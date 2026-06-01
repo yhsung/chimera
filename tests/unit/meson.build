@@ -26,6 +26,7 @@ tests = {
   'test-x86-topo': [],
   'test-cutils': [],
   'test-div128': [],
+  'test-heterogeneous-soc-protocol': [],
   'test-shift128': [],
   'test-mul64': [],
   # all code tested by test-int128 is inside int128.h
