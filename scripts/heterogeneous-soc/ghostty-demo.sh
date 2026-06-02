@@ -12,7 +12,11 @@ RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-s
 PHASE3_QEMU_MACHINE="${PHASE3_QEMU_MACHINE:-virt,aclint=on}"
 PHASE3_QEMU_CPU="${PHASE3_QEMU_CPU:-rv64}"
 SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
-CONTROL_MESSAGE="${CONTROL_MESSAGE:-Use this pane for copy-pingpong.sh, guest SSH, run-pong.sh, and run-ping.sh.}"
+CONTROL_MESSAGE="${CONTROL_MESSAGE:-Guest quick start:
+ARM or RISC-V: busybox mkdir -p /mnt/pingpong
+ARM or RISC-V: busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong
+RISC-V: /mnt/pingpong/pong.sh
+ARM: /mnt/pingpong/ping.sh}"
 ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
 HOST_TERM="${TERM:-}"
 FALLBACK_TERM="${FALLBACK_TERM:-xterm-256color}"
