@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+SESSION_NAME="${SESSION_NAME:-heterogeneous-soc}"
+ARM_RUN_SCRIPT="${ARM_RUN_SCRIPT:-scripts/heterogeneous-soc/run-arm-phase1.sh}"
+RISCV_RUN_SCRIPT="${RISCV_RUN_SCRIPT:-scripts/heterogeneous-soc/run-riscv-phase3.sh}"
+RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-uboot}"
+RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-}"
+SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
+CONTROL_MESSAGE="${CONTROL_MESSAGE:-Use this pane for copy-pingpong.sh, guest SSH, run-pong.sh, and run-ping.sh.}"
+ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
+HOST_TERM="${TERM:-}"
+FALLBACK_TERM="${FALLBACK_TERM:-xterm-256color}"
+
+die() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+}
+
+require_file() {
+    [[ -f "$1" ]] || die "required file not found: $1"
+}
+
+shell_quote() {
+    printf '%q' "$1"
+}
+
+send_repo_command() {
+    local target="$1"
+    local cmd="$2"
+
+    tmux send-keys -t "${target}" "cd $(shell_quote "${REPO_ROOT}") && ${cmd}" C-m
+}
+
+send_message_pane() {
+    local target="$1"
+    local message="$2"
+
+    tmux send-keys -t "${target}" "cd $(shell_quote "${REPO_ROOT}") && printf '%s\n' $(shell_quote "${message}")" C-m
+}
+
+command_prefix() {
+    local prefix=""
+
+    if [[ -n "${ENV_SETUP_SCRIPT}" ]]; then
+        prefix=". $(shell_quote "${ENV_SETUP_SCRIPT}") && "
+    fi
+
+    printf '%s' "${prefix}"
+}
+
+repo_file_exists() {
+    [[ -f "${REPO_ROOT}/$1" ]]
+}
+
+select_tmux_term() {
+    if [[ -n "${HOST_TERM}" ]] && infocmp "${HOST_TERM}" >/dev/null 2>&1; then
+        printf '%s' "${HOST_TERM}"
+        return
+    fi
+
+    if infocmp "${FALLBACK_TERM}" >/dev/null 2>&1; then
+        printf '%s' "${FALLBACK_TERM}"
+        return
+    fi
+
+    printf 'screen'
+}
+
+maybe_launch_server() {
+    local target="$1"
+    local server_bin="${BUILD_DIR:-${REPO_ROOT}/build-linux}/ivshmem-server"
+    local prefix
+
+    prefix="$(command_prefix)"
+    if repo_file_exists "${SERVER_SCRIPT}" && [[ -x "${server_bin}" ]]; then
+        send_repo_command "${target}" "${prefix}$(shell_quote "${SERVER_SCRIPT}")"
+        return
+    fi
+
+    send_message_pane "${target}" \
+        "ivshmem server not launched. Expected binary at ${server_bin}. Build it first with scripts/heterogeneous-soc/build-ivshmem-tools.sh in the Linux/Lima environment, or set BUILD_DIR to the directory that already contains ivshmem-server."
+}
+
+maybe_launch_arm() {
+    local target="$1"
+    local prefix
+
+    prefix="$(command_prefix)"
+    if [[ "${ARM_RUN_SCRIPT}" == "scripts/heterogeneous-soc/run-arm-phase2.sh" ]]; then
+        if [[ -z "${ARM_LINUX_IMAGE:-}" ]]; then
+            send_message_pane "${target}" \
+                "ARM Phase 2 not launched. Set ARM_LINUX_IMAGE to the ARM disk/ISO image, and if needed also ARM_TFA_QEMU_BIOS or ARM_TFA_BL1 plus ARM_TFA_FIP."
+            return
+        fi
+    fi
+
+    if repo_file_exists "${ARM_RUN_SCRIPT}" || [[ -f "${ARM_RUN_SCRIPT}" ]]; then
+        send_repo_command "${target}" "${prefix}$(shell_quote "${ARM_RUN_SCRIPT}")"
+        return
+    fi
+
+    send_message_pane "${target}" \
+        "ARM runner not launched. Script not found: ${ARM_RUN_SCRIPT}"
+}
+
+maybe_launch_riscv() {
+    local target="$1"
+    local prefix
+    local riscv_iso="${RISCV_ISO:-${HOME}/iso/alpine-standard-3.23.4-riscv64.iso}"
+
+    prefix="$(command_prefix)"
+    if [[ ! -f "${riscv_iso}" ]]; then
+        send_message_pane "${target}" \
+            "RISC-V runner not launched. Missing installer ISO: ${riscv_iso}. Fetch assets first with scripts/heterogeneous-soc/fetch-images.sh in the Linux/Lima environment, or set RISCV_ISO to an existing image."
+        return
+    fi
+
+    if repo_file_exists "${RISCV_RUN_SCRIPT}" || [[ -f "${RISCV_RUN_SCRIPT}" ]]; then
+        if [[ -n "${RISCV_KERNEL_CMDLINE}" ]]; then
+            send_repo_command \
+                "${target}" \
+                "${prefix}RISCV_BOOT_MODE=$(shell_quote "${RISCV_BOOT_MODE}") RISCV_KERNEL_CMDLINE=$(shell_quote "${RISCV_KERNEL_CMDLINE}") $(shell_quote "${RISCV_RUN_SCRIPT}")"
+        else
+            send_repo_command \
+                "${target}" \
+                "${prefix}RISCV_BOOT_MODE=$(shell_quote "${RISCV_BOOT_MODE}") $(shell_quote "${RISCV_RUN_SCRIPT}")"
+        fi
+        return
+    fi
+
+    send_message_pane "${target}" \
+        "RISC-V runner not launched. Script not found: ${RISCV_RUN_SCRIPT}"
+}
+
+require_cmd tmux
+require_file "${REPO_ROOT}/${SERVER_SCRIPT}"
+require_file "${REPO_ROOT}/${ARM_RUN_SCRIPT}"
+require_file "${REPO_ROOT}/${RISCV_RUN_SCRIPT}"
+
+TMUX_TERM_VALUE="$(select_tmux_term)"
+
+if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
+    exec env TERM="${TMUX_TERM_VALUE}" tmux attach -t "${SESSION_NAME}"
+fi
+
+env TERM="${TMUX_TERM_VALUE}" tmux new-session -d -s "${SESSION_NAME}" -n demo
+
+maybe_launch_server "${SESSION_NAME}:0.0"
+
+env TERM="${TMUX_TERM_VALUE}" tmux split-window -h -t "${SESSION_NAME}:0.0"
+maybe_launch_arm "${SESSION_NAME}:0.1"
+
+env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -t "${SESSION_NAME}:0.1"
+maybe_launch_riscv "${SESSION_NAME}:0.2"
+
+env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -t "${SESSION_NAME}:0.0"
+send_message_pane "${SESSION_NAME}:0.3" "${CONTROL_MESSAGE}"
+
+env TERM="${TMUX_TERM_VALUE}" tmux select-layout -t "${SESSION_NAME}:0" tiled
+env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${SESSION_NAME}:0.3"
+exec env TERM="${TMUX_TERM_VALUE}" tmux attach -t "${SESSION_NAME}"
