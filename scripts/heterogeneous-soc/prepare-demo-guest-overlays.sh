@@ -32,6 +32,7 @@ EOF
 ::sysinit:/sbin/openrc sysinit --quiet
 ::wait:/sbin/openrc boot --quiet
 ::wait:/sbin/openrc default --quiet
+::once:/bin/sh -c 'mkdir -p /mnt/pingpong; mount /mnt/pingpong 2>/dev/null || mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong 2>/dev/null || true'
 ::ctrlaltdel:/sbin/reboot
 ::shutdown:/sbin/openrc shutdown
 ${tty_device}::respawn:/sbin/getty -n -l /usr/sbin/autologin 115200 ${tty_device} vt100

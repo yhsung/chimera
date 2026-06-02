@@ -41,7 +41,7 @@ ARM_INITRAMFS_IMAGE="${ARM_INITRAMFS_IMAGE:-${ARM_BOOT_ASSET_DIR}/initramfs-virt
 ARM_INITRAMFS_OVERLAY="${ARM_INITRAMFS_OVERLAY:-${ARM_BOOT_ASSET_DIR}/initramfs-overlay.cpio.gz}"
 ARM_INITRAMFS_COMBINED="${ARM_INITRAMFS_COMBINED:-${ARM_BOOT_ASSET_DIR}/initramfs-virt-with-overlay}"
 ARM_MODLOOP_IMAGE="${ARM_MODLOOP_IMAGE:-${ARM_BOOT_ASSET_DIR}/modloop-virt}"
-ARM_KERNEL_CMDLINE="${ARM_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage console=ttyAMA0}"
+ARM_KERNEL_CMDLINE="${ARM_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage,9p,9pnet,9pnet_virtio console=ttyAMA0}"
 RISCV_ISO="${RISCV_ISO:-${ASSET_DIR}/alpine-standard-3.23.4-riscv64.iso}"
 RISCV_UBOOT_ARCHIVE="${RISCV_UBOOT_ARCHIVE:-${ASSET_DIR}/alpine-uboot-3.23.4-riscv64.tar.gz}"
 RISCV_UBOOT_DIR="${RISCV_UBOOT_DIR:-${ASSET_DIR}/alpine-uboot-3.23.4-riscv64}"
@@ -55,7 +55,7 @@ RISCV_INITRAMFS_IMAGE="${RISCV_INITRAMFS_IMAGE:-${RISCV_BOOT_ASSET_DIR}/initramf
 RISCV_INITRAMFS_OVERLAY="${RISCV_INITRAMFS_OVERLAY:-${RISCV_BOOT_ASSET_DIR}/initramfs-overlay.cpio.gz}"
 RISCV_INITRAMFS_COMBINED="${RISCV_INITRAMFS_COMBINED:-${RISCV_BOOT_ASSET_DIR}/initramfs-lts-with-overlay}"
 RISCV_MODLOOP_IMAGE="${RISCV_MODLOOP_IMAGE:-${RISCV_BOOT_ASSET_DIR}/modloop-lts}"
-RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage console=ttyS0}"
+RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage,9p,9pnet,9pnet_virtio console=ttyS0}"
 
 ARM_SSH_PORT="${ARM_SSH_PORT:-2222}"
 RISCV_SSH_PORT="${RISCV_SSH_PORT:-2223}"
