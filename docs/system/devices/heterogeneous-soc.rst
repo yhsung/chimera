@@ -105,6 +105,10 @@ few important ways:
   as a raw block image.
 * Building the TF-A-documented ``ArmVirtQemuKernel`` EDK2 payload inside
   Lima requires ``acpica-tools`` so that ``iasl`` is available.
+* ``build-arm-secure-stack.sh`` now prefers a locally built
+  ``~/edk2/Build/ArmVirtQemuKernel-AArch64/DEBUG_GCCNOLTO/FV/QEMU_EFI.fd``
+  as ``BL33`` when it exists, and falls back to
+  ``/usr/share/qemu-efi-aarch64/QEMU_EFI.fd`` otherwise.
 * The Phase 2 build now defaults to the cleaner SPMD plus secure
   partition packaging flow for QEMU: Hafnium is passed as ``BL32`` and
   OP-TEE is packaged through ``SP_LAYOUT_FILE`` instead of also being
@@ -122,5 +126,15 @@ few important ways:
   in the TF-A build, matching OP-TEE's GICv3 configuration, and booting
   QEMU with ``gic-version=3`` pushes the same Lima smoke boot into live
   Hafnium output, including ``Initializing Hafnium (SPMC)`` and its
-  early memory-layout logs. Full Hafnium/OP-TEE/Linux handoff is still
-  pending.
+  early memory-layout logs.
+* For the current Lima/QEMU runtime, the Phase 2 launcher now defaults
+  to ``PHASE2_QEMU_CPU=max,sme=off,sve=off``. That avoids later EL2
+  faults in Hafnium's host timer and SIMD restore paths while keeping
+  the ``max`` CPU model needed for S-EL2 bring-up. With the same
+  runtime override plus the current host-timer workaround, the secure
+  stack now reaches ``SPM Core init end.`` and BL31 starts its exit to
+  the normal world.
+* Rebuilding the secure stack against the local ``ArmVirtQemuKernel``
+  ``QEMU_EFI.fd`` moves the same Lima runtime path farther again: the
+  post-handoff serial console now shows live EDK2 output, reaches
+  ``Booting 'Linux virt'``, and continues into Alpine/OpenRC startup.
