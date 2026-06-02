@@ -6,6 +6,7 @@ source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 require_file "${RISCV_ISO}" "RISC-V installer ISO"
 require_file "${RISCV_UBOOT_ARCHIVE}" "RISC-V U-Boot archive"
 require_file "${RISCV_OPENSBI_BIOS}" "RISC-V OpenSBI firmware"
+[[ -d "${PINGPONG_DIR}" ]] || die "shared pingpong directory not found: ${PINGPONG_DIR}"
 
 RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-uboot}"
 PHASE3_QEMU_MACHINE="${PHASE3_QEMU_MACHINE:-virt,aclint=on,aia=aplic-imsic}"
@@ -59,6 +60,7 @@ if [[ "${RISCV_BOOT_MODE}" == "direct" ]]; then
         -device virtio-blk-device,drive=cd0 \
         -netdev user,id=net0,hostfwd=tcp::"${RISCV_SSH_PORT}"-:22 \
         -device virtio-net-device,netdev=net0 \
+        -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
         "${qemu_debug_args[@]}" \
         "${qemu_console_args[@]}"
 fi
@@ -76,5 +78,6 @@ exec qemu-system-riscv64 \
     -device virtio-blk-device,drive=cd0 \
     -netdev user,id=net0,hostfwd=tcp::"${RISCV_SSH_PORT}"-:22 \
     -device virtio-net-device,netdev=net0 \
+    -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     "${qemu_debug_args[@]}" \
     "${qemu_console_args[@]}"

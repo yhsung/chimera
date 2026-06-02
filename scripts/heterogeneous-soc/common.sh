@@ -67,6 +67,7 @@ default_pingpong_dir() {
 PINGPONG_DIR="${PINGPONG_DIR:-$(default_pingpong_dir)}"
 PING_BINARY="${PING_BINARY:-${PINGPONG_DIR}/ping}"
 PONG_BINARY="${PONG_BINARY:-${PINGPONG_DIR}/pong}"
+PINGPONG_SHARE_TAG="${PINGPONG_SHARE_TAG:-pingpong}"
 
 ARM_TFA_BL1="${ARM_TFA_BL1:-}"
 ARM_TFA_FIP="${ARM_TFA_FIP:-}"
