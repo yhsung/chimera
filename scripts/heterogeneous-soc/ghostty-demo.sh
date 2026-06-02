@@ -12,11 +12,10 @@ RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-s
 PHASE3_QEMU_MACHINE="${PHASE3_QEMU_MACHINE:-virt,aclint=on}"
 PHASE3_QEMU_CPU="${PHASE3_QEMU_CPU:-rv64}"
 SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
-CONTROL_MESSAGE="${CONTROL_MESSAGE:-Guest quick start:
-ARM or RISC-V: busybox mkdir -p /mnt/pingpong
-ARM or RISC-V: busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong
-RISC-V: /mnt/pingpong/pong.sh
-ARM: /mnt/pingpong/ping.sh}"
+CONTROL_MESSAGE="${CONTROL_MESSAGE:-Control-pane helpers:
+bash scripts/heterogeneous-soc/demo-run-pong.sh
+bash scripts/heterogeneous-soc/demo-run-ping.sh
+Guests should auto-login root and auto-mount /mnt/pingpong via the boot overlay.}"
 ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
 HOST_TERM="${TERM:-}"
 FALLBACK_TERM="${FALLBACK_TERM:-xterm-256color}"
@@ -174,6 +173,11 @@ server_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux display-message -p -t "${SESSI
 arm_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux split-window -h -P -F '#{pane_id}' -t "${server_pane}")"
 riscv_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -P -F '#{pane_id}' -t "${arm_pane}")"
 control_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -P -F '#{pane_id}' -t "${server_pane}")"
+
+env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${server_pane}" -T server
+env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${arm_pane}" -T arm
+env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${riscv_pane}" -T riscv
+env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${control_pane}" -T control
 
 maybe_launch_server "${server_pane}"
 maybe_launch_arm "${arm_pane}"

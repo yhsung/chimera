@@ -41,8 +41,9 @@ fi
 
 if [[ "${RISCV_BOOT_MODE}" == "direct" ]]; then
     bash "${SCRIPT_DIR}/prepare-riscv-phase3-boot-assets.sh"
+    bash "${SCRIPT_DIR}/prepare-demo-guest-overlays.sh"
     require_file "${RISCV_KERNEL_IMAGE}" "RISC-V decompressed kernel image"
-    require_file "${RISCV_INITRAMFS_IMAGE}" "RISC-V initramfs image"
+    require_file "${RISCV_INITRAMFS_COMBINED}" "RISC-V combined initramfs image"
 
     exec qemu-system-riscv64 \
         -machine "${PHASE3_QEMU_MACHINE}" \
@@ -50,7 +51,7 @@ if [[ "${RISCV_BOOT_MODE}" == "direct" ]]; then
         -m 2G -smp 4 \
         -bios "${RISCV_OPENSBI_BIOS}" \
         -kernel "${RISCV_KERNEL_IMAGE}" \
-        -initrd "${RISCV_INITRAMFS_IMAGE}" \
+        -initrd "${RISCV_INITRAMFS_COMBINED}" \
         -append "${RISCV_KERNEL_CMDLINE}" \
         -chardev socket,id=ivshmem,path="${IVSHMEM_SOCKET}" \
         -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
