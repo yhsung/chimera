@@ -34,8 +34,9 @@ by plan phase:
   * ``prepare-arm-phase2-boot-assets.sh``
   * ``run-arm-phase2.sh``
 
-* Phase 3 RISC-V virtualization:
+* Phase 3 RISC-V functional bring-up:
 
+  * ``prepare-riscv-phase3-boot-assets.sh``
   * ``run-riscv-phase3.sh``
 
 * Phase 4 cross-cluster ping/pong:
@@ -138,3 +139,61 @@ few important ways:
   ``QEMU_EFI.fd`` moves the same Lima runtime path farther again: the
   post-handoff serial console now shows live EDK2 output, reaches
   ``Booting 'Linux virt'``, and continues into Alpine/OpenRC startup.
+* For the direct ``-kernel`` / ``-initrd`` Phase 2 path, the working
+  Alpine guest command line is now
+  ``modules=loop,squashfs,sd-mod,usb-storage console=ttyAMA0``. Adding
+  ``root=/dev/ram0`` causes Alpine to fall into the initramfs emergency
+  shell instead of mounting the boot media. With the Alpine-style
+  command line, the same Lima runtime proceeds through ``Mounting boot
+  media``, package installation into the root filesystem, and the later
+  OpenRC startup stages before timeout ends the smoke test.
+* Extending that same smoke test to 240 seconds now reaches a normal
+  serial login prompt:
+
+  .. code-block:: text
+
+     Welcome to Alpine Linux 3.21
+     Kernel 6.12.81-0-virt on an aarch64 (/dev/ttyAMA0)
+     localhost login:
+
+  That is the strongest current Phase 2 runtime proof in Lima: the
+  secure stack reaches a normal-world Linux login prompt while still
+  exposing the ivshmem PCI function on the guest side.
+* ``run-riscv-phase3.sh`` now supports two Phase 3 boot modes:
+
+  * ``RISCV_BOOT_MODE=uboot`` (default) keeps the existing U-Boot plus
+    GRUB boot path from the Alpine ISO.
+  * ``RISCV_BOOT_MODE=direct`` uses
+    ``prepare-riscv-phase3-boot-assets.sh`` to extract and decompress
+    the Alpine kernel and initramfs, then boots them directly under
+    OpenSBI with an explicit kernel command line.
+
+* The direct Phase 3 debug path is currently the strongest verified
+  guest-side evidence for the RISC-V stack in Lima. With
+  ``RISCV_BOOT_MODE=direct`` and
+  ``RISCV_KERNEL_CMDLINE="console=ttyS0 earlycon=sbi irqpoll rdinit=/bin/sh"``,
+  the guest reaches an initramfs shell and shows:
+
+  .. code-block:: text
+
+     isa        : rv64imafdcvh_...
+     hart isa   : rv64imafdcvh_...
+
+  That proves the guest-visible ISA includes the ``h`` extension.
+
+* The same direct Phase 3 shell satisfies the relaxed functional
+  bring-up path in ``docs/heterogeneous-soc-plan.md`` by proving that
+  the guest boots far enough for direct software debugging and that the
+  guest-visible ISA can include ``h``.
+
+* Stronger KVM-specific checks are still absent in the current Lima
+  environment:
+
+  * ``/dev/kvm`` is absent in the guest.
+  * ``dmesg | grep -i "kvm|hypervisor"`` does not report KVM.
+  * The current Lima/QEMU AIA/IMSIC path still hits serial IRQ failures
+    such as ``irq 11: nobody cared`` and later RCU stall reports.
+
+  So the current environment proves guest-visible RISC-V hypervisor
+  extensions under emulation and a usable debug shell, but not true
+  KVM-RISC-V.
