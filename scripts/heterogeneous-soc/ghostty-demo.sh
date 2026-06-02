@@ -9,6 +9,8 @@ ARM_RUN_SCRIPT="${ARM_RUN_SCRIPT:-scripts/heterogeneous-soc/run-arm-phase1.sh}"
 RISCV_RUN_SCRIPT="${RISCV_RUN_SCRIPT:-scripts/heterogeneous-soc/run-riscv-phase3.sh}"
 RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-direct}"
 RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-console=ttyS0 earlycon=sbi irqpoll rdinit=/bin/sh}"
+PHASE3_QEMU_MACHINE="${PHASE3_QEMU_MACHINE:-virt,aclint=on}"
+PHASE3_QEMU_CPU="${PHASE3_QEMU_CPU:-rv64}"
 SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
 CONTROL_MESSAGE="${CONTROL_MESSAGE:-Use this pane for copy-pingpong.sh, guest SSH, run-pong.sh, and run-ping.sh.}"
 ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
@@ -138,11 +140,11 @@ maybe_launch_riscv() {
         if [[ -n "${RISCV_KERNEL_CMDLINE}" ]]; then
             send_repo_command \
                 "${target}" \
-                "${prefix}RISCV_BOOT_MODE=$(shell_quote "${RISCV_BOOT_MODE}") RISCV_KERNEL_CMDLINE=$(shell_quote "${RISCV_KERNEL_CMDLINE}") $(shell_quote "${RISCV_RUN_SCRIPT}")"
+                "${prefix}PHASE3_QEMU_MACHINE=$(shell_quote "${PHASE3_QEMU_MACHINE}") PHASE3_QEMU_CPU=$(shell_quote "${PHASE3_QEMU_CPU}") RISCV_BOOT_MODE=$(shell_quote "${RISCV_BOOT_MODE}") RISCV_KERNEL_CMDLINE=$(shell_quote "${RISCV_KERNEL_CMDLINE}") $(shell_quote "${RISCV_RUN_SCRIPT}")"
         else
             send_repo_command \
                 "${target}" \
-                "${prefix}RISCV_BOOT_MODE=$(shell_quote "${RISCV_BOOT_MODE}") $(shell_quote "${RISCV_RUN_SCRIPT}")"
+                "${prefix}PHASE3_QEMU_MACHINE=$(shell_quote "${PHASE3_QEMU_MACHINE}") PHASE3_QEMU_CPU=$(shell_quote "${PHASE3_QEMU_CPU}") RISCV_BOOT_MODE=$(shell_quote "${RISCV_BOOT_MODE}") $(shell_quote "${RISCV_RUN_SCRIPT}")"
         fi
         return
     fi
