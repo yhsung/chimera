@@ -13,9 +13,9 @@ PHASE3_QEMU_MACHINE="${PHASE3_QEMU_MACHINE:-virt,aclint=on}"
 PHASE3_QEMU_CPU="${PHASE3_QEMU_CPU:-rv64}"
 SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
 CONTROL_MESSAGE="${CONTROL_MESSAGE:-Control-pane helpers:
+bash scripts/heterogeneous-soc/demo-prepare-guests.sh
 bash scripts/heterogeneous-soc/demo-run-pong.sh
-bash scripts/heterogeneous-soc/demo-run-ping.sh
-Guests should auto-login root and auto-mount /mnt/pingpong via the boot overlay.}"
+bash scripts/heterogeneous-soc/demo-run-ping.sh}"
 ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
 HOST_TERM="${TERM:-}"
 FALLBACK_TERM="${FALLBACK_TERM:-xterm-256color}"
