@@ -7,8 +7,8 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 SESSION_NAME="${SESSION_NAME:-heterogeneous-soc}"
 ARM_RUN_SCRIPT="${ARM_RUN_SCRIPT:-scripts/heterogeneous-soc/run-arm-phase1.sh}"
 RISCV_RUN_SCRIPT="${RISCV_RUN_SCRIPT:-scripts/heterogeneous-soc/run-riscv-phase3.sh}"
-RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-uboot}"
-RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-}"
+RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-direct}"
+RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-console=ttyS0 earlycon=sbi irqpoll rdinit=/bin/sh}"
 SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
 CONTROL_MESSAGE="${CONTROL_MESSAGE:-Use this pane for copy-pingpong.sh, guest SSH, run-pong.sh, and run-ping.sh.}"
 ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
@@ -76,17 +76,28 @@ select_tmux_term() {
 
 maybe_launch_server() {
     local target="$1"
-    local server_bin="${BUILD_DIR:-${REPO_ROOT}/build-linux}/ivshmem-server"
+    local build_dir="${BUILD_DIR:-${REPO_ROOT}/build-linux}"
+    local server_bin=""
+    local candidate
     local prefix
 
+    for candidate in \
+        "${build_dir}/ivshmem-server" \
+        "${build_dir}/contrib/ivshmem-server/ivshmem-server"; do
+        if [[ -x "${candidate}" ]]; then
+            server_bin="${candidate}"
+            break
+        fi
+    done
+
     prefix="$(command_prefix)"
-    if repo_file_exists "${SERVER_SCRIPT}" && [[ -x "${server_bin}" ]]; then
+    if repo_file_exists "${SERVER_SCRIPT}" && [[ -n "${server_bin}" ]]; then
         send_repo_command "${target}" "${prefix}$(shell_quote "${SERVER_SCRIPT}")"
         return
     fi
 
     send_message_pane "${target}" \
-        "ivshmem server not launched. Expected binary at ${server_bin}. Build it first with scripts/heterogeneous-soc/build-ivshmem-tools.sh in the Linux/Lima environment, or set BUILD_DIR to the directory that already contains ivshmem-server."
+        "ivshmem server not launched. Expected binary under ${build_dir} (for example ${build_dir}/contrib/ivshmem-server/ivshmem-server). Build it first with scripts/heterogeneous-soc/build-ivshmem-tools.sh in the Linux/Lima environment, or set BUILD_DIR to the directory that already contains ivshmem-server."
 }
 
 maybe_launch_arm() {
@@ -153,17 +164,16 @@ fi
 
 env TERM="${TMUX_TERM_VALUE}" tmux new-session -d -s "${SESSION_NAME}" -n demo
 
-maybe_launch_server "${SESSION_NAME}:0.0"
+server_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux display-message -p -t "${SESSION_NAME}:0.0" '#{pane_id}')"
+arm_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux split-window -h -P -F '#{pane_id}' -t "${server_pane}")"
+riscv_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -P -F '#{pane_id}' -t "${arm_pane}")"
+control_pane="$(env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -P -F '#{pane_id}' -t "${server_pane}")"
 
-env TERM="${TMUX_TERM_VALUE}" tmux split-window -h -t "${SESSION_NAME}:0.0"
-maybe_launch_arm "${SESSION_NAME}:0.1"
-
-env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -t "${SESSION_NAME}:0.1"
-maybe_launch_riscv "${SESSION_NAME}:0.2"
-
-env TERM="${TMUX_TERM_VALUE}" tmux split-window -v -t "${SESSION_NAME}:0.0"
-send_message_pane "${SESSION_NAME}:0.3" "${CONTROL_MESSAGE}"
+maybe_launch_server "${server_pane}"
+maybe_launch_arm "${arm_pane}"
+maybe_launch_riscv "${riscv_pane}"
+send_message_pane "${control_pane}" "${CONTROL_MESSAGE}"
 
 env TERM="${TMUX_TERM_VALUE}" tmux select-layout -t "${SESSION_NAME}:0" tiled
-env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${SESSION_NAME}:0.3"
+env TERM="${TMUX_TERM_VALUE}" tmux select-pane -t "${control_pane}"
 exec env TERM="${TMUX_TERM_VALUE}" tmux attach -t "${SESSION_NAME}"

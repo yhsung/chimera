@@ -22,8 +22,9 @@ if grep -q '^#undef CONFIG_EVENTFD' config-host.h 2>/dev/null; then
     die "this build directory was configured without Linux eventfd support; use a fresh Linux-local BUILD_DIR such as BUILD_DIR=\$HOME/chimera-build-linux VM_SOURCE_DIR=\$HOME/chimera-src"
 fi
 
-if ! ninja -t targets all | grep -Eq '(^|[[:space:]])ivshmem-server:'; then
-    die "ivshmem-server target is unavailable in this build directory; re-run inside the Linux/Lima environment after configure succeeds with ivshmem support"
+if ! grep -q 'build contrib/ivshmem-server/ivshmem-server:' build.ninja; then
+    die "ivshmem-server target is unavailable in this build directory even though Linux eventfd is enabled; inspect the generated Ninja targets in ${BUILD_DIR}"
 fi
 
-ninja ivshmem-server ivshmem-client
+ninja contrib/ivshmem-server/ivshmem-server \
+      contrib/ivshmem-client/ivshmem-client
