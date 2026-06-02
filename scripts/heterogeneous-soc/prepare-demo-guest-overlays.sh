@@ -48,15 +48,25 @@ build_overlay_archive() {
     tmpdir="$(mktemp -d)"
     trap 'rm -rf "${tmpdir}"' RETURN
 
-    write_overlay_tree "${tmpdir}/overlay" "${tty_device}"
     (
-        cd "${tmpdir}/overlay"
-        find . -print0 \
-            | cpio --null -o -H newc 2>/dev/null \
-            | gzip -n9 > "${overlay_archive}"
+        cd "${tmpdir}"
+        mkdir root overlay
+        cd root
+        gzip -dc "${base_initramfs}" | cpio -idmu --quiet 2>/dev/null
     )
 
-    cat "${base_initramfs}" "${overlay_archive}" > "${combined_initramfs}"
+    write_overlay_tree "${tmpdir}/overlay" "${tty_device}"
+    cp -R "${tmpdir}/overlay/." "${tmpdir}/root/"
+
+    (
+        cd "${tmpdir}/root"
+        find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -n9 > "${combined_initramfs}"
+    )
+
+    (
+        cd "${tmpdir}/overlay"
+        find . -print0 | cpio --null -o -H newc 2>/dev/null | gzip -n9 > "${overlay_archive}"
+    )
     rm -rf "${tmpdir}"
     trap - RETURN
 }
