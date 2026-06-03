@@ -100,6 +100,31 @@ static const char *find_ivshmem_resource(void)
     return NULL;
 }
 
+/*
+ * Volatile byte helpers prevent the compiler from emitting NEON/SIMD
+ * instructions for bulk copies to/from PCI device memory (BAR2), which
+ * would SIGBUS on ARM because device memory is non-cacheable.
+ */
+static void shm_write(volatile void *dst, const void *src, size_t n)
+{
+    volatile uint8_t *d = (volatile uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    size_t i;
+    for (i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+}
+
+static void shm_read(void *dst, const volatile void *src, size_t n)
+{
+    uint8_t *d = (uint8_t *)dst;
+    const volatile uint8_t *s = (const volatile uint8_t *)src;
+    size_t i;
+    for (i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+}
+
 static void wait_for_flag(volatile uint32_t *flag, uint32_t expected)
 {
     while (*flag != expected) {
@@ -116,21 +141,23 @@ static int main_loop(struct hsoc_layout *shm)
 
     while (true) {
         struct timespec ts_send;
+        struct hsoc_hello_msg msg;
         struct hsoc_hello_msg ack;
 
+        /* Build the outgoing message in normal stack memory to avoid
+         * NEON-on-device-memory faults, then copy it to BAR2. */
         clock_gettime(CLOCK_REALTIME, &ts_send);
-        memset(&shm->linux_to_freertos.msg, 0,
-               sizeof(shm->linux_to_freertos.msg));
-        shm->linux_to_freertos.msg.magic = HSOC_HELLO_MAGIC;
-        shm->linux_to_freertos.msg.version = HSOC_PROTO_VERSION;
-        shm->linux_to_freertos.msg.msg_type = HSOC_MSG_HELLO;
-        shm->linux_to_freertos.msg.seq = seq;
-        shm->linux_to_freertos.msg.sender_id = HSOC_SENDER_ID;
-        shm->linux_to_freertos.msg.ts_sec = ts_send.tv_sec;
-        shm->linux_to_freertos.msg.ts_nsec = ts_send.tv_nsec;
-        snprintf(shm->linux_to_freertos.msg.text,
-                 sizeof(shm->linux_to_freertos.msg.text),
-                 "hello from %s", HSOC_SENDER_LABEL);
+        memset(&msg, 0, sizeof(msg));
+        msg.magic     = HSOC_HELLO_MAGIC;
+        msg.version   = HSOC_PROTO_VERSION;
+        msg.msg_type  = HSOC_MSG_HELLO;
+        msg.seq       = seq;
+        msg.sender_id = HSOC_SENDER_ID;
+        msg.ts_sec    = ts_send.tv_sec;
+        msg.ts_nsec   = ts_send.tv_nsec;
+        snprintf(msg.text, sizeof(msg.text), "hello from %s", HSOC_SENDER_LABEL);
+
+        shm_write(&shm->linux_to_freertos.msg, &msg, sizeof(msg));
         __sync_synchronize();
         shm->linux_to_freertos.flag = 1;
 
@@ -138,7 +165,7 @@ static int main_loop(struct hsoc_layout *shm)
                HSOC_SENDER_LABEL, seq, shm->linux_to_freertos.msg.text);
 
         wait_for_flag(&shm->freertos_to_linux.flag, 1);
-        ack = shm->freertos_to_linux.msg;
+        shm_read(&ack, &shm->freertos_to_linux.msg, sizeof(ack));
         __sync_synchronize();
         shm->freertos_to_linux.flag = 0;
 
