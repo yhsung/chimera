@@ -18,54 +18,62 @@ if [[ ! -f "$ELF" ]]; then
     echo "=== Setup complete ==="
 fi
 
-# Replace any existing session
+# Kill any existing session
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-# Window 0: ARM ivshmem server
-tmux new-session -d -s "$SESSION" -n "arm-ft-server" -x 220 -y 50
-tmux send-keys -t "$SESSION:arm-ft-server" \
-    "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh" Enter
+# Build a single-window layout:
+#
+#  ┌─────────────────┬─────────────────┐
+#  │  arm-ft-server  │ riscv-ft-server │  (panes 0, 3)
+#  ├─────────────────┴─────────────────┤
+#  │            freertos               │  (pane 1)
+#  ├─────────────────┬─────────────────┤
+#  │   arm-guest     │   riscv-guest   │  (panes 2, 4)
+#  └─────────────────┴─────────────────┘
 
-# Window 1: RISC-V ivshmem server
-tmux new-window -t "$SESSION" -n "riscv-ft-server"
-tmux send-keys -t "$SESSION:riscv-ft-server" \
-    "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
+tmux new-session  -d -s "$SESSION" -x 220 -y 55
 
-# Give servers a moment to bind their sockets
+# Split into three horizontal bands: servers (top), freertos (middle), guests (bottom)
+tmux split-window -v -t "$SESSION:0.0" -p 80   # pane 0=top(20%), pane 1=rest(80%)
+tmux split-window -v -t "$SESSION:0.1" -p 45   # pane 1=middle(44%), pane 2=bottom(36%)
+
+# Split the server band and the guest band each into two side-by-side panes
+tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 3=top-right
+tmux split-window -h -t "$SESSION:0.2"          # pane 2=bottom-left, pane 4=bottom-right
+
+# Start ivshmem servers first, then wait for sockets before launching guests
+tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh"   Enter
+tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
+
 sleep 1
 
-# Window 2: FreeRTOS guest
-tmux new-window -t "$SESSION" -n "freertos"
-tmux send-keys -t "$SESSION:freertos" \
-    "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
+tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
 
-# Window 3: ARM/Linux guest
-tmux new-window -t "$SESSION" -n "arm-guest"
-tmux send-keys -t "$SESSION:arm-guest" \
-    "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh" Enter
-
-# Window 4: RISC-V/Linux guest
-tmux new-window -t "$SESSION" -n "riscv-guest"
-tmux send-keys -t "$SESSION:riscv-guest" \
-    "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh" Enter
-
-# Focus the FreeRTOS window so output is visible on attach
-tmux select-window -t "$SESSION:freertos"
+# Focus freertos pane
+tmux select-pane -t "$SESSION:0.1"
 
 cat <<'EOF'
 
 === Phase 5 showcase starting (tmux session: freertos-showcase) ===
 
-Windows:  0:arm-ft-server  1:riscv-ft-server  2:freertos  3:arm-guest  4:riscv-guest
-Navigate: Ctrl-b 0..4
+Layout (single window, 5 panes):
+  top-left:     arm-ft-server
+  top-right:    riscv-ft-server
+  middle:       freertos guest
+  bottom-left:  arm-guest
+  bottom-right: riscv-guest
+
+Navigate panes: Ctrl-b arrow keys
 
 Once the Linux guests finish booting, run inside each QEMU console:
 
-  ARM guest (window 3):
+  ARM guest (bottom-left):
     busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong
     /mnt/pingpong/freertos-showcase/hello-arm-linux
 
-  RISC-V guest (window 4):
+  RISC-V guest (bottom-right):
     busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong
     /mnt/pingpong/freertos-showcase/hello-riscv-linux
 
