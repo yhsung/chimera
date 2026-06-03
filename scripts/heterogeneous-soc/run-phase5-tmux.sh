@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-$HOME/dev-projects/chimera}"
+REPO="${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}"
 SESSION="freertos-showcase"
 ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf"
 
