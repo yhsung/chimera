@@ -24,7 +24,5 @@ exec "${qemu_bin}" \
     -chardev socket,id=ivshmem,path="${IVSHMEM_ARM_FREERTOS_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
     -drive file="${ARM_ISO}",media=cdrom \
-    -netdev user,id=net0,hostfwd=tcp::"${ARM_SSH_PORT}"-:22 \
-    -device virtio-net-device,netdev=net0 \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -nographic

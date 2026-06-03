@@ -36,7 +36,5 @@ exec "${qemu_bin}" \
     -device virtio-blk-device,drive=hd0 \
     -drive file="${RISCV_ISO}",media=cdrom,if=none,id=cd0,readonly=on \
     -device virtio-blk-device,drive=cd0 \
-    -netdev user,id=net0,hostfwd=tcp::"${RISCV_SSH_PORT}"-:22 \
-    -device virtio-net-device,netdev=net0 \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -nographic
