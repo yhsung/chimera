@@ -1,0 +1,30 @@
+#ifndef HETEROGENEOUS_SOC_FREERTOS_IVSHMEM_FLAT_H
+#define HETEROGENEOUS_SOC_FREERTOS_IVSHMEM_FLAT_H
+
+#include <stdint.h>
+
+#include "hello_proto.h"
+
+#define FREERTOS_IVSHMEM_INTMASK 0x0
+#define FREERTOS_IVSHMEM_INTSTATUS 0x4
+#define FREERTOS_IVSHMEM_IVPOSITION 0x8
+#define FREERTOS_IVSHMEM_DOORBELL 0xc
+
+struct freertos_ivshmem_link {
+    volatile uint32_t *mmio_base;
+    struct hsoc_layout *layout;
+    const char *name;
+};
+
+void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
+                           uintptr_t mmio_base,
+                           uintptr_t shmem_base,
+                           const char *name);
+int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
+                                struct hsoc_hello_msg *msg);
+void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
+                               uint32_t seq,
+                               int64_t ts_sec,
+                               int64_t ts_nsec);
+
+#endif

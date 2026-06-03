@@ -13,6 +13,8 @@ sudo apt-get install -y \
     qemu-system-misc \
     gcc-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu \
+    gcc-riscv64-unknown-elf \
+    binutils-riscv64-unknown-elf \
     libarchive-tools \
     libglib2.0-dev \
     libpixman-1-dev \

@@ -10,7 +10,7 @@ LIMA_MEMORY="${LIMA_MEMORY:-8}"
 LIMA_DISK="${LIMA_DISK:-40}"
 
 default_build_dir() {
-    if [[ -w "${CHIMERA_ROOT}" ]]; then
+    if [[ "${CHIMERA_ROOT}" == /Users/* && -w "${CHIMERA_ROOT}" ]]; then
         printf '%s/build-linux\n' "${CHIMERA_ROOT}"
     else
         printf '%s/chimera-build-linux\n' "${HOME}"
@@ -18,7 +18,7 @@ default_build_dir() {
 }
 
 default_vm_source_dir() {
-    if [[ -w "${CHIMERA_ROOT}" ]]; then
+    if [[ "${CHIMERA_ROOT}" == /Users/* && -w "${CHIMERA_ROOT}" ]]; then
         printf '%s\n' "${CHIMERA_ROOT}"
     else
         printf '%s/chimera-src\n' "${HOME}"
@@ -61,7 +61,7 @@ ARM_SSH_PORT="${ARM_SSH_PORT:-2222}"
 RISCV_SSH_PORT="${RISCV_SSH_PORT:-2223}"
 
 default_pingpong_dir() {
-    if [[ -w "${CHIMERA_ROOT}" ]]; then
+    if [[ "${CHIMERA_ROOT}" == /Users/* && -w "${CHIMERA_ROOT}" ]]; then
         printf '%s/contrib/heterogeneous-soc\n' "${CHIMERA_ROOT}"
     else
         printf '%s/contrib/heterogeneous-soc\n' "${VM_SOURCE_DIR}"
@@ -71,6 +71,16 @@ default_pingpong_dir() {
 PINGPONG_DIR="${PINGPONG_DIR:-$(default_pingpong_dir)}"
 PING_BINARY="${PING_BINARY:-${PINGPONG_DIR}/ping}"
 PONG_BINARY="${PONG_BINARY:-${PINGPONG_DIR}/pong}"
+IVSHMEM_ARM_FREERTOS_DIR="${IVSHMEM_ARM_FREERTOS_DIR:-/tmp/ivshmem-arm-freertos}"
+IVSHMEM_ARM_FREERTOS_SOCKET="${IVSHMEM_ARM_FREERTOS_SOCKET:-${IVSHMEM_ARM_FREERTOS_DIR}/sock}"
+IVSHMEM_RISCV_FREERTOS_DIR="${IVSHMEM_RISCV_FREERTOS_DIR:-/tmp/ivshmem-riscv-freertos}"
+IVSHMEM_RISCV_FREERTOS_SOCKET="${IVSHMEM_RISCV_FREERTOS_SOCKET:-${IVSHMEM_RISCV_FREERTOS_DIR}/sock}"
+FREERTOS_DEPS_ROOT="${FREERTOS_DEPS_ROOT:-${HOME}/heterogeneous-soc-freertos}"
+FREERTOS_KERNEL_DIR="${FREERTOS_KERNEL_DIR:-${FREERTOS_DEPS_ROOT}/FreeRTOS-Kernel}"
+FREERTOS_SHOWCASE_DIR="${FREERTOS_SHOWCASE_DIR:-${PINGPONG_DIR}/freertos-showcase}"
+HELLO_ARM_BINARY="${HELLO_ARM_BINARY:-${FREERTOS_SHOWCASE_DIR}/hello-arm-linux}"
+HELLO_RISCV_BINARY="${HELLO_RISCV_BINARY:-${FREERTOS_SHOWCASE_DIR}/hello-riscv-linux}"
+FREERTOS_DEMO_ELF="${FREERTOS_DEMO_ELF:-${FREERTOS_SHOWCASE_DIR}/freertos-riscv-demo.elf}"
 PINGPONG_SHARE_TAG="${PINGPONG_SHARE_TAG:-pingpong}"
 
 ARM_TFA_BL1="${ARM_TFA_BL1:-}"
