@@ -162,7 +162,7 @@ static int main_loop(struct hsoc_layout *shm)
         shm->linux_to_freertos.flag = 1;
 
         printf("[%s] HELLO #%" PRIu32 " %s\n",
-               HSOC_SENDER_LABEL, seq, shm->linux_to_freertos.msg.text);
+               HSOC_SENDER_LABEL, seq, msg.text);
 
         wait_for_flag(&shm->freertos_to_linux.flag, 1);
         shm_read(&ack, &shm->freertos_to_linux.msg, sizeof(ack));
