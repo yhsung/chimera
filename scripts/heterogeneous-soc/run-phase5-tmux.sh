@@ -52,33 +52,42 @@ tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/run-ri
 tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
 tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
 
-# Focus freertos pane
+# Wait for a login prompt in a pane, then send commands automatically.
+# Runs in the background so attach-session below can proceed.
+auto_login_and_run() {
+    local pane="$1"
+    local hello_bin="$2"
+    local timeout=180
+    local elapsed=0
+
+    while (( elapsed < timeout )); do
+        if tmux capture-pane -p -t "$pane" 2>/dev/null | grep -q "login:"; then
+            tmux send-keys -t "$pane" "root" Enter
+            sleep 3
+            tmux send-keys -t "$pane" "busybox mkdir -p /mnt/pingpong" Enter
+            sleep 1
+            tmux send-keys -t "$pane" "busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong" Enter
+            sleep 1
+            tmux send-keys -t "$pane" "$hello_bin" Enter
+            return 0
+        fi
+        sleep 3
+        (( elapsed += 3 ))
+    done
+    echo "WARNING: timed out waiting for login prompt in pane $pane" >&2
+}
+
+auto_login_and_run "$SESSION:0.2" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
+auto_login_and_run "$SESSION:0.4" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+
+# Focus freertos pane so FreeRTOS output is front-and-center on attach
 tmux select-pane -t "$SESSION:0.1"
 
-cat <<'EOF'
-
-=== Phase 5 showcase starting (tmux session: freertos-showcase) ===
-
-Layout (single window, 5 panes):
-  top-left:     arm-ft-server
-  top-right:    riscv-ft-server
-  middle:       freertos guest
-  bottom-left:  arm-guest
-  bottom-right: riscv-guest
-
-Navigate panes: Ctrl-b arrow keys
-
-Once the Linux guests finish booting, run inside each QEMU console:
-
-  ARM guest (bottom-left):
-    busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong
-    /mnt/pingpong/freertos-showcase/hello-arm-linux
-
-  RISC-V guest (bottom-right):
-    busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong
-    /mnt/pingpong/freertos-showcase/hello-riscv-linux
-
-Attaching...
-EOF
+echo ""
+echo "=== Phase 5 showcase starting (session: $SESSION) ==="
+echo "    Guests will auto-login and run hello senders once booted."
+echo "    Navigate panes: Ctrl-b arrow keys"
+echo "    Attaching..."
+echo ""
 
 tmux attach-session -t "$SESSION"
