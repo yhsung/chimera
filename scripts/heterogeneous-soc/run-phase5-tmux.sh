@@ -23,13 +23,16 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 # Build a single-window layout:
 #
-#  ┌─────────────────┬─────────────────┐
-#  │  arm-ft-server  │ riscv-ft-server │  (panes 0, 3)
-#  ├─────────────────┴─────────────────┤
-#  │            freertos               │  (pane 1)
-#  ├─────────────────┬─────────────────┤
-#  │   arm-guest     │   riscv-guest   │  (panes 2, 4)
-#  └─────────────────┴─────────────────┘
+# After each split-window -h, tmux renumbers panes by visual position
+# (left-to-right, top-to-bottom), so the indices after all four splits are:
+#
+#  ┌──────────────────────────┬──────────────────────────┐
+#  │ shmem server ARM-FreeRTOS│ shmem server RISCV-FreeRT│  (panes 0, 1)
+#  ├──────────────────────────┴──────────────────────────┤
+#  │                    FreeRTOS                         │  (pane 2)
+#  ├──────────────────────────┬──────────────────────────┤
+#  │   hello from ARM-Linux   │  hello from RISCV-Linux  │  (panes 3, 4)
+#  └──────────────────────────┴──────────────────────────┘
 
 tmux new-session -d -s "$SESSION" -x "${COLUMNS:-220}" -y "${LINES:-55}"
 
@@ -38,18 +41,21 @@ tmux new-session -d -s "$SESSION" -x "${COLUMNS:-220}" -y "${LINES:-55}"
 tmux split-window -v -t "$SESSION:0.0" -l 80%  # pane 0=top(20%), pane 1=rest(80%)
 tmux split-window -v -t "$SESSION:0.1" -l 45%  # pane 1=middle(44%), pane 2=bottom(36%)
 
-# Split the server band and the guest band each into two side-by-side panes
-tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 3=top-right
-tmux split-window -h -t "$SESSION:0.2"          # pane 2=bottom-left, pane 4=bottom-right
+# Split the server band and the guest band each into two side-by-side panes.
+# After the first h-split, tmux renumbers by visual position: the new top-right
+# pane becomes 1, pushing old pane 1→2 (middle) and old pane 2→3 (bottom).
+# The second h-split must therefore target pane 3 (the bottom band).
+tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 1=top-right
+tmux split-window -h -t "$SESSION:0.3"          # pane 3=bottom-left, pane 4=bottom-right
 
 # Start ivshmem servers first, then wait for sockets before launching guests
 tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh"   Enter
-tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
+tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
 
 sleep 1
 
-tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
-tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
+tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
 tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
 
 # Wait for a login prompt in a pane, then send commands automatically.
@@ -77,11 +83,11 @@ auto_login_and_run() {
     echo "WARNING: timed out waiting for login prompt in pane $pane" >&2
 }
 
-auto_login_and_run "$SESSION:0.2" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
+auto_login_and_run "$SESSION:0.3" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
 auto_login_and_run "$SESSION:0.4" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
 
 # Focus freertos pane so FreeRTOS output is front-and-center on attach
-tmux select-pane -t "$SESSION:0.1"
+tmux select-pane -t "$SESSION:0.2"
 
 echo ""
 echo "=== Phase 5 showcase starting (session: $SESSION) ==="
