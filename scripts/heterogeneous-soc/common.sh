@@ -130,3 +130,20 @@ find_ivshmem_server() {
 
     die "ivshmem-server binary not found under ${BUILD_DIR}"
 }
+
+find_qemu_system_binary() {
+    local binary="$1"
+    local candidate="${BUILD_DIR}/${binary}"
+
+    if [[ -x "${candidate}" ]]; then
+        printf '%s\n' "${candidate}"
+        return 0
+    fi
+
+    if command -v "${binary}" >/dev/null 2>&1; then
+        command -v "${binary}"
+        return 0
+    fi
+
+    die "${binary} not found in ${BUILD_DIR} or PATH"
+}

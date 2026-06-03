@@ -3,6 +3,8 @@ set -euo pipefail
 
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
+qemu_bin="$(find_qemu_system_binary qemu-system-riscv64)"
+
 require_file "${RISCV_ISO}" "RISC-V installer ISO"
 require_file "${RISCV_OPENSBI_BIOS}" "RISC-V OpenSBI firmware"
 [[ -d "${PINGPONG_DIR}" ]] || die "shared pingpong directory not found: ${PINGPONG_DIR}"
@@ -20,7 +22,7 @@ fi
 require_file "${RISCV_KERNEL_IMAGE}" "RISC-V decompressed kernel image"
 require_file "${RISCV_INITRAMFS_COMBINED}" "RISC-V combined initramfs image"
 
-exec qemu-system-riscv64 \
+exec "${qemu_bin}" \
     -machine virt,aclint=on \
     -cpu rv64,h=true,v=true \
     -m 2G -smp 4 \

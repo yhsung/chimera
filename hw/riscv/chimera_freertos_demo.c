@@ -180,10 +180,11 @@ static void chimera_freertos_machine_init(MachineState *machine)
                    qdev_get_gpio_in(plic, CHIMERA_FREERTOS_UART_IRQ),
                    399193, serial_hd(0), DEVICE_LITTLE_ENDIAN);
 
-#ifndef CONFIG_IVSHMEM_FLAT_DEVICE
-    error_report("ivshmem-flat support is unavailable in this QEMU build");
-    exit(EXIT_FAILURE);
-#else
+    if (!module_object_class_by_name(TYPE_IVSHMEM_FLAT)) {
+        error_report("ivshmem-flat support is unavailable in this QEMU build");
+        exit(EXIT_FAILURE);
+    }
+
     chimera_freertos_connect_ivshmem(
         plic, arm_chr,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM0_MMIO].base,
@@ -194,7 +195,6 @@ static void chimera_freertos_machine_init(MachineState *machine)
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM1_MMIO].base,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM1_SHMEM].base,
         CHIMERA_FREERTOS_IVSHMEM1_IRQ);
-#endif
 
     if (machine->firmware) {
         riscv_load_firmware(machine->firmware, &firmware_load_addr, NULL);

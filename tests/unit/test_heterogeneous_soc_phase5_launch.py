@@ -28,26 +28,28 @@ class Phase5LaunchTest(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
         self.tmp = Path(self.tmpdir.name)
-        self.bin_dir = self.tmp / "bin"
-        self.bin_dir.mkdir()
+        self.build_dir = self.tmp / "build"
+        self.build_dir.mkdir()
+        self.path_dir = self.tmp / "path"
+        self.path_dir.mkdir()
         self.log_file = self.tmp / "commands.log"
         self.freertos_elf = self.tmp / "freertos-riscv-demo.elf"
         self.freertos_elf.write_bytes(b"ELF")
         self._write_stub(
-            self.bin_dir / "qemu-system-riscv64",
+            self.build_dir / "qemu-system-riscv64",
             f"""#!/bin/sh
 printf 'qemu|%s\\n' "$*" >> {self.log_file}
 exit 0
 """,
         )
         self._write_stub(
-            self.bin_dir / "ivshmem-server",
+            self.build_dir / "ivshmem-server",
             f"""#!/bin/sh
 printf 'ivshmem-server|%s\\n' "$*" >> {self.log_file}
 exit 0
 """,
         )
-        self._write_stub(self.bin_dir / "ss", "#!/bin/sh\nexit 1\n")
+        self._write_stub(self.path_dir / "ss", "#!/bin/sh\nexit 1\n")
 
     def tearDown(self):
         self.tmpdir.cleanup()
@@ -60,8 +62,8 @@ exit 0
         env = os.environ.copy()
         env.update(
             {
-                "PATH": f"{self.bin_dir}:{env['PATH']}",
-                "BUILD_DIR": str(self.bin_dir),
+                "PATH": f"{self.path_dir}:{env['PATH']}",
+                "BUILD_DIR": str(self.build_dir),
                 "FREERTOS_DEMO_ELF": str(self.freertos_elf),
                 "IVSHMEM_ARM_FREERTOS_SOCKET": "/tmp/ivshmem-arm-freertos/sock",
                 "IVSHMEM_RISCV_FREERTOS_SOCKET": "/tmp/ivshmem-riscv-freertos/sock",
@@ -89,8 +91,8 @@ exit 0
         env = os.environ.copy()
         env.update(
             {
-                "PATH": f"{self.bin_dir}:{env['PATH']}",
-                "BUILD_DIR": str(self.bin_dir),
+                "PATH": f"{self.path_dir}:{env['PATH']}",
+                "BUILD_DIR": str(self.build_dir),
                 "IVSHMEM_ARM_FREERTOS_DIR": "/tmp/ivshmem-arm-freertos",
                 "IVSHMEM_ARM_FREERTOS_SOCKET": "/tmp/ivshmem-arm-freertos/sock",
             }

@@ -3,9 +3,11 @@ set -euo pipefail
 
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
+qemu_bin="$(find_qemu_system_binary qemu-system-riscv64)"
+
 require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 
-exec qemu-system-riscv64 \
+exec "${qemu_bin}" \
     -machine chimera-riscv-freertos-demo,ivshmem-arm-freertos=armft,ivshmem-riscv-freertos=riscvft \
     -chardev socket,id=armft,path="${IVSHMEM_ARM_FREERTOS_SOCKET}" \
     -chardev socket,id=riscvft,path="${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
