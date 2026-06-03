@@ -1,5 +1,37 @@
 #include "freertos_ivshmem_flat.h"
 
+/*
+ * Volatile byte helpers prevent GCC's loop-invariant code motion (LICM) from
+ * hoisting reads from or writes to the ivshmem shared-memory region out of the
+ * poll loop.  Without these, GCC -O2 can treat a non-volatile struct read
+ * through a non-volatile pointer as loop-invariant, reading the msg once
+ * (returning all-zeros on the first iteration before Linux has written
+ * anything) and reusing the stale cached value on every subsequent iteration.
+ * The volatile flag field is already protected against this, but the msg body
+ * fields are not — they need the same treatment.
+ */
+static void shmem_read(void *dst, const volatile void *src, uint32_t n)
+{
+    uint8_t *d = (uint8_t *)dst;
+    const volatile uint8_t *s = (const volatile uint8_t *)src;
+    uint32_t i;
+
+    for (i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+}
+
+static void shmem_write(volatile void *dst, const void *src, uint32_t n)
+{
+    volatile uint8_t *d = (volatile uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    uint32_t i;
+
+    for (i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+}
+
 static void copy_text(char *dest, const char *src)
 {
     uint32_t i;
@@ -35,7 +67,7 @@ int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
     }
 
     __sync_synchronize();
-    *msg = link->layout->linux_to_freertos.msg;
+    shmem_read(msg, &link->layout->linux_to_freertos.msg, sizeof(*msg));
     link->layout->linux_to_freertos.flag = 0;
     __sync_synchronize();
 
@@ -49,16 +81,18 @@ void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
                                int64_t ts_sec,
                                int64_t ts_nsec)
 {
-    struct hsoc_hello_msg *msg = &link->layout->freertos_to_linux.msg;
+    struct hsoc_hello_msg ack;
 
-    msg->magic = HSOC_HELLO_MAGIC;
-    msg->version = HSOC_PROTO_VERSION;
-    msg->msg_type = HSOC_MSG_ACK;
-    msg->seq = seq;
-    msg->sender_id = HSOC_SENDER_RISCV_FREERTOS;
-    msg->ts_sec = ts_sec;
-    msg->ts_nsec = ts_nsec;
-    copy_text(msg->text, "ack from riscv-freertos");
+    ack.magic = HSOC_HELLO_MAGIC;
+    ack.version = HSOC_PROTO_VERSION;
+    ack.msg_type = HSOC_MSG_ACK;
+    ack.seq = seq;
+    ack.sender_id = HSOC_SENDER_RISCV_FREERTOS;
+    ack.ts_sec = ts_sec;
+    ack.ts_nsec = ts_nsec;
+    copy_text(ack.text, "ack from riscv-freertos");
+
+    shmem_write(&link->layout->freertos_to_linux.msg, &ack, sizeof(ack));
     __sync_synchronize();
     link->layout->freertos_to_linux.flag = 1;
 }
