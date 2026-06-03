@@ -31,11 +31,12 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 #  │   arm-guest     │   riscv-guest   │  (panes 2, 4)
 #  └─────────────────┴─────────────────┘
 
-tmux new-session  -d -s "$SESSION"
+tmux new-session -d -s "$SESSION" -x "${COLUMNS:-220}" -y "${LINES:-55}"
 
 # Split into three horizontal bands: servers (top), freertos (middle), guests (bottom)
-tmux split-window -v -t "$SESSION:0.0" -p 80   # pane 0=top(20%), pane 1=rest(80%)
-tmux split-window -v -t "$SESSION:0.1" -p 45   # pane 1=middle(44%), pane 2=bottom(36%)
+# tmux 3.4+ requires -l N% instead of the removed -p N flag
+tmux split-window -v -t "$SESSION:0.0" -l 80%  # pane 0=top(20%), pane 1=rest(80%)
+tmux split-window -v -t "$SESSION:0.1" -l 45%  # pane 1=middle(44%), pane 2=bottom(36%)
 
 # Split the server band and the guest band each into two side-by-side panes
 tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 3=top-right
