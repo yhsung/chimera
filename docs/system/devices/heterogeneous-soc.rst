@@ -1,17 +1,28 @@
 ARM + RISC-V heterogeneous SoC demo
 -----------------------------------
 
-This repository now includes a runnable scaffold for the
+This repository now includes runnable scaffolding for the
 heterogeneous SoC plan described in ``docs/heterogeneous-soc-plan.md``.
-The demo uses two QEMU instances connected through
-``ivshmem-doorbell``:
+Two showcase modes are supported:
 
-* ARM guest: Linux running ``contrib/heterogeneous-soc/ping``
-* RISC-V guest: Linux running ``contrib/heterogeneous-soc/pong``
+* Phase 4 cross-cluster ping/pong:
 
-The shared-memory protocol definition lives in
+  * ARM/Linux guest running ``contrib/heterogeneous-soc/ping``
+  * RISC-V/Linux guest running ``contrib/heterogeneous-soc/pong``
+
+* Phase 5 Linux + FreeRTOS hello/ack:
+
+  * ARM/Linux guest running
+    ``contrib/heterogeneous-soc/freertos-showcase/hello-arm-linux``
+  * RISC-V/Linux guest running
+    ``contrib/heterogeneous-soc/freertos-showcase/hello-riscv-linux``
+  * RISC-V FreeRTOS guest running
+    ``contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf``
+
+The Phase 4 shared-memory protocol definition lives in
 ``contrib/heterogeneous-soc/ivshmem_proto.h`` and matches the 64 MiB
-BAR2 layout from the plan.
+BAR2 layout from the plan. The Phase 5 Linux/FreeRTOS protocol and
+payloads live under ``contrib/heterogeneous-soc/freertos-showcase/``.
 
 Quick start
 ~~~~~~~~~~~
@@ -46,6 +57,18 @@ by plan phase:
   * ``run-pong.sh``
   * ``find_ivshmem_bar2.py``
 
+* Phase 5 Linux + FreeRTOS hello/ack:
+
+  * ``fetch-freertos-kernel.sh``
+  * ``build-freertos-showcase.sh``
+  * ``start-ivshmem-server-arm-freertos.sh``
+  * ``start-ivshmem-server-riscv-freertos.sh``
+  * ``run-arm-phase5.sh``
+  * ``run-riscv-phase5.sh``
+  * ``run-riscv-freertos-phase5.sh``
+  * ``run-hello-arm.sh``
+  * ``run-hello-riscv.sh``
+
 Example flow inside the Lima guest:
 
 .. code-block:: bash
@@ -79,6 +102,9 @@ Verification checklist
 * ``/usr/local/bin/pong`` starts on RISC-V and waits for messages.
 * ``/usr/local/bin/ping`` on ARM prints the round-trip time for each
   reply received from the RISC-V guest.
+* ``freertos-riscv-demo.elf`` builds as a RISC-V bare-metal ELF and
+  the Phase 5 scripts launch a dedicated FreeRTOS responder with two
+  separate ivshmem links.
 
 Runtime notes
 ~~~~~~~~~~~~~

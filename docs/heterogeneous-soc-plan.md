@@ -671,3 +671,28 @@ ping $BAR2
 | ivshmem build gate     | `meson.build:3241`               |
 | ARM EL2/EL3 flags      | `target/arm/cpu.h:986,988`       |
 | RISC-V H-extension     | `target/riscv/cpu.c:1196`        |
+
+---
+
+### Phase 5 — ARM/Linux + RISC-V/Linux to RISC-V/FreeRTOS
+
+**Goal:** Both Linux guests send timestamped hello messages to a
+dedicated RISC-V FreeRTOS guest over two separate ivshmem links, and
+the FreeRTOS guest acknowledges each request with its own timestamp.
+
+**Payloads:**
+- `contrib/heterogeneous-soc/freertos-showcase/hello-arm-linux`
+- `contrib/heterogeneous-soc/freertos-showcase/hello-riscv-linux`
+- `contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf`
+
+**Host flow:**
+- Start `scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh`
+- Start `scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh`
+- Build payloads with `scripts/heterogeneous-soc/build-freertos-showcase.sh`
+- Launch the guests with `run-arm-phase5.sh`,
+  `run-riscv-phase5.sh`, and `run-riscv-freertos-phase5.sh`
+
+**Success criteria:**
+- ARM/Linux prints `hello from arm-linux` and receives an ACK
+- RISC-V/Linux prints `hello from riscv-linux` and receives an ACK
+- FreeRTOS logs both inbound hellos during the same run
