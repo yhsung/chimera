@@ -65,9 +65,9 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
         _skip "all packages already present"
     fi
 
-    # ── Step 2: Fetch ISOs and disk images ────────────────────────────────────
+    # ── Step 2: Fetch Debian kernel packages ──────────────────────────────────
 
-    _step "Fetching disk images and ISOs"
+    _step "Fetching Debian kernel packages"
     mkdir -p "${ASSET_DIR}"
 
     _fetch() {
@@ -81,20 +81,16 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
         fi
     }
 
-    _fetch "${ARM_ISO}" \
-        "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/alpine-virt-3.21.7-aarch64.iso" \
-        "Alpine aarch64 (ARM)"
-    _fetch "${RISCV_ISO}" \
-        "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/riscv64/alpine-standard-3.23.4-riscv64.iso" \
-        "Alpine riscv64"
-    _fetch "${RISCV_UBOOT_ARCHIVE}" \
-        "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/riscv64/alpine-uboot-3.23.4-riscv64.tar.gz" \
-        "Alpine riscv64 U-Boot"
-    _fetch "${MIPS_ISO}" \
-        "https://dl-cdn.alpinelinux.org/alpine/v3.10/releases/mips/alpine-standard-3.10.0-mips.iso" \
-        "Alpine mips (3.10)"
+    _fetch "${ARM_KERNEL_DEB}" \
+        "http://ftp.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-30-arm64_6.1.124-1_arm64.deb" \
+        "Debian arm64 kernel"
+    _fetch "${RISCV_KERNEL_DEB}" \
+        "http://ftp.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-30-riscv64_6.1.124-1_riscv64.deb" \
+        "Debian riscv64 kernel"
+    _fetch "${MIPS_KERNEL_DEB}" \
+        "http://ftp.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-30-4kc-malta_6.1.124-1_mips.deb" \
+        "Debian mips 4kc-malta kernel"
 
-    # Note: RISCV disk image is created on first RISCV-Linux QEMU launch (run-riscv-phase5.sh).
 fi
 
 # ── Step 3: Build ivshmem server (and full QEMU) ─────────────────────────────
@@ -145,23 +141,25 @@ else
     fi
 fi
 
-# ── Step 6: MIPS boot assets ─────────────────────────────────────────────────
-# prepare-mips-boot-assets.sh is idempotent (bsdtar only extracts; output files
-# are overwritten each run so a changed ISO is always reflected).
+# ── Step 6: Debian rootfs disk images ───────────────────────────────────────────
+# prepare-debian-rootfs.sh creates minimal Debian qcow2 disks via debootstrap.
+# These are created once and reused; the script skips existing images.
 
-_step "MIPS boot assets"
-if [[ -f "${MIPS_ISO}" ]]; then
-    bash "${SCRIPT_DIR}/prepare-mips-boot-assets.sh"
-    _ok "MIPS kernel and initramfs extracted"
-else
-    _skip "MIPS ISO not present — run without SKIP_PREREQS to download it"
-fi
+_step "Debian rootfs images"
+bash "${SCRIPT_DIR}/prepare-debian-rootfs.sh"
+_ok "Debian rootfs disks ready"
 
-# ── Step 7: Launch ────────────────────────────────────────────────────────────
+# ── Step 7: Extract kernel + initrd from .deb packages ─────────────────────────
+
+_step "Kernel extraction"
+bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh"
+_ok "Kernels and initrds extracted"
+
+# ── Step 8: Launch ────────────────────────────────────────────────────────────
 
 _step "Launching Chimera showcase"
 printf '  Session:  freertos-showcase\n'
-printf '  Layout:   3 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Linux\n'
+printf '  Layout:   3 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
 printf '  Navigate: Ctrl-b + arrow keys\n\n'
 
 # Pass SKIP_BUILD=1 so run-phase5-tmux.sh goes straight to the tmux launch
