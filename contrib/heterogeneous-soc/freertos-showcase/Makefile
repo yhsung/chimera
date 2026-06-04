@@ -10,7 +10,7 @@ OBJCOPY ?= $(CROSS_COMPILE)objcopy
 CFLAGS_BARE ?= -O2 -Wall -Wextra -ffreestanding -fno-omit-frame-pointer \
 	-march=rv64gc -mabi=lp64d -mcmodel=medany -msmall-data-limit=0 \
 	-ffunction-sections -fdata-sections
-LDFLAGS_BARE ?= -nostdlib -static -Wl,--gc-sections -T linker.ld
+LDFLAGS_BARE ?= -nostdlib -static -Wl,--gc-sections -T linker.ld -lgcc
 
 # Build hello-riscv-linux only when the Linux-targeting cross-compiler is available.
 HAVE_CC_ARM   := $(shell command -v $(CC_ARM) 2>/dev/null)

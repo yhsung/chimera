@@ -9,6 +9,10 @@ SECTIONS
 {
     .text : {
         *(.text.init)
+        KEEP(*(.text.freertos_risc_v_trap_handler*))
+        KEEP(*(.text.freertos_risc_v_exception_handler*))
+        KEEP(*(.text.freertos_risc_v_interrupt_handler*))
+        KEEP(*(.text.freertos_risc_v_mtimer_interrupt_handler*))
         *(.text*)
         *(.rodata*)
     } > RAM

@@ -4,6 +4,12 @@
 _start:
     la sp, _stack_top
 
+    /* Install the FreeRTOS trap handler before any exception can occur.
+     * This also prevents --gc-sections from removing the trap handler section,
+     * since startup.S now holds a direct reference to the symbol. */
+    la t0, freertos_risc_v_trap_handler
+    csrw mtvec, t0
+
     la t0, __bss_start
     la t1, __bss_end
 1:
