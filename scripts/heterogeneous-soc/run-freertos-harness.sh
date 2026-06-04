@@ -134,14 +134,11 @@ auto_login_and_run() {
         if echo "${content}" | grep -q "login:"; then
             tmux send-keys -t "${pane}" "root" Enter
             sleep 3
-            tmux send-keys -t "${pane}" "busybox mkdir -p /mnt/pingpong" Enter
-            sleep 1
-            tmux send-keys -t "${pane}" \
-                "busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong" Enter
+            tmux send-keys -t "${pane}" "mount /mnt/pingpong" Enter
             sleep 1
             tmux send-keys -t "${pane}" "${hello_bin}" Enter
             return 0
-        elif echo "${content}" | grep -q "~#"; then
+        elif echo "${content}" | grep -qE "root@[^:]*:~?#"; then
             tmux send-keys -t "${pane}" "${hello_bin}" Enter
             return 0
         fi
