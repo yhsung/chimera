@@ -12,7 +12,18 @@ CFLAGS_BARE ?= -O2 -Wall -Wextra -ffreestanding -fno-omit-frame-pointer \
 	-ffunction-sections -fdata-sections
 LDFLAGS_BARE ?= -nostdlib -static -Wl,--gc-sections -T linker.ld
 
-HELLO_TARGETS := hello-arm-linux hello-riscv-linux
+# Build hello-riscv-linux only when the Linux-targeting cross-compiler is available.
+HAVE_CC_ARM   := $(shell command -v $(CC_ARM) 2>/dev/null)
+HAVE_CC_RISCV := $(shell command -v $(CC_RISCV) 2>/dev/null)
+
+HELLO_TARGETS :=
+ifneq ($(HAVE_CC_ARM),)
+HELLO_TARGETS += hello-arm-linux
+endif
+ifneq ($(HAVE_CC_RISCV),)
+HELLO_TARGETS += hello-riscv-linux
+endif
+
 FREERTOS_SRCS := \
 	$(FREERTOS_KERNEL_DIR)/tasks.c \
 	$(FREERTOS_KERNEL_DIR)/list.c \
@@ -24,6 +35,12 @@ FREERTOS_SRCS := \
 .PHONY: all clean
 
 all: $(HELLO_TARGETS) freertos-riscv-demo.elf
+ifeq ($(HAVE_CC_ARM),)
+	$(warning CC_ARM=$(CC_ARM) not found — hello-arm-linux skipped)
+endif
+ifeq ($(HAVE_CC_RISCV),)
+	$(warning CC_RISCV=$(CC_RISCV) not found — hello-riscv-linux skipped)
+endif
 
 hello-arm-linux: linux_hello.c hello_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) \

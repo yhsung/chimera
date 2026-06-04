@@ -54,17 +54,35 @@ tmux split-window -v -t "$SESSION:0.1" -l 45%  # pane 1=middle(44%), pane 2=bott
 tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 1=top-right
 tmux split-window -h -t "$SESSION:0.3"          # pane 3=bottom-left, pane 4=bottom-right
 
-# Start ivshmem servers first, then wait for sockets before launching guests
+# Kill any stale QEMU processes that outlived a previous session.
+pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+
+# Start ivshmem servers first, then wait for both sockets before launching guests.
 tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh"   Enter
 tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
 
-sleep 1
+# Wait until both Unix sockets exist AND are actively listening.
+ARM_SOCK="${IVSHMEM_ARM_FREERTOS_DIR:-/tmp/ivshmem-arm-freertos}/sock"
+RISCV_SOCK="${IVSHMEM_RISCV_FREERTOS_DIR:-/tmp/ivshmem-riscv-freertos}/sock"
+for _i in $(seq 1 60); do
+    if [[ -S "$ARM_SOCK"  ]] && ss -xl | grep -Fq "$ARM_SOCK" && \
+       [[ -S "$RISCV_SOCK" ]] && ss -xl | grep -Fq "$RISCV_SOCK"; then
+        break
+    fi
+    sleep 0.5
+done
 
 tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
 tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
 tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
 
-# Wait for a login prompt in a pane, then send commands automatically.
+# Wait for the guest shell to be ready, then run the hello binary.
+# Handles two cases:
+#   1. Interactive login: detects "login:" (no autologin overlay)
+#   2. Autologin overlay: detect "~#" shell prompt (overlay skips login prompt
+#      entirely via getty -n, so "login:" never appears)
+# In both cases the overlay's ::once inittab entry mounts /mnt/pingpong before
+# the shell is presented, so no explicit mount command is needed.
 # Runs in the background so attach-session below can proceed.
 auto_login_and_run() {
     local pane="$1"
@@ -73,7 +91,10 @@ auto_login_and_run() {
     local elapsed=0
 
     while (( elapsed < timeout )); do
-        if tmux capture-pane -p -t "$pane" 2>/dev/null | grep -q "login:"; then
+        local content
+        content="$(tmux capture-pane -p -t "$pane" 2>/dev/null)"
+        if echo "$content" | grep -q "login:"; then
+            # Interactive login prompt (no autologin overlay).
             tmux send-keys -t "$pane" "root" Enter
             sleep 3
             tmux send-keys -t "$pane" "busybox mkdir -p /mnt/pingpong" Enter
@@ -82,11 +103,15 @@ auto_login_and_run() {
             sleep 1
             tmux send-keys -t "$pane" "$hello_bin" Enter
             return 0
+        elif echo "$content" | grep -q "~#"; then
+            # Autologin overlay: root shell already running, 9p already mounted.
+            tmux send-keys -t "$pane" "$hello_bin" Enter
+            return 0
         fi
         sleep 3
         (( elapsed += 3 ))
     done
-    echo "WARNING: timed out waiting for login prompt in pane $pane" >&2
+    echo "WARNING: timed out waiting for shell prompt in pane $pane" >&2
 }
 
 auto_login_and_run "$SESSION:0.3" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &

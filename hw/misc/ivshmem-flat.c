@@ -320,6 +320,16 @@ static void ivshmem_flat_instance_init(Object *obj)
     sysbus_init_mmio(sbd, &s->iomem);
 
     /*
+     * Pre-register the shmem slot as mmio[1] so that sysbus_mmio_map(sbd, 1,
+     * addr) works after realize.  memory_region_init_ram_from_fd() in
+     * ivshmem_flat_connect_server() will fully initialize s->shmem before
+     * sysbus_mmio_map is called; storing the pointer here while the struct is
+     * still zeroed is safe because nothing dereferences it until realize
+     * completes.
+     */
+    sysbus_init_mmio(sbd, &s->shmem);
+
+    /*
      * Create one output IRQ that will be connect to the
      * machine's interrupt controller.
      */
@@ -331,7 +341,6 @@ static void ivshmem_flat_instance_init(Object *obj)
 static bool ivshmem_flat_connect_server(DeviceState *dev, Error **errp)
 {
     IvshmemFTState *s = IVSHMEM_FLAT(dev);
-    SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
     int64_t protocol_version, msg;
     int shmem_fd;
     uint16_t peer_id;
@@ -419,7 +428,6 @@ static bool ivshmem_flat_connect_server(DeviceState *dev, Error **errp)
     memory_region_init_ram_from_fd(&s->shmem, OBJECT(s),
                                    "ivshmem-shmem", s->shmem_size,
                                    RAM_SHARED, shmem_fd, 0, NULL);
-    sysbus_init_mmio(sbd, &s->shmem);
 
     return true;
 }
