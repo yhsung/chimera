@@ -1,5 +1,6 @@
 CC_ARM ?= aarch64-linux-gnu-gcc
 CC_RISCV ?= riscv64-linux-gnu-gcc
+CC_MIPS ?= mips-linux-gnu-gcc
 CROSS_COMPILE ?= riscv64-unknown-elf-
 CFLAGS_LINUX ?= -O2 -Wall -Wextra -static
 FREERTOS_KERNEL_DIR ?= $(HOME)/heterogeneous-soc-freertos/FreeRTOS-Kernel
@@ -15,6 +16,7 @@ LDFLAGS_BARE ?= -nostdlib -static -Wl,--gc-sections -T linker.ld -lgcc
 # Build hello-riscv-linux only when the Linux-targeting cross-compiler is available.
 HAVE_CC_ARM   := $(shell command -v $(CC_ARM) 2>/dev/null)
 HAVE_CC_RISCV := $(shell command -v $(CC_RISCV) 2>/dev/null)
+HAVE_CC_MIPS  := $(shell command -v $(CC_MIPS) 2>/dev/null)
 
 HELLO_TARGETS :=
 ifneq ($(HAVE_CC_ARM),)
@@ -22,6 +24,9 @@ HELLO_TARGETS += hello-arm-linux
 endif
 ifneq ($(HAVE_CC_RISCV),)
 HELLO_TARGETS += hello-riscv-linux
+endif
+ifneq ($(HAVE_CC_MIPS),)
+HELLO_TARGETS += hello-mips-linux
 endif
 
 FREERTOS_SRCS := \
@@ -41,6 +46,9 @@ endif
 ifeq ($(HAVE_CC_RISCV),)
 	$(warning CC_RISCV=$(CC_RISCV) not found — hello-riscv-linux skipped)
 endif
+ifeq ($(HAVE_CC_MIPS),)
+	$(warning CC_MIPS=$(CC_MIPS) not found — hello-mips-linux skipped)
+endif
 
 hello-arm-linux: linux_hello.c hello_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) \
@@ -52,6 +60,12 @@ hello-riscv-linux: linux_hello.c hello_proto.h
 	$(CC_RISCV) $(CFLAGS_LINUX) \
 	  -DHSOC_SENDER_LABEL='"riscv-linux"' \
 	  -DHSOC_SENDER_ID=HSOC_SENDER_RISCV_LINUX \
+	  -o $@ linux_hello.c
+
+hello-mips-linux: linux_hello.c hello_proto.h
+	$(CC_MIPS) $(CFLAGS_LINUX) \
+	  -DHSOC_SENDER_LABEL='"mips-linux"' \
+	  -DHSOC_SENDER_ID=HSOC_SENDER_MIPS_LINUX \
 	  -o $@ linux_hello.c
 
 freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c \
