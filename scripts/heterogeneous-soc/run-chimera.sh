@@ -3,7 +3,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
-qemu_bin="$(find_qemu_system_binary qemu-system-mips)"
+qemu_bin="$(find_qemu_system_binary qemu-system-mipsel)"
 
 require_file "${MIPS_KERNEL_IMAGE}" "MIPS kernel image (vmlinuz)"
 require_file "${MIPS_INITRD_IMAGE}" "MIPS initrd image"

@@ -54,12 +54,12 @@ RISCV_KERNEL_IMAGE="${RISCV_KERNEL_IMAGE:-${RISCV_BOOT_ASSET_DIR}/vmlinuz}"
 RISCV_INITRD_IMAGE="${RISCV_INITRD_IMAGE:-${RISCV_BOOT_ASSET_DIR}/initrd.img}"
 RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-console=ttyS0 root=/dev/vda1 rw}"
 
-# ── MIPS (big-endian, debian-ports) ──────────────────────────────────────────
+# ── MIPS (little-endian mipsel, Debian Bookworm) ─────────────────────────────
 MIPS_KERNEL_DEB="${MIPS_KERNEL_DEB:-${ASSET_DIR}/linux-image-4kc-malta.deb}"
 MIPS_BOOT_ASSET_DIR="${MIPS_BOOT_ASSET_DIR:-${ASSET_DIR}/mips-boot}"
 MIPS_KERNEL_IMAGE="${MIPS_KERNEL_IMAGE:-${MIPS_BOOT_ASSET_DIR}/vmlinuz}"
 MIPS_INITRD_IMAGE="${MIPS_INITRD_IMAGE:-${MIPS_BOOT_ASSET_DIR}/initrd.img}"
-MIPS_KERNEL_CMDLINE="${MIPS_KERNEL_CMDLINE:-console=ttyS0 root=/dev/sda1 rw}"
+MIPS_KERNEL_CMDLINE="${MIPS_KERNEL_CMDLINE:-console=ttyS0 root=/dev/vda1 rw}"
 
 ARM_SSH_PORT="${ARM_SSH_PORT:-2222}"
 RISCV_SSH_PORT="${RISCV_SSH_PORT:-2223}"

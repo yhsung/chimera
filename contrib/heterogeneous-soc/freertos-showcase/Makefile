@@ -1,6 +1,6 @@
 CC_ARM ?= aarch64-linux-gnu-gcc
 CC_RISCV ?= riscv64-linux-gnu-gcc
-CC_MIPS ?= mips-linux-gnu-gcc
+CC_MIPS ?= mipsel-linux-gnu-gcc
 CROSS_COMPILE ?= riscv64-unknown-elf-
 CFLAGS_LINUX ?= -O2 -Wall -Wextra -static
 FREERTOS_KERNEL_DIR ?= $(HOME)/heterogeneous-soc-freertos/FreeRTOS-Kernel

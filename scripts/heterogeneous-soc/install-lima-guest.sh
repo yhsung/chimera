@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ── Register foreign architectures for cross-arch kernel downloads ────────
-# fetch-images.sh uses apt-get download to pull Debian kernel .deb packages
-# for arm64, riscv64, and mips.  dpkg needs each foreign arch registered
+# fetch-images.sh uses apt-get download to pull kernel .deb packages
+# for arm64, riscv64, and mipsel.  dpkg needs each foreign arch registered
 # before apt-get update so the package indices include those architectures.
-for _arch in arm64 riscv64 mips; do
+for _arch in arm64 riscv64 mipsel; do
     if dpkg --print-architecture 2>/dev/null | grep -qxF "${_arch}"; then
         continue  # native arch
     fi
@@ -27,10 +27,11 @@ sudo apt-get install -y \
     git \
     qemu-system-arm \
     qemu-system-misc \
+    qemu-system-mips \
     qemu-user-static \
     gcc-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu \
-    gcc-mips-linux-gnu \
+    gcc-mipsel-linux-gnu \
     gcc-riscv64-unknown-elf \
     binutils-riscv64-unknown-elf \
     libarchive-tools \

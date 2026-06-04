@@ -3,32 +3,32 @@
 #
 # Create minimal Debian rootfs qcow2 disk images via debootstrap.
 # Each image is configured for serial-console auto-login and 9p virtio mount.
+# Installs the kernel .deb inside the chroot so that update-initramfs generates
+# a proper initrd; vmlinuz and initrd.img are copied to the boot asset directory
+# before the qcow2 is created.
 #
 # Architectures:
-#   arm64   -> ${ARM_DEBIAN_DISK}   (native debootstrap or qemu-debootstrap)
-#   riscv64 -> ${RISCV_DEBIAN_DISK} (qemu-debootstrap)
-#   mips    -> ${MIPS_DEBIAN_DISK}  (qemu-debootstrap via debian-ports)
-#
-# The images include:
-#   - systemd with serial-getty auto-login for root
-#   - mount utilities for 9p virtio
-#   - /mnt/pingpong directory
-#   - fstab entry for the 9p share
+#   arm64   -> ${ARM_DEBIAN_DISK}   (Debian Bookworm)
+#   riscv64 -> ${RISCV_DEBIAN_DISK} (Debian Trixie; riscv64 not in Bookworm)
+#   mipsel  -> ${MIPS_DEBIAN_DISK}  (Debian Bookworm)
 #
 # Environment:
-#   DEBIAN_MIRROR       Debian mirror URL (default: http://deb.debian.org/debian)
-#   DEBIAN_PORTS_MIRROR Debian-ports mirror for MIPS (default: http://deb.debian.org/debian-ports)
-#   DEBIAN_VERSION      Debian release (default: bookworm)
-#   ROOTFS_SIZE         Disk image size (default: 1G)
+#   DEBIAN_MIRROR          Debian mirror URL (default: http://deb.debian.org/debian)
+#   DEBIAN_VERSION         Debian release for arm64/mipsel (default: bookworm)
+#   DEBIAN_RISCV_VERSION   Debian release for riscv64 (default: trixie)
+#   ROOTFS_SIZE            Disk image size (default: 1G)
 set -euo pipefail
 
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://deb.debian.org/debian}"
-DEBIAN_PORTS_MIRROR="${DEBIAN_PORTS_MIRROR:-http://deb.debian.org/debian-ports}"
 DEBIAN_VERSION="${DEBIAN_VERSION:-bookworm}"
+DEBIAN_RISCV_VERSION="${DEBIAN_RISCV_VERSION:-trixie}"
 ROOTFS_SIZE="${ROOTFS_SIZE:-1G}"
-DEBIAN_INCLUDE_PKGS="${DEBIAN_INCLUDE_PKGS:-systemd,systemd-resolved,udev,dbus}"
+# initramfs-tools: generates initrd in kernel postinst
+# kmod: needed by depmod (called during kernel install)
+# linux-base: required by Debian kernel postinst scripts
+DEBIAN_INCLUDE_PKGS="${DEBIAN_INCLUDE_PKGS:-systemd,systemd-resolved,udev,dbus,initramfs-tools,kmod,linux-base}"
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -36,27 +36,43 @@ _ok()   { printf '\033[0;32m  ✓ %s\033[0m\n' "$*"; }
 _info() { printf '  %s\n' "$*"; }
 _die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-# create_debian_disk ARCH QCOW2_PATH MIRROR_URL [EXTRA_DEBOOTSTRAP_ARGS...]
+# create_debian_disk ARCH QCOW2_PATH MIRROR_URL KERNEL_DEB BOOT_DIR [EXTRA...]
 #
-# Uses qemu-debootstrap for cross-arch when ARCH != host arch.
-# Falls back to plain debootstrap when ARCH == host arch.
+# KERNEL_DEB: path to the versioned kernel .deb (e.g. linux-image-6.1.0-42-arm64)
+# BOOT_DIR:   directory where vmlinuz and initrd.img will be placed
+#
+# Installs KERNEL_DEB inside the rootfs chroot so update-initramfs runs and
+# generates /boot/initrd.img-*.  Both vmlinuz and initrd.img are then copied
+# to BOOT_DIR before the qcow2 is created.
 create_debian_disk() {
     local target_arch="$1"
     local qcow2_path="$2"
     local mirror_url="$3"
-    shift 3
+    local kernel_deb="$4"
+    local boot_dir="$5"
+    shift 5
     local extra_args=("$@")
 
-    if [[ -f "${qcow2_path}" ]]; then
-        _ok "Disk image already exists: ${qcow2_path} ($(du -sh "${qcow2_path}" | cut -f1))"
+    # riscv64 was added in Debian Trixie; arm64 and mipsel use Bookworm.
+    local debian_version
+    case "${target_arch}" in
+        riscv64) debian_version="${DEBIAN_RISCV_VERSION}" ;;
+        *)       debian_version="${DEBIAN_VERSION}" ;;
+    esac
+
+    # Skip if both qcow2 and boot assets already exist.
+    if [[ -f "${qcow2_path}" ]] && \
+       [[ -f "${boot_dir}/vmlinuz" ]] && \
+       [[ -f "${boot_dir}/initrd.img" ]]; then
+        _ok "Disk image and boot assets already exist: ${qcow2_path##*/}"
         return 0
     fi
 
-    _info "Creating Debian ${DEBIAN_VERSION} rootfs for ${target_arch}..."
+    _info "Creating Debian ${debian_version} rootfs for ${target_arch}..."
 
     local tmpdir
     tmpdir="$(mktemp -d)"
-    trap 'rm -rf "${tmpdir}"' RETURN
+    trap 'sudo rm -rf "${tmpdir}"' RETURN
 
     local rootfs_dir="${tmpdir}/rootfs"
 
@@ -66,69 +82,99 @@ create_debian_disk() {
 
     if [[ "${target_arch}" == "${host_arch}" ]]; then
         _info "Native debootstrap (${target_arch})..."
-        debootstrap \
+        sudo debootstrap \
             --arch="${target_arch}" \
             --include="${DEBIAN_INCLUDE_PKGS}" \
             --variant=minbase \
             "${extra_args[@]}" \
-            "${DEBIAN_VERSION}" \
+            "${debian_version}" \
             "${rootfs_dir}" \
             "${mirror_url}"
     elif command -v qemu-debootstrap &>/dev/null; then
         _info "qemu-debootstrap for ${target_arch}..."
-        qemu-debootstrap \
+        sudo qemu-debootstrap \
             --arch="${target_arch}" \
             --include="${DEBIAN_INCLUDE_PKGS}" \
             --variant=minbase \
             "${extra_args[@]}" \
-            "${DEBIAN_VERSION}" \
+            "${debian_version}" \
             "${rootfs_dir}" \
             "${mirror_url}"
     else
         _info "qemu-debootstrap not found; using debootstrap --foreign..."
-        debootstrap \
+        sudo debootstrap \
             --arch="${target_arch}" \
             --include="${DEBIAN_INCLUDE_PKGS}" \
             --variant=minbase \
             --foreign \
             "${extra_args[@]}" \
-            "${DEBIAN_VERSION}" \
+            "${debian_version}" \
             "${rootfs_dir}" \
             "${mirror_url}"
 
-        # Copy qemu-user-static binary for second stage
         local qemu_static
         case "${target_arch}" in
-            arm64)     qemu_static="qemu-aarch64-static" ;;
-            riscv64)   qemu_static="qemu-riscv64-static" ;;
-            mips|mipseb) qemu_static="qemu-mips-static" ;;
-            *)         _die "Unknown qemu-user-static binary for arch: ${target_arch}" ;;
+            arm64)   qemu_static="qemu-aarch64-static" ;;
+            riscv64) qemu_static="qemu-riscv64-static" ;;
+            mipsel)  qemu_static="qemu-mipsel-static" ;;
+            *)       _die "Unknown qemu-user-static binary for arch: ${target_arch}" ;;
         esac
 
         if command -v "${qemu_static}" &>/dev/null; then
-            cp "$(command -v "${qemu_static}")" "${rootfs_dir}/usr/bin/"
-            chroot "${rootfs_dir}" /debootstrap/debootstrap --second-stage
-            rm -f "${rootfs_dir}/usr/bin/${qemu_static}"
+            sudo cp "$(command -v "${qemu_static}")" "${rootfs_dir}/usr/bin/"
+            sudo chroot "${rootfs_dir}" /debootstrap/debootstrap --second-stage
+            sudo rm -f "${rootfs_dir}/usr/bin/${qemu_static}"
         else
             _die "${qemu_static} not found. Install qemu-user-static package."
         fi
     fi
 
-    # Stage 2: Configure the rootfs
+    # Stage 2: Install kernel .deb inside the rootfs.
+    # The kernel's postinst calls update-initramfs which generates initrd.img.
+    if [[ -f "${kernel_deb}" ]]; then
+        _info "Installing kernel in rootfs (this triggers initrd generation)..."
+        local kern_basename
+        kern_basename="$(basename "${kernel_deb}")"
+        sudo cp "${kernel_deb}" "${rootfs_dir}/tmp/${kern_basename}"
+        # --force-depends in case not all dependencies are in the minbase rootfs.
+        sudo chroot "${rootfs_dir}" dpkg --force-depends -i "/tmp/${kern_basename}" \
+            2>&1 | grep -v "^(Reading database" | tail -20 || true
+        sudo rm -f "${rootfs_dir}/tmp/${kern_basename}"
+    fi
+
+    # Stage 3: Copy vmlinuz (or vmlinux for riscv64) and initrd to boot_dir.
+    local vmlinuz_src initrd_src
+    # Debian riscv64 ships vmlinux (uncompressed ELF); others use vmlinuz.
+    vmlinuz_src="$(find "${rootfs_dir}/boot" -maxdepth 1 \
+        \( -name 'vmlinuz-*' -o -name 'vmlinux-*' \) \
+        -not -name '*.old-dkms' 2>/dev/null | head -1)" || true
+    initrd_src="$(find "${rootfs_dir}/boot" -maxdepth 1 \
+        -name 'initrd.img-*' 2>/dev/null | head -1)" || true
+
+    if [[ -z "${vmlinuz_src}" ]]; then
+        _die "No vmlinuz/vmlinux found in ${rootfs_dir}/boot after kernel install"
+    fi
+    if [[ -z "${initrd_src}" ]]; then
+        _die "No initrd.img found in ${rootfs_dir}/boot after kernel install"
+    fi
+
+    mkdir -p "${boot_dir}"
+    cp "${vmlinuz_src}" "${boot_dir}/vmlinuz"
+    cp "${initrd_src}"  "${boot_dir}/initrd.img"
+    _ok "Boot assets extracted to ${boot_dir}/"
+
+    # Stage 4: Configure the rootfs
     _configure_rootfs "${rootfs_dir}" "${target_arch}"
 
-    # Stage 3: Create disk image
+    # Stage 5: Create disk image
     _info "Creating disk image: ${qcow2_path}"
     local raw_img="${tmpdir}/debian-rootfs.raw"
     qemu-img create -f raw "${raw_img}" "${ROOTFS_SIZE}"
 
-    # Format and populate
     mkfs.ext4 -q -F "${raw_img}"
 
     local mnt_dir="${tmpdir}/mnt"
     mkdir -p "${mnt_dir}"
-    # Guard mount with an EXIT trap so the loop device is always released,
-    # even when set -e aborts the shell mid-block (RETURN traps don't fire on exit).
     trap 'sudo umount "${mnt_dir}" 2>/dev/null || true' EXIT
     sudo mount -o loop "${raw_img}" "${mnt_dir}"
     sudo cp -a "${rootfs_dir}/." "${mnt_dir}/"
@@ -150,12 +196,10 @@ _configure_rootfs() {
     case "${arch}" in
         arm64)   tty="ttyAMA0" ;;
         riscv64) tty="ttyS0" ;;
-        mips)    tty="ttyS0" ;;
+        mipsel)  tty="ttyS0" ;;
         *)       tty="ttyS0" ;;
     esac
 
-    # ── Serial console auto-login ─────────────────────────────────────────
-    # Override getty@.service to auto-login root on the serial console
     local getty_override="${rootfs}/etc/systemd/system/getty@.service.d/override.conf"
     sudo mkdir -p "$(dirname "${getty_override}")"
 
@@ -166,26 +210,20 @@ ExecStart=-/sbin/agetty --autologin root --noclear %I \$TERM
 Type=idle
 EOF
 
-    # Enable the serial getty
     sudo ln -sf /lib/systemd/system/getty@.service \
         "${rootfs}/etc/systemd/system/getty.target.wants/getty@${tty}.service" 2>/dev/null || true
 
-    # ── 9p mount point and fstab ──────────────────────────────────────────
     sudo mkdir -p "${rootfs}/mnt/pingpong"
 
     sudo tee -a "${rootfs}/etc/fstab" >/dev/null <<EOF
 pingpong /mnt/pingpong 9p trans=virtio,version=9p2000.L 0 0
 EOF
 
-    # ── Hostname ──────────────────────────────────────────────────────────
     echo "debian-${arch}" | sudo tee "${rootfs}/etc/hostname" >/dev/null
 
-    # ── Root password (empty / passwordless) ──────────────────────────────
-    # Allow root login with no password on serial console
     if [[ -f "${rootfs}/etc/pam.d/login" ]]; then
         sudo sed -i 's/^auth\s\+required\s\+pam_securetty\.so/#&/' "${rootfs}/etc/pam.d/login" 2>/dev/null || true
     fi
-    # Ensure root account is unlocked
     if [[ -f "${rootfs}/etc/shadow" ]]; then
         sudo sed -i 's/^root:[^:]*:/root::/' "${rootfs}/etc/shadow"
     fi
@@ -195,7 +233,6 @@ EOF
 
 # ── Main ────────────────────────────────────────────────────────────────────
 
-# Check prerequisites
 if [[ "$(uname -s)" != "Linux" ]]; then
     _die "This script must run on Linux (requires debootstrap, mount, ext4)"
 fi
@@ -208,12 +245,14 @@ done
 
 mkdir -p "${ASSET_DIR}"
 
-# ARM64
-create_debian_disk "arm64" "${ARM_DEBIAN_DISK}" "${DEBIAN_MIRROR}"
+# ARM64 — Debian Bookworm
+create_debian_disk "arm64" "${ARM_DEBIAN_DISK}" "${DEBIAN_MIRROR}" \
+    "${ARM_KERNEL_DEB}" "${ARM_BOOT_ASSET_DIR}"
 
-# RISC-V 64
-create_debian_disk "riscv64" "${RISCV_DEBIAN_DISK}" "${DEBIAN_MIRROR}"
+# RISC-V 64 — Debian Trixie
+create_debian_disk "riscv64" "${RISCV_DEBIAN_DISK}" "${DEBIAN_MIRROR}" \
+    "${RISCV_KERNEL_DEB}" "${RISCV_BOOT_ASSET_DIR}"
 
-# MIPS (big-endian, uses debian-ports mirror)
-create_debian_disk "mips" "${MIPS_DEBIAN_DISK}" "${DEBIAN_PORTS_MIRROR}" \
-    --no-check-gpg
+# MIPS (little-endian mipsel) — Debian Bookworm
+create_debian_disk "mipsel" "${MIPS_DEBIAN_DISK}" "${DEBIAN_MIRROR}" \
+    "${MIPS_KERNEL_DEB}" "${MIPS_BOOT_ASSET_DIR}"
