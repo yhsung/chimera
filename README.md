@@ -9,19 +9,19 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 ```
  ┌─────────────────────────┐      ivshmem-arm-freertos      ┌──────────────────────────────────┐
  │  ARM-Linux (aarch64)    │ ◄────────────────────────────► │                                  │
- │  Alpine Linux            │  /tmp/ivshmem-arm-freertos/    │  RISCV FreeRTOS (bare-metal)     │
+ │  Debian Linux            │  /tmp/ivshmem-arm-freertos/    │  RISCV FreeRTOS (bare-metal)     │
  │  QEMU virt (gic-version=3)│  IVSHMEM0_SHMEM=0x31000000   │  QEMU chimera-riscv-freertos-demo│
  └─────────────────────────┘                                 │                                  │
                                                              │  Polls all three channels every  │
  ┌─────────────────────────┐      ivshmem-riscv-freertos    │  1 ms; sends ACK with FreeRTOS   │
  │  RISCV-Linux (rv64)     │ ◄────────────────────────────► │  tick timestamp                  │
- │  Alpine Linux            │  /tmp/ivshmem-riscv-freertos/  │                                  │
+ │  Debian Linux            │  /tmp/ivshmem-riscv-freertos/  │                                  │
  │  QEMU virt (OpenSBI)    │  IVSHMEM1_SHMEM=0x36000000    │                                  │
  └─────────────────────────┘                                 │                                  │
                                                              │                                  │
  ┌─────────────────────────┐      ivshmem-mips-freertos     │                                  │
  │  MIPS-Linux (mips32)    │ ◄────────────────────────────► │                                  │
- │  Alpine Linux 3.10      │  /tmp/ivshmem-mips-freertos/   │                                  │
+ │  Debian Linux 12        │  /tmp/ivshmem-mips-freertos/   │                                  │
  │  QEMU malta             │  IVSHMEM2_SHMEM=0x3B000000    └──────────────────────────────────┘
  └─────────────────────────┘
 ```
@@ -30,9 +30,9 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 
 | Component | Machine | OS | Role |
 |---|---|---|---|
-| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Alpine Linux | Sends HELLO, waits for ACK |
-| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Alpine Linux | Sends HELLO, waits for ACK |
-| MIPS-Linux | QEMU `malta` mips32 | Alpine Linux 3.10 | Sends HELLO, waits for ACK |
+| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
+| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
+| MIPS-Linux | QEMU `malta` mips32 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
 | RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | Receives HELLO from all three, sends ACK |
 | ivshmem-server (ARM) | Host process | — | Brokers shared memory for ARM↔FreeRTOS |
 | ivshmem-server (RISCV) | Host process | — | Brokers shared memory for RISCV↔FreeRTOS |
@@ -138,26 +138,27 @@ Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mou
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/run-chimera-showcase.sh
 ```
 
-`run-chimera-showcase.sh` is the full-stack launcher. It runs 7 stages, each idempotent:
+`run-chimera-showcase.sh` is the full-stack launcher. It runs 8 stages, each idempotent:
 
 | Stage | What it does | Skip condition |
 |---|---|---|
 | 1 — apt packages | Installs all build deps including `gcc-mips-linux-gnu` | Already installed |
-| 2 — ISOs | Downloads ARM / RISCV / MIPS Alpine ISOs | File already exists |
+| 2 — kernel packages | Downloads ARM / RISCV / MIPS Debian kernel .deb packages | File already exists |
 | 3 — QEMU build | Builds `qemu-system-riscv64/aarch64` + `ivshmem-server` | Binaries already in `BUILD_DIR` |
 | 4 — FreeRTOS kernel | Clones / pulls FreeRTOS-Kernel | Already cloned (pulls latest) |
 | 5 — Showcase binaries | Builds ELF + `hello-{arm,riscv,mips}-linux` | Warns if MIPS binary absent |
-| 6 — MIPS boot assets | Extracts kernel + initramfs from Alpine mips ISO | Skipped if ISO not present |
-| 7 — Launch | Opens 7-pane tmux session | — |
+| 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap | Skipped if disk exists |
+| 7 — boot assets | Extracts kernel + initramfs from Debian kernel .deb packages | Skipped if already extracted |
+| 8 — Launch | Opens 7-pane tmux session | — |
 
 **Environment overrides:**
 
 | Variable | Effect |
 |---|---|
 | `SKIP_PREREQS=1` | Skip stages 1–2 (fast re-run after first setup) |
-| `SKIP_BUILD=1` | Skip stages 1–6 (jump straight to tmux launch using cached binaries) |
+| `SKIP_BUILD=1` | Skip stages 1–7 (jump straight to tmux launch using cached binaries) |
 | `BUILD_DIR` | QEMU build output directory (default: `~/chimera-build-linux`) |
-| `ASSET_DIR` | ISO / disk image cache directory (default: `~/iso`) |
+| `ASSET_DIR` | Kernel .deb / disk image cache directory (default: `~/iso`) |
 
 ### Manual step-by-step
 
@@ -171,7 +172,7 @@ limactl shell qemu-dev
 # Install build dependencies (once)
 bash ~/chimera-src/scripts/heterogeneous-soc/install-lima-guest.sh
 
-# Fetch ISOs
+# Fetch Debian kernel packages
 bash ~/chimera-src/scripts/heterogeneous-soc/fetch-images.sh
 
 # Build QEMU + ivshmem-server
@@ -193,7 +194,7 @@ CHIMERA_ROOT=~/chimera-src BUILD_DIR=~/chimera-build-linux \
 
 - macOS host with [Lima](https://lima-vm.io/) (`brew install lima`)
 - QEMU built from this tree inside the Lima VM (`qemu-dev`)
-- Alpine Linux ISOs for aarch64, riscv64, and mips (fetched automatically)
+- Debian kernel .deb packages for arm64, riscv64, and mips (fetched automatically)
 
 Cross-compilation happens inside the Lima VM, which provides:
 
@@ -204,7 +205,7 @@ Cross-compilation happens inside the Lima VM, which provides:
 | `mips-linux-gnu-gcc` | MIPS-Linux hello binary |
 | `riscv64-unknown-elf-gcc` | FreeRTOS bare-metal ELF |
 
-> **MIPS OS note:** Alpine dropped 32-bit MIPS after v3.12. The demo uses Alpine 3.10.0-mips, the last supported release. The kernel filename in the boot directory is `vmlinuz-vanilla`; if a different ISO is used, set `MIPS_KERNEL_BASENAME` and `MIPS_INITRAMFS_BASENAME` before running.
+> **MIPS OS note:** Debian dropped big-endian 32-bit MIPS (mips) after Debian 8 (jessie). The demo uses the `4kc-malta` kernel from the Debian 12 `debian-ports` archive. The MIPS rootfs is built via `debootstrap` using the `debian-ports` suite.
 
 ---
 
@@ -223,7 +224,7 @@ scripts/heterogeneous-soc/
   run-chimera-showcase.sh               — full-stack launcher (prereqs + build + tmux)
   run-phase5-tmux.sh                    — tmux session launcher (7 panes)
   build-freertos-showcase.sh            — builds all binaries via Lima
-  fetch-images.sh                       — downloads Alpine ISOs
+  fetch-images.sh                       — downloads Debian kernel .deb packages
   install-lima-guest.sh                 — installs apt packages in Lima VM
   start-ivshmem-server-arm-freertos.sh  — starts ARM ivshmem-server
   start-ivshmem-server-riscv-freertos.sh — starts RISCV ivshmem-server
@@ -232,8 +233,8 @@ scripts/heterogeneous-soc/
   run-riscv-phase5.sh                   — launches RISCV-Linux QEMU
   run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
   run-riscv-freertos-phase5.sh          — launches FreeRTOS QEMU
-  prepare-mips-boot-assets.sh           — extracts MIPS kernel/initramfs from ISO
-  prepare-demo-guest-overlays.sh        — builds autologin initramfs overlays for all guests
+  prepare-debian-rootfs.sh              — creates minimal Debian qcow2 rootfs disks via debootstrap
+  prepare-debian-boot-assets.sh         — extracts kernel + initramfs from Debian kernel .deb packages
 
 hw/riscv/chimera_freertos_demo.c  — custom QEMU machine (3 ivshmem channels)
 hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by FreeRTOS)
