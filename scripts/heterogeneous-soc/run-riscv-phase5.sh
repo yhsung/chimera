@@ -5,22 +5,13 @@ source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 qemu_bin="$(find_qemu_system_binary qemu-system-riscv64)"
 
-require_file "${RISCV_ISO}" "RISC-V installer ISO"
 require_file "${RISCV_OPENSBI_BIOS}" "RISC-V OpenSBI firmware"
+require_file "${RISCV_KERNEL_IMAGE}" "RISC-V kernel image (vmlinuz)"
+require_file "${RISCV_INITRD_IMAGE}" "RISC-V initrd image"
+require_file "${RISCV_DEBIAN_DISK}" "RISC-V Debian rootfs disk"
 [[ -d "${PINGPONG_DIR}" ]] || die "shared pingpong directory not found: ${PINGPONG_DIR}"
 
-RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-direct}"
-
-bash "${SCRIPT_DIR}/prepare-riscv-uboot.sh"
-bash "${SCRIPT_DIR}/prepare-riscv-phase3-boot-assets.sh"
-bash "${SCRIPT_DIR}/prepare-demo-guest-overlays.sh"
-
-if [[ ! -f "${RISCV_DISK}" ]]; then
-    qemu-img create -f qcow2 "${RISCV_DISK}" 4G
-fi
-
-require_file "${RISCV_KERNEL_IMAGE}" "RISC-V decompressed kernel image"
-require_file "${RISCV_INITRAMFS_COMBINED}" "RISC-V combined initramfs image"
+bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
     -machine virt,aclint=on \
@@ -28,13 +19,10 @@ exec "${qemu_bin}" \
     -m 2G -smp 4 \
     -bios "${RISCV_OPENSBI_BIOS}" \
     -kernel "${RISCV_KERNEL_IMAGE}" \
-    -initrd "${RISCV_INITRAMFS_COMBINED}" \
+    -initrd "${RISCV_INITRD_IMAGE}" \
     -append "${RISCV_KERNEL_CMDLINE}" \
     -chardev socket,id=ivshmem,path="${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
-    -drive file="${RISCV_DISK}",if=none,id=hd0 \
-    -device virtio-blk-device,drive=hd0 \
-    -drive file="${RISCV_ISO}",media=cdrom,if=none,id=cd0,readonly=on \
-    -device virtio-blk-device,drive=cd0 \
+    -drive file="${RISCV_DEBIAN_DISK}",format=qcow2,if=virtio \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -nographic
