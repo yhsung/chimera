@@ -29,7 +29,7 @@ static void uart_putc(char ch)
     *thr = (uint8_t)ch;
 }
 
-static void log_uart(const char *msg)
+void log_uart(const char *msg)
 {
     while (*msg != '\0') {
         if (*msg == '\n') {
@@ -65,9 +65,27 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     freertos_ivshmem_send_ack(link, hello.seq, ts_sec, ts_nsec);
 }
 
+static void diag_print_hex32(uint32_t v)
+{
+    static const char hex[] = "0123456789abcdef";
+    char buf[11];
+    buf[0] = '0'; buf[1] = 'x';
+    buf[2] = hex[(v >> 28) & 0xf];
+    buf[3] = hex[(v >> 24) & 0xf];
+    buf[4] = hex[(v >> 20) & 0xf];
+    buf[5] = hex[(v >> 16) & 0xf];
+    buf[6] = hex[(v >> 12) & 0xf];
+    buf[7] = hex[(v >> 8) & 0xf];
+    buf[8] = hex[(v >> 4) & 0xf];
+    buf[9] = hex[v & 0xf];
+    buf[10] = '\0';
+    log_uart(buf);
+}
+
 static void showcase_task(void *opaque)
 {
     (void)opaque;
+    uint32_t diag_count = 0;
 
     freertos_ivshmem_init(&arm_link, IVSHMEM0_MMIO, IVSHMEM0_SHMEM,
                           "arm-linux");
@@ -81,6 +99,20 @@ static void showcase_task(void *opaque)
                            "[freertos] received hello from arm-linux\n");
         maybe_service_link(&riscv_link,
                            "[freertos] received hello from riscv-linux\n");
+
+        if (++diag_count >= 3000) {
+            diag_count = 0;
+            log_uart("[diag] arm_flag=");
+            diag_print_hex32(arm_link.layout->linux_to_freertos.flag);
+            log_uart(" arm_magic=");
+            diag_print_hex32(arm_link.layout->linux_to_freertos.msg.magic);
+            log_uart(" riscv_flag=");
+            diag_print_hex32(riscv_link.layout->linux_to_freertos.flag);
+            log_uart(" riscv_magic=");
+            diag_print_hex32(riscv_link.layout->linux_to_freertos.msg.magic);
+            log_uart("\n");
+        }
+
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

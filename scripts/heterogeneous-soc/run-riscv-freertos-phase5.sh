@@ -12,4 +12,5 @@ exec "${qemu_bin}" \
     -chardev socket,id=armft,path="${IVSHMEM_ARM_FREERTOS_SOCKET}" \
     -chardev socket,id=riscvft,path="${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
     -bios "${FREERTOS_DEMO_ELF}" \
+    -monitor unix:/tmp/freertos-monitor.sock,server,nowait \
     -nographic

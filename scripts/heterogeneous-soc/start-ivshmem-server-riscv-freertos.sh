@@ -14,6 +14,7 @@ fi
 rm -f "${IVSHMEM_RISCV_FREERTOS_SOCKET}"
 exec "$(find_ivshmem_server)" \
     -F \
+    -M riscv-freertos \
     -S "${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
     -l "${IVSHMEM_SIZE}" \
     -n "${IVSHMEM_VECTORS}" \

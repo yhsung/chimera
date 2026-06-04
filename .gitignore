@@ -21,3 +21,6 @@ GTAGS
 *.patch
 *.gcov
 .DS_Store
+*.elf
+contrib/heterogeneous-soc/freertos-showcase/hello-arm-linux
+contrib/heterogeneous-soc/freertos-showcase/hello-riscv-linux
