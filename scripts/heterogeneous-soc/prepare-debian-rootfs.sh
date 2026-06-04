@@ -70,6 +70,7 @@ create_debian_disk() {
             --arch="${target_arch}" \
             --include="${DEBIAN_INCLUDE_PKGS}" \
             --variant=minbase \
+            "${extra_args[@]}" \
             "${DEBIAN_VERSION}" \
             "${rootfs_dir}" \
             "${mirror_url}"
@@ -126,9 +127,13 @@ create_debian_disk() {
 
     local mnt_dir="${tmpdir}/mnt"
     mkdir -p "${mnt_dir}"
+    # Guard mount with an EXIT trap so the loop device is always released,
+    # even when set -e aborts the shell mid-block (RETURN traps don't fire on exit).
+    trap 'sudo umount "${mnt_dir}" 2>/dev/null || true' EXIT
     sudo mount -o loop "${raw_img}" "${mnt_dir}"
     sudo cp -a "${rootfs_dir}/." "${mnt_dir}/"
     sudo umount "${mnt_dir}"
+    trap - EXIT
 
     qemu-img convert -f raw -O qcow2 "${raw_img}" "${qcow2_path}"
     rm -f "${raw_img}"
@@ -191,6 +196,12 @@ EOF
 # ── Main ────────────────────────────────────────────────────────────────────
 
 # Check prerequisites
+if [[ "$(uname -s)" != "Linux" ]]; then
+    _die "This script must run on Linux (requires debootstrap, mount, ext4)"
+fi
+if ! sudo -n true 2>/dev/null; then
+    _die "sudo requires a password; run with passwordless sudo or refresh your token first"
+fi
 for cmd in debootstrap qemu-img mkfs.ext4; do
     command -v "${cmd}" &>/dev/null || _die "${cmd} not found — install it first"
 done
