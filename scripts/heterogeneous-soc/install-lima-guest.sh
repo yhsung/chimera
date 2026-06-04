@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ── Register foreign architectures for cross-arch kernel downloads ────────
+# fetch-images.sh uses apt-get download to pull Debian kernel .deb packages
+# for arm64, riscv64, and mips.  dpkg needs each foreign arch registered
+# before apt-get update so the package indices include those architectures.
+for _arch in arm64 riscv64 mips; do
+    if dpkg --print-architecture 2>/dev/null | grep -qxF "${_arch}"; then
+        continue  # native arch
+    fi
+    if dpkg --print-foreign-architectures 2>/dev/null | grep -qxF "${_arch}"; then
+        continue  # already registered
+    fi
+    echo "Adding foreign architecture: ${_arch}"
+    sudo dpkg --add-architecture "${_arch}" 2>/dev/null || true
+done
+
 sudo apt-get update
 sudo apt-get install -y \
     build-essential \

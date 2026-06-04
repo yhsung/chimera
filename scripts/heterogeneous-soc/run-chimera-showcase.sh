@@ -70,28 +70,8 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     # ── Step 2: Fetch Debian kernel packages ──────────────────────────────────
 
     _step "Fetching Debian kernel packages"
-    mkdir -p "${ASSET_DIR}"
-
-    _fetch() {
-        local dst="$1" url="$2" label="$3"
-        if [[ -f "${dst}" ]]; then
-            _skip "${label} already present ($(du -sh "${dst}" | cut -f1))"
-        else
-            _info "Downloading ${label}..."
-            wget -q --show-progress -O "${dst}" "${url}"
-            _ok "${label} fetched"
-        fi
-    }
-
-    _fetch "${ARM_KERNEL_DEB}" \
-        "http://ftp.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-30-arm64_6.1.124-1_arm64.deb" \
-        "Debian arm64 kernel"
-    _fetch "${RISCV_KERNEL_DEB}" \
-        "http://ftp.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-30-riscv64_6.1.124-1_riscv64.deb" \
-        "Debian riscv64 kernel"
-    _fetch "${MIPS_KERNEL_DEB}" \
-        "http://ftp.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-30-4kc-malta_6.1.124-1_mips.deb" \
-        "Debian mips 4kc-malta kernel"
+    bash "${SCRIPT_DIR}/fetch-images.sh"
+    _ok "Debian kernel packages fetched"
 
 fi
 
