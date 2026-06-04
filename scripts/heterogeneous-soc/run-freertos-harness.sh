@@ -43,6 +43,7 @@ trap cleanup EXIT INT TERM
 echo "[harness] Killing orphan processes and removing stale sockets..."
 pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
 pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
+pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5
 rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" 2>/dev/null || true
 
