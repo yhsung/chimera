@@ -55,7 +55,11 @@ tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 1=top-ri
 tmux split-window -h -t "$SESSION:0.3"          # pane 3=bottom-left, pane 4=bottom-right
 
 # Kill any stale QEMU processes that outlived a previous session.
+# This also releases write locks on qcow2 disk images held by orphan VMs.
 pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+pkill -f "qemu-system-riscv64.*riscv-phase5"        2>/dev/null || true
+pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
+sleep 0.5   # let the processes exit and release disk locks before QEMU restarts
 
 # Start ivshmem servers first, then wait for both sockets before launching guests.
 tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh"   Enter
