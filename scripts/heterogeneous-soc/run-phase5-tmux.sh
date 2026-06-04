@@ -24,70 +24,67 @@ echo "=== Building FreeRTOS showcase ==="
 scripts/heterogeneous-soc/build-freertos-showcase.sh
 echo "=== Build complete ==="
 
+# Build a single-window layout:
+#
+#  ┌──────────────┬──────────────┬──────────────┐
+#  │  srv ARM-FT  │  srv RISCV-FT│  srv MIPS-FT │  panes 0, 1, 2
+#  ├──────────────┴──────────────┴──────────────┤
+#  │                  FreeRTOS                   │  pane 3
+#  ├──────────────┬──────────────┬──────────────┤
+#  │  ARM-Linux   │  RISCV-Linux │  MIPS-Linux  │  panes 4, 5, 6
+#  └──────────────┴──────────────┴──────────────┘
+#
+# Split sequence (tmux renumbers panes by visual position after each split):
+#   split-v 80% on 0   → 0=top(20%),   1=rest(80%)
+#   split-v 45% on 0.1 → 0=top(20%),   1=mid(44%),    2=bot(36%)
+#   split-h on 0.0     → 0=tl,1=tr,    2=mid,          3=bot
+#   split-h on 0.3     → 0=tl,1=tr,    2=mid,          3=bl,5=br — wait, actually:
+#                         after this:  0=tl,1=tr,2=mid,3=bl,4=br
+#   split-h on 0.1     → 0=tl,1=tm,2=tr,3=mid,4=bl,5=br
+#   split-h on 0.5     → 0=tl,1=tm,2=tr,3=mid,4=bl,5=bm,6=br
+
 # Kill any existing session
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-# Build a single-window layout:
-#
-# After each split-window -h, tmux renumbers panes by visual position
-# (left-to-right, top-to-bottom), so the indices after all four splits are:
-#
-#  ┌──────────────────────────┬──────────────────────────┐
-#  │ shmem server ARM-FreeRTOS│ shmem server RISCV-FreeRT│  (panes 0, 1)
-#  ├──────────────────────────┴──────────────────────────┤
-#  │                    FreeRTOS                         │  (pane 2)
-#  ├──────────────────────────┬──────────────────────────┤
-#  │   hello from ARM-Linux   │  hello from RISCV-Linux  │  (panes 3, 4)
-#  └──────────────────────────┴──────────────────────────┘
-
 tmux new-session -d -s "$SESSION" -x "${COLUMNS:-220}" -y "${LINES:-55}"
 
-# Split into three horizontal bands: servers (top), freertos (middle), guests (bottom)
-# tmux 3.4+ requires -l N% instead of the removed -p N flag
-tmux split-window -v -t "$SESSION:0.0" -l 80%  # pane 0=top(20%), pane 1=rest(80%)
-tmux split-window -v -t "$SESSION:0.1" -l 45%  # pane 1=middle(44%), pane 2=bottom(36%)
-
-# Split the server band and the guest band each into two side-by-side panes.
-# After the first h-split, tmux renumbers by visual position: the new top-right
-# pane becomes 1, pushing old pane 1→2 (middle) and old pane 2→3 (bottom).
-# The second h-split must therefore target pane 3 (the bottom band).
-tmux split-window -h -t "$SESSION:0.0"          # pane 0=top-left, pane 1=top-right
-tmux split-window -h -t "$SESSION:0.3"          # pane 3=bottom-left, pane 4=bottom-right
+tmux split-window -v -t "$SESSION:0.0" -l 80%
+tmux split-window -v -t "$SESSION:0.1" -l 45%
+tmux split-window -h -t "$SESSION:0.0"
+tmux split-window -h -t "$SESSION:0.3"
+tmux split-window -h -t "$SESSION:0.1"
+tmux split-window -h -t "$SESSION:0.5"
 
 # Kill any stale QEMU processes that outlived a previous session.
-# This also releases write locks on qcow2 disk images held by orphan VMs.
 pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
 pkill -f "qemu-system-riscv64.*riscv-phase5"        2>/dev/null || true
 pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
+pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5   # let the processes exit and release disk locks before QEMU restarts
 
-# Start ivshmem servers first, then wait for both sockets before launching guests.
+# Start ivshmem servers first; wait for all three sockets before launching guests.
 tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh"   Enter
 tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
+tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-mips-freertos.sh"  Enter
 
-# Wait until both Unix sockets exist AND are actively listening.
 ARM_SOCK="${IVSHMEM_ARM_FREERTOS_DIR:-/tmp/ivshmem-arm-freertos}/sock"
 RISCV_SOCK="${IVSHMEM_RISCV_FREERTOS_DIR:-/tmp/ivshmem-riscv-freertos}/sock"
+MIPS_SOCK="${IVSHMEM_MIPS_FREERTOS_DIR:-/tmp/ivshmem-mips-freertos}/sock"
 for _i in $(seq 1 60); do
-    if [[ -S "$ARM_SOCK"  ]] && ss -xl | grep -Fq "$ARM_SOCK" && \
-       [[ -S "$RISCV_SOCK" ]] && ss -xl | grep -Fq "$RISCV_SOCK"; then
+    if [[ -S "$ARM_SOCK"  ]] && ss -xl | grep -Fq "$ARM_SOCK"  && \
+       [[ -S "$RISCV_SOCK" ]] && ss -xl | grep -Fq "$RISCV_SOCK" && \
+       [[ -S "$MIPS_SOCK"  ]] && ss -xl | grep -Fq "$MIPS_SOCK"; then
         break
     fi
     sleep 0.5
 done
 
-tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
-tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
-tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
+tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
+tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
+tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/run-chimera.sh"               Enter
 
 # Wait for the guest shell to be ready, then run the hello binary.
-# Handles two cases:
-#   1. Interactive login: detects "login:" (no autologin overlay)
-#   2. Autologin overlay: detect "~#" shell prompt (overlay skips login prompt
-#      entirely via getty -n, so "login:" never appears)
-# In both cases the overlay's ::once inittab entry mounts /mnt/pingpong before
-# the shell is presented, so no explicit mount command is needed.
-# Runs in the background so attach-session below can proceed.
 auto_login_and_run() {
     local pane="$1"
     local hello_bin="$2"
@@ -98,7 +95,6 @@ auto_login_and_run() {
         local content
         content="$(tmux capture-pane -p -t "$pane" 2>/dev/null)"
         if echo "$content" | grep -q "login:"; then
-            # Interactive login prompt (no autologin overlay).
             tmux send-keys -t "$pane" "root" Enter
             sleep 3
             tmux send-keys -t "$pane" "busybox mkdir -p /mnt/pingpong" Enter
@@ -108,7 +104,6 @@ auto_login_and_run() {
             tmux send-keys -t "$pane" "$hello_bin" Enter
             return 0
         elif echo "$content" | grep -q "~#"; then
-            # Autologin overlay: root shell already running, 9p already mounted.
             tmux send-keys -t "$pane" "$hello_bin" Enter
             return 0
         fi
@@ -118,11 +113,12 @@ auto_login_and_run() {
     echo "WARNING: timed out waiting for shell prompt in pane $pane" >&2
 }
 
-auto_login_and_run "$SESSION:0.3" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
-auto_login_and_run "$SESSION:0.4" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+auto_login_and_run "$SESSION:0.4" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
+auto_login_and_run "$SESSION:0.5" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+auto_login_and_run "$SESSION:0.6" "/mnt/pingpong/freertos-showcase/hello-mips-linux"  &
 
-# Focus freertos pane so FreeRTOS output is front-and-center on attach
-tmux select-pane -t "$SESSION:0.2"
+# Focus FreeRTOS pane so FreeRTOS output is front-and-center on attach
+tmux select-pane -t "$SESSION:0.3"
 
 echo ""
 echo "=== Phase 5 showcase starting (session: $SESSION) ==="
