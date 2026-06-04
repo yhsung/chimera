@@ -97,3 +97,10 @@ build_overlay_archive "ttyS0"   "${RISCV_INITRAMFS_OVERLAY}" "${RISCV_INITRAMFS_
 
 echo "ARM_INITRAMFS_COMBINED=${ARM_INITRAMFS_COMBINED}"
 echo "RISCV_INITRAMFS_COMBINED=${RISCV_INITRAMFS_COMBINED}"
+
+if [[ -f "${MIPS_INITRAMFS_IMAGE}" ]]; then
+    mkdir -p "${MIPS_BOOT_ASSET_DIR}"
+    build_overlay_archive "ttyS0" "${MIPS_INITRAMFS_OVERLAY}" "${MIPS_INITRAMFS_IMAGE}" \
+        "${MIPS_INITRAMFS_COMBINED}" "/mnt/pingpong/freertos-showcase/hello-mips-linux"
+    echo "MIPS_INITRAMFS_COMBINED=${MIPS_INITRAMFS_COMBINED}"
+fi
