@@ -73,21 +73,27 @@ Each `hsoc_channel` holds a `volatile uint32_t flag` (0 = empty, 1 = ready) foll
 
 ### Handshake sequence
 
-```
-Linux                           FreeRTOS
-  │  shm_write(msg → BAR2)         │
-  │  __sync_synchronize()           │
-  │  flag = 1  ──────────────────► │  poll flag == 1
-  │                                 │  __sync_synchronize()
-  │                                 │  shmem_read(msg)
-  │                                 │  flag = 0
-  │                                 │  __sync_synchronize()
-  │                                 │  shmem_write(ack)
-  │                                 │  __sync_synchronize()
-  │  wait flag == 1 ◄────────────  │  flag = 1
-  │  shm_read(ack ← BAR2)          │
-  │  __sync_synchronize()           │
-  │  flag = 0                       │
+```mermaid
+sequenceDiagram
+    participant L as Linux
+    participant S as Shared Memory (BAR2)
+    participant F as FreeRTOS
+
+    L->>S: shm_write(msg)
+    Note over L: __sync_synchronize()
+    L->>S: flag = 1
+    S-->>F: poll detects flag == 1
+    Note over F: __sync_synchronize()
+    F->>S: shmem_read(msg)
+    F->>S: flag = 0
+    Note over F: __sync_synchronize()
+    F->>S: shmem_write(ack)
+    Note over F: __sync_synchronize()
+    F->>S: flag = 1
+    S-->>L: wait detects flag == 1
+    L->>S: shm_read(ack)
+    Note over L: __sync_synchronize()
+    L->>S: flag = 0
 ```
 
 ---
