@@ -1,6 +1,11 @@
 #include "freertos_ivshmem_flat.h"
 
 /*
+ * log_uart is defined in freertos_main.c; used here for diagnostic output.
+ */
+extern void log_uart(const char *msg);
+
+/*
  * Volatile byte helpers prevent GCC's loop-invariant code motion (LICM) from
  * hoisting reads from or writes to the ivshmem shared-memory region out of the
  * poll loop.  Without these, GCC -O2 can treat a non-volatile struct read
@@ -10,6 +15,24 @@
  * The volatile flag field is already protected against this, but the msg body
  * fields are not — they need the same treatment.
  */
+
+static void log_hex32(uint32_t v)
+{
+    static const char hex[] = "0123456789abcdef";
+    char buf[11];
+    buf[0] = '0'; buf[1] = 'x';
+    buf[2] = hex[(v >> 28) & 0xf];
+    buf[3] = hex[(v >> 24) & 0xf];
+    buf[4] = hex[(v >> 20) & 0xf];
+    buf[5] = hex[(v >> 16) & 0xf];
+    buf[6] = hex[(v >> 12) & 0xf];
+    buf[7] = hex[(v >> 8) & 0xf];
+    buf[8] = hex[(v >> 4) & 0xf];
+    buf[9] = hex[v & 0xf];
+    buf[10] = '\0';
+    log_uart(buf);
+}
+
 static void shmem_read(void *dst, const volatile void *src, uint32_t n)
 {
     uint8_t *d = (uint8_t *)dst;
@@ -66,14 +89,29 @@ int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
         return 0;
     }
 
+    log_uart("[diag] flag=1 on ");
+    log_uart(link->name);
+    log_uart("\n");
+
     __sync_synchronize();
     shmem_read(msg, &link->layout->linux_to_freertos.msg, sizeof(*msg));
     link->layout->linux_to_freertos.flag = 0;
     __sync_synchronize();
 
-    return msg->magic == HSOC_HELLO_MAGIC &&
-           msg->version == HSOC_PROTO_VERSION &&
-           msg->msg_type == HSOC_MSG_HELLO;
+    if (msg->magic != HSOC_HELLO_MAGIC ||
+        msg->version != HSOC_PROTO_VERSION ||
+        msg->msg_type != HSOC_MSG_HELLO) {
+        log_uart("[diag] validation failed: magic=");
+        log_hex32(msg->magic);
+        log_uart(" ver=");
+        log_hex32(msg->version);
+        log_uart(" type=");
+        log_hex32(msg->msg_type);
+        log_uart("\n");
+        return 0;
+    }
+
+    return 1;
 }
 
 void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
