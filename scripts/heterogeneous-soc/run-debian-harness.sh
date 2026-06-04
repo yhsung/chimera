@@ -354,7 +354,7 @@ MISSING_COUNT=0
 for s in "${PASS_STRINGS[@]}"; do
     if [[ "${seen[$s]}" -eq 0 ]]; then
         _fail "  Never saw: $s"
-        (( MISSING_COUNT++ ))
+        MISSING_COUNT=$(( MISSING_COUNT + 1 ))
     fi
 done
 

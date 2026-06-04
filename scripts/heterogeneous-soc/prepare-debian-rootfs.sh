@@ -133,6 +133,20 @@ create_debian_disk() {
     # The kernel's postinst calls update-initramfs which generates initrd.img.
     if [[ -f "${kernel_deb}" ]]; then
         _info "Installing kernel in rootfs (this triggers initrd generation)..."
+
+        # Ensure VirtIO and 9p modules are loaded early by the initrd so QEMU
+        # guests can mount the virtio-blk root disk and the 9p pingpong share.
+        sudo mkdir -p "${rootfs_dir}/etc/initramfs-tools"
+        sudo tee "${rootfs_dir}/etc/initramfs-tools/modules" >/dev/null <<'MODS'
+# Force-load VirtIO drivers so the initrd can mount root=/dev/vda1
+virtio_pci
+virtio_blk
+virtio_mmio
+9p
+9pnet
+9pnet_virtio
+MODS
+
         local kern_basename
         kern_basename="$(basename "${kernel_deb}")"
         sudo cp "${kernel_deb}" "${rootfs_dir}/tmp/${kern_basename}"

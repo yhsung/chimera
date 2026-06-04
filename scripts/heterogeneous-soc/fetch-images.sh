@@ -37,7 +37,7 @@ _fetch_debian_kernel() {
     if [[ -f "${dst}" ]] && [[ -s "${dst}" ]]; then
         local cached_contents
         cached_contents="$(dpkg-deb -c "${dst}" 2>/dev/null)" || true
-        if echo "${cached_contents}" | grep -q 'boot/vmlinuz'; then
+        if echo "${cached_contents}" | grep -qE 'boot/vmlinuz|boot/vmlinux'; then
             echo "  skip: ${label} already present ($(du -sh "${dst}" | cut -f1))"
             return 0
         fi
