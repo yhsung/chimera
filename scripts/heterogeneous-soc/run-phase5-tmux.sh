@@ -7,22 +7,24 @@ ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf"
 
 cd "$REPO"
 
-# One-time setup: Lima guest, disk images, and ivshmem server binary.
-# Gated on ELF absence as a proxy; none of these need to re-run on every launch.
-if [[ ! -f "$ELF" ]]; then
-    echo "=== One-time setup ==="
-    scripts/heterogeneous-soc/install-lima-guest.sh
-    scripts/heterogeneous-soc/fetch-images.sh
-    BUILD_DIR="$HOME/chimera-build-linux" VM_SOURCE_DIR="$HOME/chimera-src" \
-        scripts/heterogeneous-soc/build-ivshmem-tools.sh
-    echo "=== One-time setup complete ==="
-fi
+if [[ -z "${SKIP_BUILD:-}" ]]; then
+    # One-time setup: Lima guest, disk images, and ivshmem server binary.
+    # Gated on ELF absence as a proxy; none of these need to re-run on every launch.
+    if [[ ! -f "$ELF" ]]; then
+        echo "=== One-time setup ==="
+        scripts/heterogeneous-soc/install-lima-guest.sh
+        scripts/heterogeneous-soc/fetch-images.sh
+        BUILD_DIR="$HOME/chimera-build-linux" VM_SOURCE_DIR="$HOME/chimera-src" \
+            scripts/heterogeneous-soc/build-ivshmem-tools.sh
+        echo "=== One-time setup complete ==="
+    fi
 
-# Always rebuild the FreeRTOS ELF and Linux hello binaries so source changes
-# are picked up without manual intervention.
-echo "=== Building FreeRTOS showcase ==="
-scripts/heterogeneous-soc/build-freertos-showcase.sh
-echo "=== Build complete ==="
+    # Always rebuild the FreeRTOS ELF and Linux hello binaries so source changes
+    # are picked up without manual intervention.
+    echo "=== Building FreeRTOS showcase ==="
+    scripts/heterogeneous-soc/build-freertos-showcase.sh
+    echo "=== Build complete ==="
+fi
 
 # Build a single-window layout:
 #
