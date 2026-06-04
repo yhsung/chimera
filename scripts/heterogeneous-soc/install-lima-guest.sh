@@ -7,10 +7,12 @@ sudo apt-get install -y \
     acpica-tools \
     bison \
     clang \
+    debootstrap \
     flex \
     git \
     qemu-system-arm \
     qemu-system-misc \
+    qemu-user-static \
     gcc-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu \
     gcc-mips-linux-gnu \

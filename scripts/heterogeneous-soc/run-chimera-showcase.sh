@@ -44,6 +44,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check gcc-riscv64-unknown-elf
     _pkg_check binutils-riscv64-unknown-elf
     _pkg_check gcc-mips-linux-gnu
+    _pkg_check debootstrap
     _pkg_check libarchive-tools
     _pkg_check libglib2.0-dev
     _pkg_check libpixman-1-dev
@@ -53,6 +54,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check pciutils
     _pkg_check python3-pip
     _pkg_check qemu-system-misc
+    _pkg_check qemu-user-static
     _pkg_check rsync
     _pkg_check zlib1g-dev
 
