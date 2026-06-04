@@ -13,6 +13,7 @@ sudo apt-get install -y \
     qemu-system-misc \
     gcc-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu \
+    gcc-mips-linux-gnu \
     gcc-riscv64-unknown-elf \
     binutils-riscv64-unknown-elf \
     libarchive-tools \

@@ -57,6 +57,12 @@ RISCV_INITRAMFS_COMBINED="${RISCV_INITRAMFS_COMBINED:-${RISCV_BOOT_ASSET_DIR}/in
 RISCV_MODLOOP_IMAGE="${RISCV_MODLOOP_IMAGE:-${RISCV_BOOT_ASSET_DIR}/modloop-lts}"
 RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage,9p,9pnet,9pnet_virtio console=ttyS0}"
 
+MIPS_ISO="${MIPS_ISO:-${ASSET_DIR}/alpine-standard-3.10.0-mips.iso}"
+MIPS_BOOT_ASSET_DIR="${MIPS_BOOT_ASSET_DIR:-${ASSET_DIR}/mips-phase3-boot}"
+MIPS_KERNEL_IMAGE="${MIPS_KERNEL_IMAGE:-${MIPS_BOOT_ASSET_DIR}/vmlinuz-vanilla}"
+MIPS_INITRAMFS_IMAGE="${MIPS_INITRAMFS_IMAGE:-${MIPS_BOOT_ASSET_DIR}/initramfs-vanilla}"
+MIPS_KERNEL_CMDLINE="${MIPS_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage,9p,9pnet,9pnet_virtio console=ttyS0}"
+
 ARM_SSH_PORT="${ARM_SSH_PORT:-2222}"
 RISCV_SSH_PORT="${RISCV_SSH_PORT:-2223}"
 
