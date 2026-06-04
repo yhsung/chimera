@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
-source "$(cd "$(dirname "$0")" && pwd)/common.sh"
-
-require_file "${RISCV_ISO}" "RISC-V installer ISO"
-
-mkdir -p "${RISCV_BOOT_ASSET_DIR}"
-
-bsdtar -xOf "${RISCV_ISO}" boot/vmlinuz-lts > "${RISCV_KERNEL_IMAGE_COMPRESSED}"
-gzip -dc "${RISCV_KERNEL_IMAGE_COMPRESSED}" > "${RISCV_KERNEL_IMAGE}"
-bsdtar -xOf "${RISCV_ISO}" boot/initramfs-lts > "${RISCV_INITRAMFS_IMAGE}"
-bsdtar -xOf "${RISCV_ISO}" boot/grub/grub.cfg > "${RISCV_BOOT_ASSET_DIR}/grub.cfg"
-
-echo "RISCV_KERNEL_IMAGE=${RISCV_KERNEL_IMAGE}"
-echo "RISCV_INITRAMFS_IMAGE=${RISCV_INITRAMFS_IMAGE}"
+# DEPRECATED: prepare-riscv-phase3-boot-assets.sh has been replaced by
+# prepare-debian-boot-assets.sh. This stub exists for backward compatibility only.
+echo "WARNING: prepare-riscv-phase3-boot-assets.sh is deprecated." >&2
+echo "  Kernel assets are now extracted from Debian .deb packages by" >&2
+echo "  prepare-debian-boot-assets.sh." >&2
+exit 0
