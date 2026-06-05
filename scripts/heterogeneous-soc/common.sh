@@ -44,7 +44,7 @@ ARM_BOOT_ASSET_DIR="${ARM_BOOT_ASSET_DIR:-${HOME}/heterogeneous-soc-secure-stack
 ARM_KERNEL_IMAGE="${ARM_KERNEL_IMAGE:-${ARM_BOOT_ASSET_DIR}/vmlinuz}"
 ARM_INITRD_IMAGE="${ARM_INITRD_IMAGE:-${ARM_BOOT_ASSET_DIR}/initrd.img}"
 ARM_UEFI_BIOS="${ARM_UEFI_BIOS:-/usr/share/qemu-efi-aarch64/QEMU_EFI.fd}"
-ARM_KERNEL_CMDLINE="${ARM_KERNEL_CMDLINE:-console=ttyAMA0 root=/dev/vda1 rw}"
+ARM_KERNEL_CMDLINE="${ARM_KERNEL_CMDLINE:-console=ttyAMA0 root=/dev/vda rw}"
 
 # ── RISC-V (riscv64) ─────────────────────────────────────────────────────────
 RISCV_KERNEL_DEB="${RISCV_KERNEL_DEB:-${ASSET_DIR}/linux-image-riscv64.deb}"
@@ -52,14 +52,14 @@ RISCV_OPENSBI_BIOS="${RISCV_OPENSBI_BIOS:-/usr/lib/riscv64-linux-gnu/opensbi/gen
 RISCV_BOOT_ASSET_DIR="${RISCV_BOOT_ASSET_DIR:-${ASSET_DIR}/riscv-boot}"
 RISCV_KERNEL_IMAGE="${RISCV_KERNEL_IMAGE:-${RISCV_BOOT_ASSET_DIR}/vmlinuz}"
 RISCV_INITRD_IMAGE="${RISCV_INITRD_IMAGE:-${RISCV_BOOT_ASSET_DIR}/initrd.img}"
-RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-console=ttyS0 root=/dev/vda1 rw}"
+RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-console=ttyS0 root=/dev/vda rw}"
 
 # ── MIPS (little-endian mipsel, Debian Bookworm) ─────────────────────────────
 MIPS_KERNEL_DEB="${MIPS_KERNEL_DEB:-${ASSET_DIR}/linux-image-4kc-malta.deb}"
 MIPS_BOOT_ASSET_DIR="${MIPS_BOOT_ASSET_DIR:-${ASSET_DIR}/mips-boot}"
 MIPS_KERNEL_IMAGE="${MIPS_KERNEL_IMAGE:-${MIPS_BOOT_ASSET_DIR}/vmlinuz}"
 MIPS_INITRD_IMAGE="${MIPS_INITRD_IMAGE:-${MIPS_BOOT_ASSET_DIR}/initrd.img}"
-MIPS_KERNEL_CMDLINE="${MIPS_KERNEL_CMDLINE:-console=ttyS0 root=/dev/vda1 rw}"
+MIPS_KERNEL_CMDLINE="${MIPS_KERNEL_CMDLINE:-console=ttyS0 root=/dev/vda rw}"
 
 ARM_SSH_PORT="${ARM_SSH_PORT:-2222}"
 RISCV_SSH_PORT="${RISCV_SSH_PORT:-2223}"
