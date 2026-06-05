@@ -206,12 +206,16 @@ PANE_ENV="export CHIMERA_ROOT='${CHIMERA_ROOT}'; export BUILD_DIR='${BUILD_DIR}'
 
 IVSHMEM_BIN="$(find_ivshmem_server)"
 echo "[debian-harness] Starting ivshmem servers..."
+# Each server MUST have a unique -M name; without it all three would default
+# to the POSIX shm object "ivshmem" and share the same 64 MB — causing all
+# three FreeRTOS ivshmem-flat channels to alias to identical memory, making
+# only the first channel (ARM) ever visible.
 tmux send-keys -t "${SESSION}:0.0" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_ARM_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_ARM_FREERTOS_SOCKET}\" -M ivshmem-arm-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 tmux send-keys -t "${SESSION}:0.1" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_RISCV_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_RISCV_FREERTOS_SOCKET}\" -M ivshmem-riscv-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 tmux send-keys -t "${SESSION}:0.2" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_MIPS_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_MIPS_FREERTOS_SOCKET}\" -M ivshmem-mips-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 
 # Wait for all three sockets.
 for _i in $(seq 1 60); do

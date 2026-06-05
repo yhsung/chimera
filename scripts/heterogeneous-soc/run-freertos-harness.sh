@@ -84,11 +84,11 @@ PANE_ENV="export CHIMERA_ROOT='${CHIMERA_ROOT}'; export BUILD_DIR='${BUILD_DIR}'
 
 IVSHMEM_BIN="$(find_ivshmem_server)"
 tmux send-keys -t "${SESSION}:0.0" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_ARM_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_ARM_FREERTOS_SOCKET}\" -M ivshmem-arm-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 tmux send-keys -t "${SESSION}:0.1" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_RISCV_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_RISCV_FREERTOS_SOCKET}\" -M ivshmem-riscv-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 tmux send-keys -t "${SESSION}:0.2" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_MIPS_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_MIPS_FREERTOS_SOCKET}\" -M ivshmem-mips-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 
 # Wait for sockets to exist and be listening.
 for _i in $(seq 1 60); do
