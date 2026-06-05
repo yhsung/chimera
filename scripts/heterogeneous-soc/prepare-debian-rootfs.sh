@@ -235,6 +235,14 @@ EOF
 
     echo "debian-${arch}" | sudo tee "${rootfs}/etc/hostname" >/dev/null
 
+    # minbase debootstrap may not run update-alternatives for init-system-helpers,
+    # leaving /usr/sbin/init missing.  Create it manually so the kernel can exec
+    # systemd as PID 1.  With usr-is-merged, /lib -> usr/lib so the target path
+    # /lib/systemd/systemd resolves correctly via the symlink chain.
+    if [[ -e "${rootfs}/lib/systemd/systemd" ]] && [[ ! -e "${rootfs}/usr/sbin/init" ]]; then
+        sudo ln -sf /lib/systemd/systemd "${rootfs}/usr/sbin/init"
+    fi
+
     if [[ -f "${rootfs}/etc/pam.d/login" ]]; then
         sudo sed -i 's/^auth\s\+required\s\+pam_securetty\.so/#&/' "${rootfs}/etc/pam.d/login" 2>/dev/null || true
     fi
