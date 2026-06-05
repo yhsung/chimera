@@ -7,7 +7,7 @@ CHIMERA_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LIMA_NAME="${LIMA_NAME:-qemu-dev}"
 LIMA_CPUS="${LIMA_CPUS:-4}"
 LIMA_MEMORY="${LIMA_MEMORY:-8}"
-LIMA_DISK="${LIMA_DISK:-40}"
+LIMA_DISK="${LIMA_DISK:-100}"
 
 default_build_dir() {
     if [[ "${CHIMERA_ROOT}" == /Users/* && -w "${CHIMERA_ROOT}" ]]; then

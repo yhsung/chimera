@@ -14,5 +14,13 @@ else
         template://ubuntu-lts
 fi
 
+if [[ "${VM_SOURCE_DIR}" != "${CHIMERA_ROOT}" ]]; then
+    echo "Deploying chimera source tree to ${VM_SOURCE_DIR} ..."
+    prepare_vm_source_tree
+    echo "Source tree deployed."
+else
+    echo "Repo is under \$HOME — Lima can access it directly at ${CHIMERA_ROOT}"
+fi
+
 echo "Lima VM ready. Enter it with:"
 echo "  limactl shell ${LIMA_NAME}"
