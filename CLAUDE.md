@@ -23,6 +23,24 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 `CONFIG_CHIMERA_FREERTOS_DEMO` (`hw/riscv/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` for their respective targets.
 
+## Quick Start (two commands)
+
+**Step 1 — Deploy source and create Lima VM** (run on macOS host; re-run after every pull):
+
+```bash
+bash scripts/heterogeneous-soc/host-install-lima-host.sh
+```
+
+**Step 2 — Launch the full showcase** (inside Lima):
+
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
+```
+
+`guest-run-chimera-showcase.sh` handles all prerequisites, builds, and opens the 7-pane tmux session.
+
+---
+
 ## Building QEMU
 
 QEMU must be built inside the Lima VM (`qemu-dev`) because `ivshmem-server` requires Linux `eventfd`. Cross-compilation toolchains are also only available there.
