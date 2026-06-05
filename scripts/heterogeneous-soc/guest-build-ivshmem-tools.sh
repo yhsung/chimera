@@ -27,4 +27,7 @@ if ! grep -q 'build contrib/ivshmem-server/ivshmem-server:' build.ninja; then
 fi
 
 ninja contrib/ivshmem-server/ivshmem-server \
-      contrib/ivshmem-client/ivshmem-client
+      contrib/ivshmem-client/ivshmem-client \
+      qemu-system-aarch64 \
+      qemu-system-riscv64 \
+      qemu-system-mipsel
