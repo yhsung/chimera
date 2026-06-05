@@ -89,23 +89,41 @@ tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-
 auto_login_and_run() {
     local pane="$1"
     local hello_bin="$2"
-    local timeout=180
+    local timeout=300
     local elapsed=0
+
+    _has_prompt() {
+        tmux capture-pane -p -t "$pane" 2>/dev/null | grep -qE "root@[^:]+:[^#]*#[[:space:]]*$"
+    }
+
+    _wait_prompt() {
+        local max=$1 t=0
+        while (( t < max )); do
+            _has_prompt && return 0
+            sleep 2; (( t += 2 ))
+        done
+        return 1
+    }
 
     while (( elapsed < timeout )); do
         local content
-        content="$(tmux capture-pane -p -t "$pane" 2>/dev/null)"
-        if echo "$content" | grep -q "login:"; then
+        content="$(tmux capture-pane -p -t "$pane" 2>/dev/null || true)"
+
+        # Match only a bare login: prompt — not the autologin echo line
+        # "login: root (automatic login)" which also contains "login:".
+        if echo "$content" | grep -qE 'login:[[:space:]]*$'; then
             tmux send-keys -t "$pane" "root" Enter
-            sleep 3
+            _wait_prompt 60 || true
+        fi
+
+        if _has_prompt; then
             tmux send-keys -t "$pane" "mount /mnt/pingpong" Enter
-            sleep 1
-            tmux send-keys -t "$pane" "$hello_bin" Enter
-            return 0
-        elif echo "$content" | grep -qE "root@[^:]*:~?#"; then
+            _wait_prompt 30 || true
+            sleep 0.5
             tmux send-keys -t "$pane" "$hello_bin" Enter
             return 0
         fi
+
         sleep 3
         (( elapsed += 3 ))
     done
