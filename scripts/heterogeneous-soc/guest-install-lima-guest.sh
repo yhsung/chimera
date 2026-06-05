@@ -25,6 +25,7 @@ sudo apt-get install -y \
     debootstrap \
     flex \
     git \
+    qemu-efi-aarch64 \
     qemu-system-arm \
     qemu-system-misc \
     qemu-system-mips \

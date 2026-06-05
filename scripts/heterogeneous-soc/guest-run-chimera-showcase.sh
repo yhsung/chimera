@@ -46,6 +46,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check gcc-mips-linux-gnu
     _pkg_check debootstrap
     _pkg_check libarchive-tools
+    _pkg_check qemu-efi-aarch64
     _pkg_check libglib2.0-dev
     _pkg_check libpixman-1-dev
     _pkg_check libssl-dev
