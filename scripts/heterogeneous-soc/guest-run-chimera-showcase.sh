@@ -43,7 +43,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check gcc-riscv64-linux-gnu
     _pkg_check gcc-riscv64-unknown-elf
     _pkg_check binutils-riscv64-unknown-elf
-    _pkg_check gcc-mips-linux-gnu
+    _pkg_check gcc-mipsel-linux-gnu
     _pkg_check debootstrap
     _pkg_check libarchive-tools
     _pkg_check qemu-efi-aarch64
@@ -121,7 +121,7 @@ else
     if [[ ! -f "${HELLO_MIPS_BINARY}" ]]; then
         printf '\n\033[1;33mWARNING:\033[0m hello-mips-linux was not built.\n'
         printf '  The MIPS guest will boot but the hello binary will not be present.\n'
-        printf '  Install gcc-mips-linux-gnu and re-run to fix.\n\n'
+        printf '  Install gcc-mipsel-linux-gnu and re-run to fix.\n\n'
     fi
 fi
 
