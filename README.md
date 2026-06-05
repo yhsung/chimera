@@ -9,20 +9,20 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 ```
  ┌─────────────────────────┐      ivshmem-arm-freertos      ┌──────────────────────────────────┐
  │  ARM-Linux (aarch64)    │ ◄────────────────────────────► │                                  │
- │  Debian Linux            │  /tmp/ivshmem-arm-freertos/    │  RISCV FreeRTOS (bare-metal)     │
- │  QEMU virt (gic-version=3)│  IVSHMEM0_SHMEM=0x31000000   │  QEMU chimera-riscv-freertos-demo│
- └─────────────────────────┘                                 │                                  │
-                                                             │  Polls all three channels every  │
+ │  Debian Linux           │  /tmp/ivshmem-arm-freertos/    │  RISCV FreeRTOS (bare-metal)     │
+ │  QEMU virt (gic-ver.=3) │  IVSHMEM0_SHMEM=0x31000000     │  QEMU chimera-riscv-freertos-demo│
+ └─────────────────────────┘                                │                                  │
+                                                            │  Polls all three channels every  │
  ┌─────────────────────────┐      ivshmem-riscv-freertos    │  1 ms; sends ACK with FreeRTOS   │
  │  RISCV-Linux (rv64)     │ ◄────────────────────────────► │  tick timestamp                  │
- │  Debian Linux            │  /tmp/ivshmem-riscv-freertos/  │                                  │
- │  QEMU virt (OpenSBI)    │  IVSHMEM1_SHMEM=0x36000000    │                                  │
- └─────────────────────────┘                                 │                                  │
-                                                             │                                  │
+ │  Debian Linux           │  /tmp/ivshmem-riscv-freertos/  │                                  │
+ │  QEMU virt (OpenSBI)    │  IVSHMEM1_SHMEM=0x36000000     │                                  │
+ └─────────────────────────┘                                │                                  │
+                                                            │                                  │
  ┌─────────────────────────┐      ivshmem-mips-freertos     │                                  │
  │  MIPS-Linux (mips32)    │ ◄────────────────────────────► │                                  │
  │  Debian Linux 12        │  /tmp/ivshmem-mips-freertos/   │                                  │
- │  QEMU malta             │  IVSHMEM2_SHMEM=0x3B000000    └──────────────────────────────────┘
+ │  QEMU malta             │  IVSHMEM2_SHMEM=0x3B000000     └──────────────────────────────────┘
  └─────────────────────────┘
 ```
 
@@ -112,13 +112,13 @@ sequenceDiagram
 ```
 ┌──────────────────────┬──────────────────────┬──────────────────────┐
 │  ivshmem-server      │  ivshmem-server      │  ivshmem-server      │
-│  (ARM ↔ FreeRTOS)   │  (RISCV ↔ FreeRTOS) │  (MIPS ↔ FreeRTOS)  │
+│  (ARM ↔ FreeRTOS)    │  (RISCV ↔ FreeRTOS)  │  (MIPS ↔ FreeRTOS)   │
 │  pane 0              │  pane 1              │  pane 2              │
 ├──────────────────────┴──────────────────────┴──────────────────────┤
-│                                                                      │
-│  RISCV FreeRTOS                                                     │
-│  (receives HELLO from all three Linux guests, sends ACK)            │
-│  pane 3                                                              │
+│                                                                    │
+│  RISCV FreeRTOS                                                    │
+│  (receives HELLO from all three Linux guests, sends ACK)           │
+│  pane 3                                                            │
 ├──────────────────────┬──────────────────────┬──────────────────────┤
 │  ARM-Linux           │  RISCV-Linux         │  MIPS-Linux          │
 │  hello-arm-linux     │  hello-riscv-linux   │  hello-mips-linux    │
