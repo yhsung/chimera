@@ -212,33 +212,133 @@ Cross-compilation happens inside the Lima VM, which provides:
 ## Source Layout
 
 ```
-contrib/heterogeneous-soc/freertos-showcase/
-  hello_proto.h               — shared wire protocol (sender IDs, message structs)
-  linux_hello.c               — Linux sender (ARM, RISCV, and MIPS, compiled separately)
-  freertos_main.c             — FreeRTOS task: polls all three channels, sends ACK
-  freertos_ivshmem_flat.c     — ivshmem poll/send helpers (volatile byte access)
-  freertos_ivshmem_flat.h
-  Makefile
+contrib/heterogeneous-soc/
+  ivshmem_proto.h             — pingpong wire protocol (ARM↔RISCV, used by ping/pong demo)
+  ping.c                      — ARM-side ivshmem sender (pingpong demo)
+  pong.c                      — RISCV-side ivshmem responder (pingpong demo)
+  ping.sh / pong.sh           — wrapper scripts that run the ping/pong binaries
+  Makefile                    — cross-compiles ping + pong (static, ARM + RISCV)
+  freertos-showcase/
+    hello_proto.h             — shared wire protocol (sender IDs, message structs)
+    linux_hello.c             — Linux sender (ARM, RISCV, and MIPS, compiled separately)
+    freertos_main.c           — FreeRTOS task: polls all three channels, sends ACK
+    freertos_ivshmem_flat.c   — ivshmem poll/send helpers (volatile byte access)
+    freertos_ivshmem_flat.h
+    Makefile
 
 scripts/heterogeneous-soc/
+  ── Main showcase launchers ──────────────────────────────────────────────────
   guest-run-chimera-showcase.sh               — full-stack launcher (prereqs + build + tmux)
-  guest-run-phase5-tmux.sh                    — tmux session launcher (7 panes)
-  guest-build-freertos-showcase.sh            — builds all binaries via Lima
+  guest-run-phase5-tmux.sh                    — 7-pane tmux session launcher (called by showcase)
+
+  ── CI / headless harnesses ──────────────────────────────────────────────────
+  guest-run-debian-harness.sh                 — headless pass/fail CI harness (all 3 guests)
+  guest-run-freertos-harness.sh               — headless FreeRTOS harness (ARM-only pass string)
+
+  ── Build scripts ────────────────────────────────────────────────────────────
+  guest-build-freertos-showcase.sh            — builds FreeRTOS ELF + hello-{arm,riscv,mips}-linux
+  guest-build-ivshmem-tools.sh                — builds QEMU + ivshmem-server inside Lima
+  guest-build-pingpong.sh                     — builds ping/pong binaries (ARM↔RISCV demo)
+  guest-build-arm-secure-stack.sh             — builds TF-A + Hafnium + OP-TEE secure stack
+
+  ── Fetch / setup ────────────────────────────────────────────────────────────
   guest-fetch-images.sh                       — downloads Debian kernel .deb packages
+  guest-fetch-freertos-kernel.sh              — clones/pulls FreeRTOS-Kernel source
+  guest-fetch-arm-secure-stack.sh             — fetches TF-A, Hafnium, and OP-TEE sources
   guest-install-lima-guest.sh                 — installs apt packages in Lima VM
-  guest-start-ivshmem-server-arm-freertos.sh  — starts ARM ivshmem-server
-  guest-start-ivshmem-server-riscv-freertos.sh — starts RISCV ivshmem-server
-  guest-start-ivshmem-server-mips-freertos.sh — starts MIPS ivshmem-server
-  guest-run-arm-phase5.sh                     — launches ARM-Linux QEMU
-  guest-run-riscv-phase5.sh                   — launches RISCV-Linux QEMU
-  guest-run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
+  host-install-lima-host.sh                   — creates the Lima VM (run on macOS host)
+
+  ── Rootfs / boot-asset preparation ─────────────────────────────────────────
+  guest-prepare-debian-rootfs.sh              — creates minimal Debian qcow2 disks (debootstrap)
+  guest-prepare-debian-boot-assets.sh         — extracts kernel + initrd from .deb packages
+
+  ── ivshmem-server wrappers ──────────────────────────────────────────────────
+  guest-start-ivshmem-server.sh               — generic single-channel ivshmem-server wrapper
+  guest-start-ivshmem-server-arm-freertos.sh  — ARM ivshmem-server (showcase channel)
+  guest-start-ivshmem-server-riscv-freertos.sh — RISCV ivshmem-server (showcase channel)
+  guest-start-ivshmem-server-mips-freertos.sh — MIPS ivshmem-server (showcase channel)
+
+  ── QEMU guest launchers ─────────────────────────────────────────────────────
   guest-run-riscv-freertos-phase5.sh          — launches FreeRTOS QEMU
-  guest-prepare-debian-rootfs.sh              — creates minimal Debian qcow2 rootfs disks via debootstrap
-  guest-prepare-debian-boot-assets.sh         — extracts kernel + initramfs from Debian kernel .deb packages
+  guest-run-arm-phase5.sh                     — launches ARM-Linux QEMU (Debian)
+  guest-run-riscv-phase5.sh                   — launches RISCV-Linux QEMU (Debian)
+  guest-run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
+
+  ── In-guest binary helpers ──────────────────────────────────────────────────
+  guest-run-hello-arm.sh                      — runs hello-arm-linux inside the ARM guest
+  guest-run-hello-riscv.sh                    — runs hello-riscv-linux inside the RISCV guest
+  guest-run-ping.sh                           — runs ping binary inside the ARM guest
+  guest-run-pong.sh                           — runs pong binary inside the RISCV guest
+  guest-copy-pingpong.sh                      — SCP ping/pong binaries to guests over SSH
+
+  ── Demo automation helpers ──────────────────────────────────────────────────
+  guest-demo-auto-prepare-guests.sh           — polls for boot, auto-logins, mounts 9p share
+  guest-demo-prepare-guests.sh                — login root + mount pingpong 9p share
+  guest-demo-login-root.sh                    — send "root" to ARM and RISCV tmux panes
+  guest-demo-mount-pingpong.sh                — mount pingpong virtfs share in both guests
+  guest-demo-send-to-pane.sh                  — utility: send a command to a named tmux pane
+  guest-demo-run-ping.sh                      — send ping command to ARM pane
+  guest-demo-run-pong.sh                      — send pong command to RISCV pane
+  guest-stop-demo-guests.sh                   — kill QEMU processes from the demo session
+
+  ── Host launchers ───────────────────────────────────────────────────────────
+  host-ghostty-demo.sh                        — ARM+RISCV pingpong demo (4-pane tmux, macOS host)
+
+  ── Utilities ────────────────────────────────────────────────────────────────
+  common.sh                                   — shared variables and helper functions
+  find_ivshmem_bar2.py                        — locates the ivshmem PCI BAR2 sysfs path
+
+  ── Deprecated stubs (backward-compat only) ──────────────────────────────────
+  guest-prepare-mips-boot-assets.sh           — replaced by guest-prepare-debian-boot-assets.sh
+  guest-prepare-riscv-uboot.sh                — replaced by direct OpenSBI boot
 
 hw/riscv/chimera_freertos_demo.c  — custom QEMU machine (3 ivshmem channels)
 hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by FreeRTOS)
 ```
+
+---
+
+## CI / Headless Testing
+
+Two harness scripts run the demo end-to-end without an interactive terminal and exit `0` (PASS) or `1` (FAIL):
+
+| Script | Pass condition | Timeout |
+|---|---|---|
+| `guest-run-debian-harness.sh` | FreeRTOS UART contains all three "received hello from …" strings | 600 s |
+| `guest-run-freertos-harness.sh` | FreeRTOS UART contains "received hello from arm-linux" | 300 s |
+
+Run inside the Lima VM:
+
+```bash
+# Full three-guest harness (recommended for CI):
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-debian-harness.sh
+
+# Quick single-sender variant:
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-freertos-harness.sh
+```
+
+Both scripts accept the same environment overrides as `guest-run-chimera-showcase.sh` (`SKIP_PREREQS`, `SKIP_BUILD`, etc.) and additionally `HARNESS_TIMEOUT` and `HARNESS_LOG_DIR` (default `/tmp/debian-harness-logs`). On failure, per-pane log files are written to `HARNESS_LOG_DIR` for post-mortem.
+
+---
+
+## Pingpong Demo (ARM ↔ RISCV, no FreeRTOS)
+
+The earlier two-guest demo (`ping.c` / `pong.c`) is still present in `contrib/heterogeneous-soc/`. It uses a simpler protocol (`ivshmem_proto.h`) over a single ivshmem channel and does not involve FreeRTOS.
+
+```bash
+# Launch from the macOS host (opens a 4-pane tmux: server | ARM | RISCV | control)
+bash scripts/heterogeneous-soc/host-ghostty-demo.sh
+```
+
+The control pane prints helper commands for logging in, mounting the 9p share, and starting ping/pong:
+
+```bash
+bash scripts/heterogeneous-soc/guest-demo-prepare-guests.sh   # login + mount
+bash scripts/heterogeneous-soc/guest-demo-run-pong.sh         # start RISCV pong
+bash scripts/heterogeneous-soc/guest-demo-run-ping.sh         # start ARM ping
+```
+
+`guest-demo-auto-prepare-guests.sh` handles all of the above automatically — it polls for the boot prompt, logs in as root, and mounts the 9p virtfs share without manual intervention.
 
 ---
 
