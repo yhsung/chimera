@@ -35,13 +35,16 @@ _fetch_debian_kernel() {
     local label="$5"
 
     if [[ -f "${dst}" ]] && [[ -s "${dst}" ]]; then
-        local cached_contents
-        cached_contents="$(dpkg-deb -c "${dst}" 2>/dev/null)" || true
-        if echo "${cached_contents}" | grep -qE 'boot/vmlinuz|boot/vmlinux'; then
+        # Real kernel .debs are several MB; metapackages are < 100 KB.
+        # Use size as the skip heuristic — it avoids dpkg-deb SIGPIPE races
+        # and works correctly for both vmlinuz (arm64/mipsel) and vmlinux (riscv64).
+        local pkg_size
+        pkg_size="$(wc -c < "${dst}" 2>/dev/null || echo 0)"
+        if [[ "${pkg_size}" -gt 1000000 ]]; then
             echo "  skip: ${label} already present ($(du -sh "${dst}" | cut -f1))"
             return 0
         fi
-        echo "  ${dst} is a stale metapackage or has no vmlinuz — re-downloading..."
+        echo "  ${dst} is too small (${pkg_size} bytes) — stale metapackage, re-downloading..."
         rm -f "${dst}"
     fi
     rm -f "${dst}"
