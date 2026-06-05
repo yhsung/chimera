@@ -8,6 +8,7 @@ config MALTA
     select FDC37M81X
     select GT64120
     select MIPS_CPS
+    select MSI_NONBROKEN
     select PIIX
     select PFLASH_CFI01
     select SERIAL_MM

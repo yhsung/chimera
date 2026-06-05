@@ -230,7 +230,7 @@ EOF
     sudo mkdir -p "${rootfs}/mnt/pingpong"
 
     sudo tee -a "${rootfs}/etc/fstab" >/dev/null <<EOF
-pingpong /mnt/pingpong 9p trans=virtio,version=9p2000.L 0 0
+pingpong /mnt/pingpong 9p trans=virtio,version=9p2000.L,nofail 0 0
 EOF
 
     echo "debian-${arch}" | sudo tee "${rootfs}/etc/hostname" >/dev/null

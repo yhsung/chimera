@@ -14,7 +14,7 @@ bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
     -machine malta \
-    -cpu MIPS32R2-generic \
+    -cpu 24Kf \
     -m 256M \
     -kernel "${MIPS_KERNEL_IMAGE}" \
     -initrd "${MIPS_INITRD_IMAGE}" \

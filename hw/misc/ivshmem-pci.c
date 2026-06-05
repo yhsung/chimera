@@ -749,8 +749,20 @@ static int ivshmem_setup_interrupts(IVShmemState *s, Error **errp)
     s->msi_vectors = g_new0(MSIVector, s->vectors);
 
     if (ivshmem_has_feature(s, IVSHMEM_MSI)) {
-        if (msix_init_exclusive_bar(PCI_DEVICE(s), s->vectors, 1, errp)) {
-            return -1;
+        Error *msix_err = NULL;
+        if (msix_init_exclusive_bar(PCI_DEVICE(s), s->vectors, 1, &msix_err)) {
+            /* MSI-X unavailable on this platform (e.g. MIPS Malta GT64120).
+             * Clear the MSI feature flag so ivshmem falls back to polling-
+             * only mode: BAR2 shared memory is still mapped and accessible,
+             * and the ivshmem-server eventfds are received (not rejected)
+             * but never wired to interrupts.  Protocols that poll the flag
+             * field (like the chimera ping-pong demo) continue to work.  */
+            warn_report("ivshmem: MSI-X init failed (%s); "
+                        "shared memory accessible in polling-only mode",
+                        error_get_pretty(msix_err));
+            error_free(msix_err);
+            s->features &= ~(1u << IVSHMEM_MSI);
+            return 0;
         }
 
         IVSHMEM_DPRINTF("msix initialized (%d vectors)\n", s->vectors);
