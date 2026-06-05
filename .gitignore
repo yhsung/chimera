@@ -24,3 +24,17 @@ GTAGS
 *.elf
 contrib/heterogeneous-soc/freertos-showcase/hello-arm-linux
 contrib/heterogeneous-soc/freertos-showcase/hello-riscv-linux
+
+# Cross-compilation toolchain tarballs and extracted source trees
+*.tar.xz
+*.tar.gz
+src-binu/
+src-gcc/
+src-linux/
+src-musl/
+
+# Debug session scratch files
+test.log
+final.txt
+rejoined.txt
+simplified.txt
