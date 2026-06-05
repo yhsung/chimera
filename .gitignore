@@ -24,3 +24,4 @@ GTAGS
 *.elf
 contrib/heterogeneous-soc/freertos-showcase/hello-arm-linux
 contrib/heterogeneous-soc/freertos-showcase/hello-riscv-linux
+.claude/worktrees/
