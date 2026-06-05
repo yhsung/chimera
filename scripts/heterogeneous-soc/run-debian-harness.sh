@@ -189,6 +189,9 @@ done
 #   pane 6: MIPS Linux QEMU
 
 tmux new-session -d -s "${SESSION}" -x 220 -y 55
+# Set large history-limit BEFORE any pane produces output so that early
+# FreeRTOS "received hello" messages are never evicted from the buffer.
+tmux set-option -t "${SESSION}" history-limit 100000
 tmux split-window -v -t "${SESSION}:0.0" -l 80%
 tmux split-window -v -t "${SESSION}:0.1" -l 45%
 tmux split-window -h -t "${SESSION}:0.0"
@@ -287,8 +290,6 @@ auto_login_and_run "${SESSION}:0.6" "/mnt/pingpong/freertos-showcase/hello-mips-
 PID_MIPS=$!
 
 # ── 2j. Monitor FreeRTOS output ──────────────────────────────────────────────
-
-tmux set-option -t "${SESSION}" history-limit 50000
 
 echo ""
 echo "[debian-harness] Monitoring FreeRTOS UART for pass strings (timeout ${HARNESS_TIMEOUT}s)..."
