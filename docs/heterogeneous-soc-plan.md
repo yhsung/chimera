@@ -686,11 +686,11 @@ the FreeRTOS guest acknowledges each request with its own timestamp.
 - `contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf`
 
 **Host flow:**
-- Start `scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh`
-- Start `scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh`
-- Build payloads with `scripts/heterogeneous-soc/build-freertos-showcase.sh`
-- Launch the guests with `run-arm-phase5.sh`,
-  `run-riscv-phase5.sh`, and `run-riscv-freertos-phase5.sh`
+- Start `scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh`
+- Start `scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh`
+- Build payloads with `scripts/heterogeneous-soc/guest-build-freertos-showcase.sh`
+- Launch the guests with `guest-run-arm-phase5.sh`,
+  `guest-run-riscv-phase5.sh`, and `guest-run-riscv-freertos-phase5.sh`
 
 **Success criteria:**
 - ARM/Linux prints `hello from arm-linux` and receives an ACK

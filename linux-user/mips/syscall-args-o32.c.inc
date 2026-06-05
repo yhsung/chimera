@@ -461,3 +461,12 @@
     [ 460] = 4, /* lsm_set_self_attr */
     [ 461] = 3, /* lsm_list_modules */
     [ 462] = 3, /* mseal */
+    [ 463] = 6, /* setxattrat */
+    [ 464] = 6, /* getxattrat */
+    [ 465] = 5, /* listxattrat */
+    [ 466] = 4, /* removexattrat */
+    [ 467] = 5, /* open_tree_attr */
+    [ 468] = 5, /* file_getattr */
+    [ 469] = 5, /* file_setattr */
+    [ 470] = 4, /* listns */
+    [ 471] = 0, /* rseq_slice_yield */

@@ -36,10 +36,13 @@ static const MemMapEntry chimera_freertos_memmap[] = {
     [CHIMERA_FREERTOS_IVSHMEM1_MMIO] = { 0x35000000, 0x00001000 },
     [CHIMERA_FREERTOS_IVSHMEM1_SHMEM] = { 0x36000000,
                                           CHIMERA_FREERTOS_IVSHMEM_SIZE },
+    [CHIMERA_FREERTOS_IVSHMEM2_MMIO] =  { 0x3A000000, 0x00001000 },
+    [CHIMERA_FREERTOS_IVSHMEM2_SHMEM] = { 0x3B000000,
+                                          CHIMERA_FREERTOS_IVSHMEM_SIZE },
 };
 
 #define CHIMERA_FREERTOS_PLIC_HART_CONFIG "M"
-#define CHIMERA_FREERTOS_PLIC_NUM_SOURCES 18
+#define CHIMERA_FREERTOS_PLIC_NUM_SOURCES 19
 #define CHIMERA_FREERTOS_PLIC_NUM_PRIORITIES 7
 #define CHIMERA_FREERTOS_PLIC_PRIORITY_BASE 0x0
 #define CHIMERA_FREERTOS_PLIC_PENDING_BASE 0x1000
@@ -78,6 +81,22 @@ static void chimera_freertos_set_ivshmem_riscv(Object *obj, const char *value,
 
     g_free(s->ivshmem_riscv_freertos);
     s->ivshmem_riscv_freertos = g_strdup(value);
+}
+
+static char *chimera_freertos_get_ivshmem_mips(Object *obj, Error **errp)
+{
+    ChimeraFreeRTOSMachineState *s = CHIMERA_FREERTOS_MACHINE(obj);
+
+    return g_strdup(s->ivshmem_mips_freertos);
+}
+
+static void chimera_freertos_set_ivshmem_mips(Object *obj, const char *value,
+                                              Error **errp)
+{
+    ChimeraFreeRTOSMachineState *s = CHIMERA_FREERTOS_MACHINE(obj);
+
+    g_free(s->ivshmem_mips_freertos);
+    s->ivshmem_mips_freertos = g_strdup(value);
 }
 
 static bool chimera_freertos_require_chardev(const char *id,
@@ -119,6 +138,7 @@ static void chimera_freertos_machine_init(MachineState *machine)
     hwaddr firmware_load_addr = chimera_freertos_memmap[CHIMERA_FREERTOS_RAM].base;
     Chardev *arm_chr = NULL;
     Chardev *riscv_chr = NULL;
+    Chardev *mips_chr = NULL;
     bool have_links = true;
 
     have_links &= chimera_freertos_require_chardev(s->ivshmem_arm_freertos,
@@ -127,6 +147,9 @@ static void chimera_freertos_machine_init(MachineState *machine)
     have_links &= chimera_freertos_require_chardev(s->ivshmem_riscv_freertos,
                                                    CHIMERA_FREERTOS_PROP_IVSHMEM_RISCV,
                                                    &riscv_chr);
+    have_links &= chimera_freertos_require_chardev(s->ivshmem_mips_freertos,
+                                                   CHIMERA_FREERTOS_PROP_IVSHMEM_MIPS,
+                                                   &mips_chr);
     if (!have_links) {
         exit(EXIT_FAILURE);
     }
@@ -195,6 +218,11 @@ static void chimera_freertos_machine_init(MachineState *machine)
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM1_MMIO].base,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM1_SHMEM].base,
         CHIMERA_FREERTOS_IVSHMEM1_IRQ);
+    chimera_freertos_connect_ivshmem(
+        plic, mips_chr,
+        chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM2_MMIO].base,
+        chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM2_SHMEM].base,
+        CHIMERA_FREERTOS_IVSHMEM2_IRQ);
 
     if (machine->firmware) {
         riscv_load_firmware(machine->firmware, &firmware_load_addr, NULL);
@@ -231,6 +259,13 @@ static void chimera_freertos_machine_class_init(ObjectClass *oc,
     object_class_property_set_description(
         oc, CHIMERA_FREERTOS_PROP_IVSHMEM_RISCV,
         "Chardev id for the RISC-V/Linux <-> FreeRTOS ivshmem link");
+
+    object_class_property_add_str(oc, CHIMERA_FREERTOS_PROP_IVSHMEM_MIPS,
+                                  chimera_freertos_get_ivshmem_mips,
+                                  chimera_freertos_set_ivshmem_mips);
+    object_class_property_set_description(
+        oc, CHIMERA_FREERTOS_PROP_IVSHMEM_MIPS,
+        "Chardev id for the MIPS/Linux <-> FreeRTOS ivshmem link");
 }
 
 static const TypeInfo chimera_freertos_machine_type_info = {

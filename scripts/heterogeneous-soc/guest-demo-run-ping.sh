@@ -2,4 +2,4 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bash "${SCRIPT_DIR}/demo-send-to-pane.sh" arm "/mnt/pingpong/ping.sh"
+bash "${SCRIPT_DIR}/guest-demo-send-to-pane.sh" arm "/mnt/pingpong/ping.sh"

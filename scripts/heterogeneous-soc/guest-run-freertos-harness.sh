@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# run-freertos-harness.sh — headless pass/fail harness for the FreeRTOS ivshmem demo.
+# guest-run-freertos-harness.sh — headless pass/fail harness for the FreeRTOS ivshmem demo.
 #
-# Runs everything in a detached tmux session (same layout as run-phase5-tmux.sh).
+# Runs everything in a detached tmux session (same layout as guest-run-phase5-tmux.sh).
 # FreeRTOS UART is captured to a log file via tmux pipe-pane.
 # auto_login_and_run() drives the Linux guests when the shell is ready.
 # Pass condition: FreeRTOS log contains "received hello from arm-linux".
@@ -33,8 +33,9 @@ cleanup() {
     pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
     pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
     pkill -f "qemu-system-riscv64.*run-riscv-phase5"     2>/dev/null || true
-    pkill -f "ivshmem-server.*arm-freertos\|ivshmem-server.*riscv-freertos" 2>/dev/null || true
-    rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" 2>/dev/null || true
+    pkill -f "ivshmem-server.*arm-freertos\|ivshmem-server.*riscv-freertos\|ivshmem-server.*mips-freertos" 2>/dev/null || true
+    pkill -f "qemu-system-mips.*run-chimera" 2>/dev/null || true
+    rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -42,30 +43,35 @@ trap cleanup EXIT INT TERM
 echo "[harness] Killing orphan processes and removing stale sockets..."
 pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
 pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
+pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5
-rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" 2>/dev/null || true
+rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" 2>/dev/null || true
 
 # ── Build ────────────────────────────────────────────────────────────────────
 if [[ -z "${SKIP_BUILD:-}" ]]; then
     echo "[harness] Building showcase..."
-    bash "${SCRIPT_DIR}/build-freertos-showcase.sh" \
+    bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh" \
         > "${LOG_DIR}/build-${RUN_ID}.log" 2>&1 \
         || { echo "[harness] BUILD FAILED — see ${LOG_DIR}/build-${RUN_ID}.log"; exit 1; }
 fi
 require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 
 # ── tmux session ─────────────────────────────────────────────────────────────
-# Same pane layout as run-phase5-tmux.sh:
+# Same pane layout as guest-run-phase5-tmux.sh:
 #  pane 0: ARM ivshmem server
 #  pane 1: RISCV ivshmem server
-#  pane 2: FreeRTOS QEMU   ← UART captured to ${FREERTOS_LOG}
-#  pane 3: ARM Linux QEMU
-#  pane 4: RISCV Linux QEMU
+#  pane 2: MIPS ivshmem server
+#  pane 3: FreeRTOS QEMU   ← UART captured to ${FREERTOS_LOG}
+#  pane 4: ARM Linux QEMU
+#  pane 5: RISCV Linux QEMU
+#  pane 6: MIPS Linux QEMU
 tmux new-session -d -s "${SESSION}" -x 220 -y 55
 tmux split-window -v -t "${SESSION}:0.0" -l 80%
 tmux split-window -v -t "${SESSION}:0.1" -l 45%
 tmux split-window -h -t "${SESSION}:0.0"
 tmux split-window -h -t "${SESSION}:0.3"
+tmux split-window -h -t "${SESSION}:0.1"
+tmux split-window -h -t "${SESSION}:0.5"
 
 # ── ivshmem servers ──────────────────────────────────────────────────────────
 # Prepend env setup to every pane command so scripts inherit the correct paths
@@ -78,16 +84,20 @@ PANE_ENV="export CHIMERA_ROOT='${CHIMERA_ROOT}'; export BUILD_DIR='${BUILD_DIR}'
 
 IVSHMEM_BIN="$(find_ivshmem_server)"
 tmux send-keys -t "${SESSION}:0.0" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_ARM_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_ARM_FREERTOS_SOCKET}\" -M ivshmem-arm-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 tmux send-keys -t "${SESSION}:0.1" \
-    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_RISCV_FREERTOS_SOCKET}\" -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_RISCV_FREERTOS_SOCKET}\" -M ivshmem-riscv-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
+tmux send-keys -t "${SESSION}:0.2" \
+    "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_MIPS_FREERTOS_SOCKET}\" -M ivshmem-mips-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 
 # Wait for sockets to exist and be listening.
 for _i in $(seq 1 60); do
     if [[ -S "${IVSHMEM_ARM_FREERTOS_SOCKET}"  ]] && \
        ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_ARM_FREERTOS_SOCKET}" && \
        [[ -S "${IVSHMEM_RISCV_FREERTOS_SOCKET}" ]] && \
-       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_RISCV_FREERTOS_SOCKET}"; then
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_RISCV_FREERTOS_SOCKET}" && \
+       [[ -S "${IVSHMEM_MIPS_FREERTOS_SOCKET}"  ]] && \
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_MIPS_FREERTOS_SOCKET}"; then
         break
     fi
     sleep 0.5
@@ -95,21 +105,23 @@ done
 
 # ── FreeRTOS QEMU ────────────────────────────────────────────────────────────
 echo "[harness] Starting FreeRTOS QEMU; UART → ${FREERTOS_LOG}"
-tmux send-keys -t "${SESSION}:0.2" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh'" Enter
+tmux send-keys -t "${SESSION}:0.3" \
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh'" Enter
 
 # Give FreeRTOS QEMU time to start and print its first line before anything else.
 sleep 2
 
 # ── Linux guests ─────────────────────────────────────────────────────────────
-tmux send-keys -t "${SESSION}:0.3" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-arm-phase5.sh'"   Enter
 tmux send-keys -t "${SESSION}:0.4" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-riscv-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-arm-phase5.sh'"    Enter
+tmux send-keys -t "${SESSION}:0.5" \
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-phase5.sh'"  Enter
+tmux send-keys -t "${SESSION}:0.6" \
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-chimera.sh'"        Enter
 
 # ── auto_login_and_run ───────────────────────────────────────────────────────
 # Detect the guest shell and fire the hello binary.  Same logic as
-# run-phase5-tmux.sh: handles both interactive login: and autologin ~#.
+# guest-run-phase5-tmux.sh: handles both interactive login: and autologin ~#.
 auto_login_and_run() {
     local pane="$1"
     local hello_bin="$2"
@@ -122,14 +134,11 @@ auto_login_and_run() {
         if echo "${content}" | grep -q "login:"; then
             tmux send-keys -t "${pane}" "root" Enter
             sleep 3
-            tmux send-keys -t "${pane}" "busybox mkdir -p /mnt/pingpong" Enter
-            sleep 1
-            tmux send-keys -t "${pane}" \
-                "busybox mount -t 9p -o trans=virtio,version=9p2000.L pingpong /mnt/pingpong" Enter
+            tmux send-keys -t "${pane}" "mount /mnt/pingpong" Enter
             sleep 1
             tmux send-keys -t "${pane}" "${hello_bin}" Enter
             return 0
-        elif echo "${content}" | grep -q "~#"; then
+        elif echo "${content}" | grep -qE "root@[^:]*:~?#"; then
             tmux send-keys -t "${pane}" "${hello_bin}" Enter
             return 0
         fi
@@ -139,18 +148,19 @@ auto_login_and_run() {
     echo "[harness] WARNING: timed out waiting for shell prompt in pane ${pane}" >&2
 }
 
-auto_login_and_run "${SESSION}:0.3" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
-auto_login_and_run "${SESSION}:0.4" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+auto_login_and_run "${SESSION}:0.4" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
+auto_login_and_run "${SESSION}:0.5" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+auto_login_and_run "${SESSION}:0.6" "/mnt/pingpong/freertos-showcase/hello-mips-linux"  &
 
 # ── Monitor ──────────────────────────────────────────────────────────────────
-# Poll the FreeRTOS pane (0.2) directly via tmux capture-pane (avoids all
+# Poll the FreeRTOS pane (0.3) directly via tmux capture-pane (avoids all
 # pipe-pane buffering issues).  Set a large scroll buffer so we see history.
 tmux set-option -t "${SESSION}" history-limit 50000
 
 echo "[harness] Monitoring for \"${PASS_STRING}\" (timeout ${HARNESS_TIMEOUT}s)..."
 elapsed=0
 while (( elapsed < HARNESS_TIMEOUT )); do
-    pane_content="$(tmux capture-pane -p -t "${SESSION}:0.2" -S -50000 2>/dev/null)"
+    pane_content="$(tmux capture-pane -p -t "${SESSION}:0.3" -S -50000 2>/dev/null)"
 
     if echo "${pane_content}" | grep -q "${PASS_STRING}"; then
         echo "[harness] PASS after ${elapsed}s"
@@ -172,8 +182,8 @@ done
 
 echo "[harness] FAIL: timeout after ${HARNESS_TIMEOUT}s"
 echo "=== FreeRTOS pane (last 30 lines) ==="
-tmux capture-pane -p -t "${SESSION}:0.2" -S -50000 2>/dev/null | tail -30 || true
+tmux capture-pane -p -t "${SESSION}:0.3" -S -50000 2>/dev/null | tail -30 || true
 echo ""
 echo "=== ARM Linux pane (last 20 lines) ==="
-tmux capture-pane -p -t "${SESSION}:0.3" 2>/dev/null | tail -20 || true
+tmux capture-pane -p -t "${SESSION}:0.4" 2>/dev/null | tail -20 || true
 exit 1

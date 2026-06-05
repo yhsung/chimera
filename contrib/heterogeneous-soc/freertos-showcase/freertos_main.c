@@ -14,9 +14,12 @@
 #define IVSHMEM0_SHMEM 0x31000000UL
 #define IVSHMEM1_MMIO 0x35000000UL
 #define IVSHMEM1_SHMEM 0x36000000UL
+#define IVSHMEM2_MMIO  0x3A000000UL
+#define IVSHMEM2_SHMEM 0x3B000000UL
 
 static struct freertos_ivshmem_link arm_link;
 static struct freertos_ivshmem_link riscv_link;
+static struct freertos_ivshmem_link mips_link;
 
 static void uart_putc(char ch)
 {
@@ -91,6 +94,8 @@ static void showcase_task(void *opaque)
                           "arm-linux");
     freertos_ivshmem_init(&riscv_link, IVSHMEM1_MMIO, IVSHMEM1_SHMEM,
                           "riscv-linux");
+    freertos_ivshmem_init(&mips_link, IVSHMEM2_MMIO, IVSHMEM2_SHMEM,
+                          "mips-linux");
 
     log_uart("[freertos] showcase task started\n");
 
@@ -99,6 +104,8 @@ static void showcase_task(void *opaque)
                            "[freertos] received hello from arm-linux\n");
         maybe_service_link(&riscv_link,
                            "[freertos] received hello from riscv-linux\n");
+        maybe_service_link(&mips_link,
+                           "[freertos] received hello from mips-linux\n");
 
         if (++diag_count >= 3000) {
             diag_count = 0;
@@ -110,6 +117,10 @@ static void showcase_task(void *opaque)
             diag_print_hex32(riscv_link.layout->linux_to_freertos.flag);
             log_uart(" riscv_magic=");
             diag_print_hex32(riscv_link.layout->linux_to_freertos.msg.magic);
+            log_uart(" mips_flag=");
+            diag_print_hex32(mips_link.layout->linux_to_freertos.flag);
+            log_uart(" mips_magic=");
+            diag_print_hex32(mips_link.layout->linux_to_freertos.msg.magic);
             log_uart("\n");
         }
 

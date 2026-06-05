@@ -16,11 +16,11 @@ Run these commands inside the Linux/Lima environment before starting the tasks:
 
 ```bash
 cd ~/dev-projects/chimera
-scripts/heterogeneous-soc/install-lima-guest.sh
+scripts/heterogeneous-soc/guest-install-lima-guest.sh
 BUILD_DIR=$HOME/chimera-build-linux \
 VM_SOURCE_DIR=$HOME/chimera-src \
-scripts/heterogeneous-soc/build-ivshmem-tools.sh
-scripts/heterogeneous-soc/fetch-images.sh
+scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
+scripts/heterogeneous-soc/guest-fetch-images.sh
 ```
 
 ## File Structure
@@ -63,25 +63,25 @@ scripts/heterogeneous-soc/fetch-images.sh
 
 - Modify: `scripts/heterogeneous-soc/common.sh`
   Responsibility: add dedicated Phase 5 sockets, directories, binary paths, and FreeRTOS dependency locations.
-- Modify: `scripts/heterogeneous-soc/install-lima-guest.sh`
+- Modify: `scripts/heterogeneous-soc/guest-install-lima-guest.sh`
   Responsibility: install the RISC-V bare-metal toolchain used for the FreeRTOS ELF.
-- Create: `scripts/heterogeneous-soc/fetch-freertos-kernel.sh`
+- Create: `scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh`
   Responsibility: clone or update the external FreeRTOS kernel checkout.
-- Create: `scripts/heterogeneous-soc/build-freertos-showcase.sh`
+- Create: `scripts/heterogeneous-soc/guest-build-freertos-showcase.sh`
   Responsibility: fetch FreeRTOS if needed and build the new guest payloads.
-- Create: `scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh`
+- Create: `scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh`
   Responsibility: start the dedicated ARM/Linux ↔ FreeRTOS ivshmem server.
-- Create: `scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh`
+- Create: `scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh`
   Responsibility: start the dedicated RISC-V/Linux ↔ FreeRTOS ivshmem server.
-- Create: `scripts/heterogeneous-soc/run-arm-phase5.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-arm-phase5.sh`
   Responsibility: boot the ARM/Linux guest on the ARM↔FreeRTOS link.
-- Create: `scripts/heterogeneous-soc/run-riscv-phase5.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-riscv-phase5.sh`
   Responsibility: boot the RISC-V/Linux guest on the RISC-V↔FreeRTOS link.
-- Create: `scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh`
   Responsibility: boot the FreeRTOS guest with two ivshmem chardevs and the new board.
-- Create: `scripts/heterogeneous-soc/run-hello-arm.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-hello-arm.sh`
   Responsibility: run the ARM/Linux sender from `/usr/local/bin`, `/mnt/pingpong`, or the source tree.
-- Create: `scripts/heterogeneous-soc/run-hello-riscv.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-hello-riscv.sh`
   Responsibility: run the RISC-V/Linux sender from `/usr/local/bin`, `/mnt/pingpong`, or the source tree.
 
 ### Tests
@@ -716,11 +716,11 @@ git commit -m "feat: add linux hello senders for freertos showcase"
 - Create: `contrib/heterogeneous-soc/freertos-showcase/FreeRTOSConfig.h`
 - Create: `contrib/heterogeneous-soc/freertos-showcase/startup.S`
 - Create: `contrib/heterogeneous-soc/freertos-showcase/linker.ld`
-- Create: `scripts/heterogeneous-soc/fetch-freertos-kernel.sh`
-- Create: `scripts/heterogeneous-soc/build-freertos-showcase.sh`
+- Create: `scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh`
+- Create: `scripts/heterogeneous-soc/guest-build-freertos-showcase.sh`
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/Makefile`
 - Modify: `scripts/heterogeneous-soc/common.sh`
-- Modify: `scripts/heterogeneous-soc/install-lima-guest.sh`
+- Modify: `scripts/heterogeneous-soc/guest-install-lima-guest.sh`
 
 - [ ] **Step 1: Run the FreeRTOS ELF build to verify it fails before the firmware files exist**
 
@@ -735,7 +735,7 @@ Expected: FAIL because the FreeRTOS-specific sources, linker script, or toolchai
 - [ ] **Step 2: Add the FreeRTOS dependency fetch/build scripts and environment defaults**
 
 ```bash
-# scripts/heterogeneous-soc/fetch-freertos-kernel.sh
+# scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -755,14 +755,14 @@ fi
 ```
 
 ```bash
-# scripts/heterogeneous-soc/build-freertos-showcase.sh
+# scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
 prepare_vm_source_tree
-bash "${SCRIPT_DIR}/fetch-freertos-kernel.sh"
+bash "${SCRIPT_DIR}/guest-fetch-freertos-kernel.sh"
 make -C "${FREERTOS_SHOWCASE_DIR}" clean all
 ```
 
@@ -781,7 +781,7 @@ FREERTOS_DEMO_ELF="${FREERTOS_DEMO_ELF:-${FREERTOS_SHOWCASE_DIR}/freertos-riscv-
 ```
 
 ```bash
-# scripts/heterogeneous-soc/install-lima-guest.sh
+# scripts/heterogeneous-soc/guest-install-lima-guest.sh
 sudo apt-get install -y \
     gcc-riscv64-unknown-elf \
     binutils-riscv64-unknown-elf
@@ -992,7 +992,7 @@ all: hello-arm-linux hello-riscv-linux freertos-riscv-demo.elf
 Run:
 
 ```bash
-scripts/heterogeneous-soc/build-freertos-showcase.sh
+scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
 file contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf
 ```
 
@@ -1009,23 +1009,23 @@ git add \
   contrib/heterogeneous-soc/freertos-showcase/startup.S \
   contrib/heterogeneous-soc/freertos-showcase/linker.ld \
   contrib/heterogeneous-soc/freertos-showcase/Makefile \
-  scripts/heterogeneous-soc/fetch-freertos-kernel.sh \
-  scripts/heterogeneous-soc/build-freertos-showcase.sh \
+  scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh \
+  scripts/heterogeneous-soc/guest-build-freertos-showcase.sh \
   scripts/heterogeneous-soc/common.sh \
-  scripts/heterogeneous-soc/install-lima-guest.sh
+  scripts/heterogeneous-soc/guest-install-lima-guest.sh
 git commit -m "feat: add freertos responder firmware"
 ```
 
 ## Task 5: Add the Dual-Link Phase 5 Launch Flow
 
 **Files:**
-- Create: `scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh`
-- Create: `scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh`
-- Create: `scripts/heterogeneous-soc/run-arm-phase5.sh`
-- Create: `scripts/heterogeneous-soc/run-riscv-phase5.sh`
-- Create: `scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh`
-- Create: `scripts/heterogeneous-soc/run-hello-arm.sh`
-- Create: `scripts/heterogeneous-soc/run-hello-riscv.sh`
+- Create: `scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh`
+- Create: `scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-arm-phase5.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-riscv-phase5.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-hello-arm.sh`
+- Create: `scripts/heterogeneous-soc/guest-run-hello-riscv.sh`
 - Create: `tests/unit/test_heterogeneous_soc_phase5_launch.py`
 
 - [ ] **Step 1: Write the failing Phase 5 launch test**
@@ -1042,8 +1042,8 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN_SCRIPT = REPO_ROOT / "scripts" / "heterogeneous-soc" / "run-riscv-freertos-phase5.sh"
-SERVER_SCRIPT = REPO_ROOT / "scripts" / "heterogeneous-soc" / "start-ivshmem-server-arm-freertos.sh"
+RUN_SCRIPT = REPO_ROOT / "scripts" / "heterogeneous-soc" / "guest-run-riscv-freertos-phase5.sh"
+SERVER_SCRIPT = REPO_ROOT / "scripts" / "heterogeneous-soc" / "guest-start-ivshmem-server-arm-freertos.sh"
 
 
 class Phase5LaunchTest(unittest.TestCase):
@@ -1143,7 +1143,7 @@ Expected: FAIL because the Phase 5 scripts do not exist yet.
 - [ ] **Step 3: Add the dedicated Phase 5 server and guest launch scripts**
 
 ```bash
-# scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh
+# scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
@@ -1153,7 +1153,7 @@ exec "$(find_ivshmem_server)" -F -S "${IVSHMEM_ARM_FREERTOS_SOCKET}" -l "${IVSHM
 ```
 
 ```bash
-# scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh
+# scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
@@ -1163,12 +1163,12 @@ exec "$(find_ivshmem_server)" -F -S "${IVSHMEM_RISCV_FREERTOS_SOCKET}" -l "${IVS
 ```
 
 ```bash
-# scripts/heterogeneous-soc/run-arm-phase5.sh
+# scripts/heterogeneous-soc/guest-run-arm-phase5.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
-bash "${SCRIPT_DIR}/prepare-arm-phase2-boot-assets.sh"
-bash "${SCRIPT_DIR}/prepare-demo-guest-overlays.sh"
+bash "${SCRIPT_DIR}/guest-prepare-arm-phase2-boot-assets.sh"
+bash "${SCRIPT_DIR}/guest-prepare-demo-guest-overlays.sh"
 exec qemu-system-aarch64 \
   -machine virt,gic-version=3 \
   -cpu cortex-a57 -m 512M -smp 2 \
@@ -1186,14 +1186,14 @@ exec qemu-system-aarch64 \
 ```
 
 ```bash
-# scripts/heterogeneous-soc/run-riscv-phase5.sh
+# scripts/heterogeneous-soc/guest-run-riscv-phase5.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-direct}"
-bash "${SCRIPT_DIR}/prepare-riscv-uboot.sh"
-bash "${SCRIPT_DIR}/prepare-riscv-phase3-boot-assets.sh"
-bash "${SCRIPT_DIR}/prepare-demo-guest-overlays.sh"
+bash "${SCRIPT_DIR}/guest-prepare-riscv-uboot.sh"
+bash "${SCRIPT_DIR}/guest-prepare-riscv-phase3-boot-assets.sh"
+bash "${SCRIPT_DIR}/guest-prepare-demo-guest-overlays.sh"
 exec qemu-system-riscv64 \
   -machine virt,aclint=on \
   -cpu rv64,h=true,v=true \
@@ -1215,7 +1215,7 @@ exec qemu-system-riscv64 \
 ```
 
 ```bash
-# scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh
+# scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
@@ -1229,7 +1229,7 @@ exec qemu-system-riscv64 \
 ```
 
 ```bash
-# scripts/heterogeneous-soc/run-hello-arm.sh
+# scripts/heterogeneous-soc/guest-run-hello-arm.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
@@ -1244,7 +1244,7 @@ exec "${HELLO_ARM_BINARY}" "${BAR2_PATH}"
 ```
 
 ```bash
-# scripts/heterogeneous-soc/run-hello-riscv.sh
+# scripts/heterogeneous-soc/guest-run-hello-riscv.sh
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
@@ -1272,13 +1272,13 @@ Expected: PASS for both the custom-machine launch test and the dedicated-server-
 
 ```bash
 git add \
-  scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh \
-  scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh \
-  scripts/heterogeneous-soc/run-arm-phase5.sh \
-  scripts/heterogeneous-soc/run-riscv-phase5.sh \
-  scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh \
-  scripts/heterogeneous-soc/run-hello-arm.sh \
-  scripts/heterogeneous-soc/run-hello-riscv.sh \
+  scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh \
+  scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh \
+  scripts/heterogeneous-soc/guest-run-arm-phase5.sh \
+  scripts/heterogeneous-soc/guest-run-riscv-phase5.sh \
+  scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh \
+  scripts/heterogeneous-soc/guest-run-hello-arm.sh \
+  scripts/heterogeneous-soc/guest-run-hello-riscv.sh \
   tests/unit/test_heterogeneous_soc_phase5_launch.py
 git commit -m "feat: add phase5 freertos showcase launch flow"
 ```
@@ -1348,12 +1348,12 @@ Expected: PASS for all unit and script tests.
 Run in three host terminals:
 
 ```bash
-scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh
-scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh
-scripts/heterogeneous-soc/build-freertos-showcase.sh
-scripts/heterogeneous-soc/run-arm-phase5.sh
-scripts/heterogeneous-soc/run-riscv-phase5.sh
-scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh
+scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh
+scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh
+scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
+scripts/heterogeneous-soc/guest-run-arm-phase5.sh
+scripts/heterogeneous-soc/guest-run-riscv-phase5.sh
+scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh
 ```
 
 Then inside the Linux guests:
@@ -1373,9 +1373,9 @@ Expected console output:
 - The original Phase 4 scripts still run unchanged:
 
 ```bash
-scripts/heterogeneous-soc/start-ivshmem-server.sh
-scripts/heterogeneous-soc/run-arm-phase1.sh
-scripts/heterogeneous-soc/run-riscv-phase3.sh
+scripts/heterogeneous-soc/guest-start-ivshmem-server.sh
+scripts/heterogeneous-soc/guest-run-arm-phase1.sh
+scripts/heterogeneous-soc/guest-run-riscv-phase3.sh
 ```
 
 - [ ] **Step 4: Commit**

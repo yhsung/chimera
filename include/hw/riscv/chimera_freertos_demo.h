@@ -17,6 +17,7 @@
 
 #define CHIMERA_FREERTOS_PROP_IVSHMEM_ARM "ivshmem-arm-freertos"
 #define CHIMERA_FREERTOS_PROP_IVSHMEM_RISCV "ivshmem-riscv-freertos"
+#define CHIMERA_FREERTOS_PROP_IVSHMEM_MIPS "ivshmem-mips-freertos"
 
 #define CHIMERA_FREERTOS_IVSHMEM_SIZE (64U * 1024U * 1024U)
 
@@ -34,6 +35,7 @@ struct ChimeraFreeRTOSMachineState {
     RISCVHartArrayState cpus;
     char *ivshmem_arm_freertos;
     char *ivshmem_riscv_freertos;
+    char *ivshmem_mips_freertos;
 };
 
 enum {
@@ -46,12 +48,15 @@ enum {
     CHIMERA_FREERTOS_IVSHMEM0_SHMEM,
     CHIMERA_FREERTOS_IVSHMEM1_MMIO,
     CHIMERA_FREERTOS_IVSHMEM1_SHMEM,
+    CHIMERA_FREERTOS_IVSHMEM2_MMIO,
+    CHIMERA_FREERTOS_IVSHMEM2_SHMEM,
 };
 
 enum {
     CHIMERA_FREERTOS_UART_IRQ = 10,
     CHIMERA_FREERTOS_IVSHMEM0_IRQ = 16,
     CHIMERA_FREERTOS_IVSHMEM1_IRQ = 17,
+    CHIMERA_FREERTOS_IVSHMEM2_IRQ = 18,
 };
 
 #endif

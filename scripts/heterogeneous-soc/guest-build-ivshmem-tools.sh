@@ -14,7 +14,7 @@ cd "${BUILD_DIR}"
 
 if [[ ! -f build.ninja ]]; then
     "${VM_SOURCE_DIR}/configure" \
-        --target-list=aarch64-softmmu,riscv64-softmmu \
+        --target-list=aarch64-softmmu,riscv64-softmmu,mipsel-softmmu \
         --enable-debug
 fi
 

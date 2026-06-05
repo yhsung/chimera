@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# open-phase5-iterm.sh
+# host-open-phase5-iterm.sh
 # Opens a new iTerm2 window, connects to the Lima VM, and launches the
 # Phase 5 interactive tmux showcase.
 set -euo pipefail
 
 LIMA_CMD="limactl shell qemu-dev"
-RUN_CMD="CHIMERA_ROOT=/home/yhsung.guest/chimera-src BUILD_DIR=/home/yhsung.guest/chimera-build-linux bash ~/chimera-src/scripts/heterogeneous-soc/run-phase5-tmux.sh"
+RUN_CMD="CHIMERA_ROOT=/home/yhsung.guest/chimera-src BUILD_DIR=/home/yhsung.guest/chimera-build-linux bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-phase5-tmux.sh"
 
 # Write a temp AppleScript as plain text (.applescript).
 # Using 'current window' after create avoids the broken 'set X to (create ...)' pattern.

@@ -258,17 +258,17 @@ Add a new Phase 5 style launch path for the FreeRTOS showcase.
 
 Proposed scripts:
 
-- `scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh`
-- `scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh`
-- `scripts/heterogeneous-soc/run-arm-phase5.sh`
-- `scripts/heterogeneous-soc/run-riscv-phase5.sh`
-- `scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh`
-- `scripts/heterogeneous-soc/run-hello-arm.sh`
-- `scripts/heterogeneous-soc/run-hello-riscv.sh`
+- `scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh`
+- `scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh`
+- `scripts/heterogeneous-soc/guest-run-arm-phase5.sh`
+- `scripts/heterogeneous-soc/guest-run-riscv-phase5.sh`
+- `scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh`
+- `scripts/heterogeneous-soc/guest-run-hello-arm.sh`
+- `scripts/heterogeneous-soc/guest-run-hello-riscv.sh`
 
 Optional integration:
 
-- extend `scripts/heterogeneous-soc/ghostty-demo.sh` with a mode switch for `phase4-linux-linux` and `phase5-linux-freertos`
+- extend `scripts/heterogeneous-soc/host-ghostty-demo.sh` with a mode switch for `phase4-linux-linux` and `phase5-linux-freertos`
 
 ### Host-side link model
 

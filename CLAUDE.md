@@ -29,11 +29,11 @@ QEMU must be built inside the Lima VM (`qemu-dev`) because `ivshmem-server` requ
 
 ```bash
 # One-time: create Lima VM and install deps (runs apt-get inside the VM)
-scripts/heterogeneous-soc/install-lima-guest.sh
+scripts/heterogeneous-soc/guest-install-lima-guest.sh
 
 # Build QEMU + ivshmem-server (runs inside Lima)
 BUILD_DIR=$HOME/chimera-build-linux VM_SOURCE_DIR=$HOME/chimera-src \
-    scripts/heterogeneous-soc/build-ivshmem-tools.sh
+    scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
 ```
 
 Internally this runs:
@@ -48,7 +48,7 @@ ninja contrib/ivshmem-server/ivshmem-server contrib/ivshmem-client/ivshmem-clien
 
 ```bash
 # Fetch FreeRTOS-Kernel source (needed once)
-scripts/heterogeneous-soc/fetch-freertos-kernel.sh
+scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh
 
 # Build all three binaries inside Lima (or natively on Linux with the right cross-compilers)
 make -C contrib/heterogeneous-soc/freertos-showcase/ clean all
@@ -63,18 +63,18 @@ Cross-compilers required: `aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `ris
 ## Running the Demo
 
 ```bash
-scripts/heterogeneous-soc/run-phase5-tmux.sh
+scripts/heterogeneous-soc/guest-run-phase5-tmux.sh
 ```
 
 On first run (no ELF present): does one-time Lima setup, disk image fetch, and ivshmem-server build. On every run: rebuilds FreeRTOS/Linux binaries, then opens a tmux session with five panes (2 ivshmem-servers, 1 FreeRTOS, 1 ARM-Linux, 1 RISCV-Linux). Navigate with **Ctrl-b + arrow keys**.
 
 To launch components individually:
 ```bash
-scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh   # ARM channel
-scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh # RISCV channel
-scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh           # FreeRTOS QEMU
-scripts/heterogeneous-soc/run-arm-phase5.sh                      # ARM-Linux QEMU
-scripts/heterogeneous-soc/run-riscv-phase5.sh                    # RISCV-Linux QEMU
+scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh   # ARM channel
+scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh # RISCV channel
+scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh           # FreeRTOS QEMU
+scripts/heterogeneous-soc/guest-run-arm-phase5.sh                      # ARM-Linux QEMU
+scripts/heterogeneous-soc/guest-run-riscv-phase5.sh                    # RISCV-Linux QEMU
 ```
 
 The FreeRTOS machine requires both ivshmem servers to be listening before it starts (the tmux script polls for the Unix sockets).

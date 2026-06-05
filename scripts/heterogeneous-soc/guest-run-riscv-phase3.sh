@@ -33,15 +33,15 @@ if [[ -n "${PHASE3_QEMU_LOG_FILE}" ]]; then
     qemu_debug_args+=(-D "${PHASE3_QEMU_LOG_FILE}")
 fi
 
-bash "${SCRIPT_DIR}/prepare-riscv-uboot.sh"
+bash "${SCRIPT_DIR}/guest-prepare-riscv-uboot.sh"
 
 if [[ ! -f "${RISCV_DISK}" ]]; then
     qemu-img create -f qcow2 "${RISCV_DISK}" 4G
 fi
 
 if [[ "${RISCV_BOOT_MODE}" == "direct" ]]; then
-    bash "${SCRIPT_DIR}/prepare-riscv-phase3-boot-assets.sh"
-    bash "${SCRIPT_DIR}/prepare-demo-guest-overlays.sh"
+    bash "${SCRIPT_DIR}/guest-prepare-riscv-phase3-boot-assets.sh"
+    bash "${SCRIPT_DIR}/guest-prepare-demo-guest-overlays.sh"
     require_file "${RISCV_KERNEL_IMAGE}" "RISC-V decompressed kernel image"
     require_file "${RISCV_INITRAMFS_COMBINED}" "RISC-V combined initramfs image"
 
