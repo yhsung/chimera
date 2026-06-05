@@ -84,7 +84,8 @@ _has_ivshmem() {
 }
 
 if _has_ivshmem && [[ -x "${BUILD_DIR}/qemu-system-riscv64" ]] && \
-                   [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]]; then
+                   [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]] && \
+                   [[ -x "${BUILD_DIR}/qemu-system-mipsel" ]]; then
     _skip "QEMU and ivshmem-server already built in ${BUILD_DIR}"
 else
     bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
