@@ -132,11 +132,25 @@ Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mou
 
 ## Running the Demo
 
-### One command (recommended)
+### Quick start (two commands from macOS host)
+
+**Step 1 — Deploy source tree and create the Lima VM** (run once on the macOS host):
+
+```bash
+bash scripts/heterogeneous-soc/host-install-lima-host.sh
+```
+
+This creates the `qemu-dev` Lima VM (if it does not already exist) and rsyncs the `chimera-src` tree into `~/chimera-src` inside the VM.
+
+**Step 2 — Launch the full showcase** (run inside Lima, or via `limactl shell`):
 
 ```bash
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
+
+Re-run Step 1 after pulling new commits to redeploy the source tree before Step 2.
+
+---
 
 `guest-run-chimera-showcase.sh` is the full-stack launcher. It runs 8 stages, each idempotent:
 
@@ -144,7 +158,7 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run
 |---|---|---|
 | 1 — apt packages | Installs all build deps including `gcc-mips-linux-gnu` | Already installed |
 | 2 — kernel packages | Downloads ARM / RISCV / MIPS Debian kernel .deb packages | File already exists |
-| 3 — QEMU build | Builds `qemu-system-riscv64/aarch64` + `ivshmem-server` | Binaries already in `BUILD_DIR` |
+| 3 — QEMU build | Builds `qemu-system-aarch64/riscv64/mipsel` + `ivshmem-server` | All binaries already in `BUILD_DIR` |
 | 4 — FreeRTOS kernel | Clones / pulls FreeRTOS-Kernel | Already cloned (pulls latest) |
 | 5 — Showcase binaries | Builds ELF + `hello-{arm,riscv,mips}-linux` | Warns if MIPS binary absent |
 | 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap | Skipped if disk exists |
