@@ -12,17 +12,17 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
     # Gated on ELF absence as a proxy; none of these need to re-run on every launch.
     if [[ ! -f "$ELF" ]]; then
         echo "=== One-time setup ==="
-        scripts/heterogeneous-soc/install-lima-guest.sh
-        scripts/heterogeneous-soc/fetch-images.sh
+        scripts/heterogeneous-soc/guest-install-lima-guest.sh
+        scripts/heterogeneous-soc/guest-fetch-images.sh
         BUILD_DIR="$HOME/chimera-build-linux" VM_SOURCE_DIR="$HOME/chimera-src" \
-            scripts/heterogeneous-soc/build-ivshmem-tools.sh
+            scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
         echo "=== One-time setup complete ==="
     fi
 
     # Always rebuild the FreeRTOS ELF and Linux hello binaries so source changes
     # are picked up without manual intervention.
     echo "=== Building FreeRTOS showcase ==="
-    scripts/heterogeneous-soc/build-freertos-showcase.sh
+    scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
     echo "=== Build complete ==="
 fi
 
@@ -65,9 +65,9 @@ pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5   # let the processes exit and release disk locks before QEMU restarts
 
 # Start ivshmem servers first; wait for all three sockets before launching guests.
-tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-arm-freertos.sh"   Enter
-tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-riscv-freertos.sh" Enter
-tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/start-ivshmem-server-mips-freertos.sh"  Enter
+tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh"   Enter
+tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh" Enter
+tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-mips-freertos.sh"  Enter
 
 ARM_SOCK="${IVSHMEM_ARM_FREERTOS_DIR:-/tmp/ivshmem-arm-freertos}/sock"
 RISCV_SOCK="${IVSHMEM_RISCV_FREERTOS_DIR:-/tmp/ivshmem-riscv-freertos}/sock"
@@ -81,10 +81,10 @@ for _i in $(seq 1 60); do
     sleep 0.5
 done
 
-tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh" Enter
-tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/run-arm-phase5.sh"            Enter
-tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/run-riscv-phase5.sh"          Enter
-tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/run-chimera.sh"               Enter
+tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-arm-phase5.sh"            Enter
+tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
+tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter
 
 # Wait for the guest shell to be ready, then run the hello binary.
 auto_login_and_run() {

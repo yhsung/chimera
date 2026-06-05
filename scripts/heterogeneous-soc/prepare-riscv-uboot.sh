@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# DEPRECATED: prepare-riscv-uboot.sh has been replaced by direct OpenSBI boot
-# (no U-Boot needed for Debian). This stub exists for backward compatibility only.
-echo "WARNING: prepare-riscv-uboot.sh is deprecated." >&2
-echo "  Debian kernels boot directly with OpenSBI; U-Boot is no longer required." >&2
-echo "  Use prepare-debian-boot-assets.sh to extract kernel + initrd from .deb packages." >&2
-exit 0

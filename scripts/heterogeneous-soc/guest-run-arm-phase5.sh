@@ -11,7 +11,7 @@ require_file "${ARM_INITRD_IMAGE}" "ARM initrd image"
 require_file "${ARM_DEBIAN_DISK}" "ARM Debian rootfs disk"
 [[ -d "${PINGPONG_DIR}" ]] || die "shared pingpong directory not found: ${PINGPONG_DIR}"
 
-bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh"
+bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
     -machine virt,gic-version=3 \

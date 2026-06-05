@@ -6,7 +6,7 @@ source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 require_file "${RISCV_ISO}" "RISC-V installer ISO"
 require_file "${RISCV_UBOOT_ARCHIVE}" "RISC-V U-Boot archive"
 
-bash "${SCRIPT_DIR}/prepare-riscv-uboot.sh"
+bash "${SCRIPT_DIR}/guest-prepare-riscv-uboot.sh"
 
 if [[ ! -f "${RISCV_DISK}" ]]; then
     qemu-img create -f qcow2 "${RISCV_DISK}" 4G

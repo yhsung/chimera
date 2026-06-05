@@ -72,7 +72,7 @@ login_if_needed() {
             ;;
         login)
             echo "${title}: login prompt detected, sending root."
-            bash "${SCRIPT_DIR}/demo-send-to-pane.sh" "${title}" "root"
+            bash "${SCRIPT_DIR}/guest-demo-send-to-pane.sh" "${title}" "root"
             ;;
         *)
             echo "Unexpected guest state for ${title}: ${state}" >&2
@@ -103,8 +103,8 @@ main() {
     sleep "${POST_LOGIN_WAIT_SECONDS}"
 
     echo "Mounting pingpong share in both guests."
-    bash "${SCRIPT_DIR}/demo-send-to-pane.sh" arm "${mount_cmd}"
-    bash "${SCRIPT_DIR}/demo-send-to-pane.sh" riscv "${mount_cmd}"
+    bash "${SCRIPT_DIR}/guest-demo-send-to-pane.sh" arm "${mount_cmd}"
+    bash "${SCRIPT_DIR}/guest-demo-send-to-pane.sh" riscv "${mount_cmd}"
 }
 
 main "$@"

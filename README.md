@@ -135,10 +135,10 @@ Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mou
 ### One command (recommended)
 
 ```bash
-limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/run-chimera-showcase.sh
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
-`run-chimera-showcase.sh` is the full-stack launcher. It runs 8 stages, each idempotent:
+`guest-run-chimera-showcase.sh` is the full-stack launcher. It runs 8 stages, each idempotent:
 
 | Stage | What it does | Skip condition |
 |---|---|---|
@@ -164,30 +164,30 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/run-chime
 
 ```bash
 # One-time: set up Lima VM (macOS host)
-scripts/heterogeneous-soc/install-lima-host.sh
+scripts/heterogeneous-soc/host-install-lima-host.sh
 
 # Inside Lima:
 limactl shell qemu-dev
 
 # Install build dependencies (once)
-bash ~/chimera-src/scripts/heterogeneous-soc/install-lima-guest.sh
+bash ~/chimera-src/scripts/heterogeneous-soc/guest-install-lima-guest.sh
 
 # Fetch Debian kernel packages
-bash ~/chimera-src/scripts/heterogeneous-soc/fetch-images.sh
+bash ~/chimera-src/scripts/heterogeneous-soc/guest-fetch-images.sh
 
 # Build QEMU + ivshmem-server
 BUILD_DIR=$HOME/chimera-build-linux VM_SOURCE_DIR=$HOME/chimera-src \
-    bash ~/chimera-src/scripts/heterogeneous-soc/build-ivshmem-tools.sh
+    bash ~/chimera-src/scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
 
 # Fetch FreeRTOS kernel source
-bash ~/chimera-src/scripts/heterogeneous-soc/fetch-freertos-kernel.sh
+bash ~/chimera-src/scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh
 
 # Build FreeRTOS showcase binaries
-bash ~/chimera-src/scripts/heterogeneous-soc/build-freertos-showcase.sh
+bash ~/chimera-src/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
 
 # Launch the showcase
 CHIMERA_ROOT=~/chimera-src BUILD_DIR=~/chimera-build-linux \
-    bash ~/chimera-src/scripts/heterogeneous-soc/run-phase5-tmux.sh
+    bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-phase5-tmux.sh
 ```
 
 ### Prerequisites
@@ -221,20 +221,20 @@ contrib/heterogeneous-soc/freertos-showcase/
   Makefile
 
 scripts/heterogeneous-soc/
-  run-chimera-showcase.sh               — full-stack launcher (prereqs + build + tmux)
-  run-phase5-tmux.sh                    — tmux session launcher (7 panes)
-  build-freertos-showcase.sh            — builds all binaries via Lima
-  fetch-images.sh                       — downloads Debian kernel .deb packages
-  install-lima-guest.sh                 — installs apt packages in Lima VM
-  start-ivshmem-server-arm-freertos.sh  — starts ARM ivshmem-server
-  start-ivshmem-server-riscv-freertos.sh — starts RISCV ivshmem-server
-  start-ivshmem-server-mips-freertos.sh — starts MIPS ivshmem-server
-  run-arm-phase5.sh                     — launches ARM-Linux QEMU
-  run-riscv-phase5.sh                   — launches RISCV-Linux QEMU
-  run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
-  run-riscv-freertos-phase5.sh          — launches FreeRTOS QEMU
-  prepare-debian-rootfs.sh              — creates minimal Debian qcow2 rootfs disks via debootstrap
-  prepare-debian-boot-assets.sh         — extracts kernel + initramfs from Debian kernel .deb packages
+  guest-run-chimera-showcase.sh               — full-stack launcher (prereqs + build + tmux)
+  guest-run-phase5-tmux.sh                    — tmux session launcher (7 panes)
+  guest-build-freertos-showcase.sh            — builds all binaries via Lima
+  guest-fetch-images.sh                       — downloads Debian kernel .deb packages
+  guest-install-lima-guest.sh                 — installs apt packages in Lima VM
+  guest-start-ivshmem-server-arm-freertos.sh  — starts ARM ivshmem-server
+  guest-start-ivshmem-server-riscv-freertos.sh — starts RISCV ivshmem-server
+  guest-start-ivshmem-server-mips-freertos.sh — starts MIPS ivshmem-server
+  guest-run-arm-phase5.sh                     — launches ARM-Linux QEMU
+  guest-run-riscv-phase5.sh                   — launches RISCV-Linux QEMU
+  guest-run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
+  guest-run-riscv-freertos-phase5.sh          — launches FreeRTOS QEMU
+  guest-prepare-debian-rootfs.sh              — creates minimal Debian qcow2 rootfs disks via debootstrap
+  guest-prepare-debian-boot-assets.sh         — extracts kernel + initramfs from Debian kernel .deb packages
 
 hw/riscv/chimera_freertos_demo.c  — custom QEMU machine (3 ivshmem channels)
 hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by FreeRTOS)

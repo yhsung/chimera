@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# prepare-debian-boot-assets.sh
+# guest-prepare-debian-boot-assets.sh
 #
 # Verify that vmlinuz and initrd.img exist in each architecture's boot asset
-# directory.  These files are created by prepare-debian-rootfs.sh when it
+# directory.  These files are created by guest-prepare-debian-rootfs.sh when it
 # installs the kernel .deb inside the debootstrap rootfs (which triggers
 # update-initramfs).  If they are missing, the rootfs must be (re)created.
 set -euo pipefail
@@ -25,7 +25,7 @@ require_boot_assets() {
     echo "  Expected:" >&2
     echo "    vmlinuz: ${vmlinuz}" >&2
     echo "    initrd:  ${initrd}" >&2
-    echo "  Re-run prepare-debian-rootfs.sh to recreate the rootfs with kernel." >&2
+    echo "  Re-run guest-prepare-debian-rootfs.sh to recreate the rootfs with kernel." >&2
     return 1
 }
 

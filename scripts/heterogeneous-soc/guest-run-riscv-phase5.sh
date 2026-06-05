@@ -11,7 +11,7 @@ require_file "${RISCV_INITRD_IMAGE}" "RISC-V initrd image"
 require_file "${RISCV_DEBIAN_DISK}" "RISC-V Debian rootfs disk"
 [[ -d "${PINGPONG_DIR}" ]] || die "shared pingpong directory not found: ${PINGPONG_DIR}"
 
-bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh"
+bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
     -machine virt,aclint=on \

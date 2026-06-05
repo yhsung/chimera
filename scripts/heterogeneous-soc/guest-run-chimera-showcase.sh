@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# run-chimera-showcase.sh
+# guest-run-chimera-showcase.sh
 #
 # Full-stack launcher for the three-channel Chimera heterogeneous-SoC demo.
 # Handles all prerequisites, builds every binary, then opens the 7-pane tmux
 # showcase (ARM-Linux + RISCV-Linux + MIPS-Linux ↔ FreeRTOS over ivshmem).
 #
 # Run this from inside the Lima VM:
-#   limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/run-chimera-showcase.sh
+#   limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 #
 # Key environment overrides (all have sensible defaults via common.sh):
 #   BUILD_DIR        QEMU build output  (default: ~/chimera-build-linux)
@@ -70,7 +70,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     # ── Step 2: Fetch Debian kernel packages ──────────────────────────────────
 
     _step "Fetching Debian kernel packages"
-    bash "${SCRIPT_DIR}/fetch-images.sh"
+    bash "${SCRIPT_DIR}/guest-fetch-images.sh"
     _ok "Debian kernel packages fetched"
 
 fi
@@ -87,14 +87,14 @@ if _has_ivshmem && [[ -x "${BUILD_DIR}/qemu-system-riscv64" ]] && \
                    [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]]; then
     _skip "QEMU and ivshmem-server already built in ${BUILD_DIR}"
 else
-    bash "${SCRIPT_DIR}/build-ivshmem-tools.sh"
+    bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
     _ok "QEMU and ivshmem-server built"
 fi
 
 # ── Step 4: Fetch FreeRTOS kernel source ─────────────────────────────────────
 
 _step "FreeRTOS kernel source"
-bash "${SCRIPT_DIR}/fetch-freertos-kernel.sh"
+bash "${SCRIPT_DIR}/guest-fetch-freertos-kernel.sh"
 _ok "FreeRTOS-Kernel at ${FREERTOS_KERNEL_DIR}"
 
 # ── Step 5: Build showcase binaries ──────────────────────────────────────────
@@ -105,7 +105,7 @@ if [[ -n "${SKIP_BUILD:-}" ]]; then
     require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 else
     _step "Building FreeRTOS showcase"
-    bash "${SCRIPT_DIR}/build-freertos-showcase.sh"
+    bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     _ok "freertos-riscv-demo.elf built ($(du -sh "${FREERTOS_DEMO_ELF}" | cut -f1))"
 
     for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}"; do
@@ -124,17 +124,17 @@ else
 fi
 
 # ── Step 6: Debian rootfs disk images ───────────────────────────────────────────
-# prepare-debian-rootfs.sh creates minimal Debian qcow2 disks via debootstrap.
+# guest-prepare-debian-rootfs.sh creates minimal Debian qcow2 disks via debootstrap.
 # These are created once and reused; the script skips existing images.
 
 _step "Debian rootfs images"
-bash "${SCRIPT_DIR}/prepare-debian-rootfs.sh"
+bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh"
 _ok "Debian rootfs disks ready"
 
 # ── Step 7: Extract kernel + initrd from .deb packages ─────────────────────────
 
 _step "Kernel extraction"
-bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh"
+bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 _ok "Kernels and initrds extracted"
 
 # ── Step 8: Launch ────────────────────────────────────────────────────────────
@@ -144,6 +144,6 @@ printf '  Session:  freertos-showcase\n'
 printf '  Layout:   3 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
 printf '  Navigate: Ctrl-b + arrow keys\n\n'
 
-# Pass SKIP_BUILD=1 so run-phase5-tmux.sh goes straight to the tmux launch
-# without running build-freertos-showcase.sh a second time.
-exec env SKIP_BUILD=1 bash "${SCRIPT_DIR}/run-phase5-tmux.sh"
+# Pass SKIP_BUILD=1 so guest-run-phase5-tmux.sh goes straight to the tmux launch
+# without running guest-build-freertos-showcase.sh a second time.
+exec env SKIP_BUILD=1 bash "${SCRIPT_DIR}/guest-run-phase5-tmux.sh"

@@ -7,8 +7,8 @@ require_file "${ARM_ISO}" "ARM installer image"
 require_file "${ARM_UEFI_BIOS}" "ARM UEFI firmware"
 [[ -d "${PINGPONG_DIR}" ]] || die "shared pingpong directory not found: ${PINGPONG_DIR}"
 
-bash "${SCRIPT_DIR}/prepare-arm-phase2-boot-assets.sh"
-bash "${SCRIPT_DIR}/prepare-demo-guest-overlays.sh"
+bash "${SCRIPT_DIR}/guest-prepare-arm-phase2-boot-assets.sh"
+bash "${SCRIPT_DIR}/guest-prepare-demo-guest-overlays.sh"
 require_file "${ARM_KERNEL_IMAGE}" "ARM kernel image"
 require_file "${ARM_INITRAMFS_COMBINED}" "ARM combined initramfs"
 

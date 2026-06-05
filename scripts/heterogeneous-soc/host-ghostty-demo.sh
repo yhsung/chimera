@@ -5,23 +5,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 SESSION_NAME="${SESSION_NAME:-heterogeneous-soc}"
-ARM_RUN_SCRIPT="${ARM_RUN_SCRIPT:-scripts/heterogeneous-soc/run-arm-phase1.sh}"
-RISCV_RUN_SCRIPT="${RISCV_RUN_SCRIPT:-scripts/heterogeneous-soc/run-riscv-phase3.sh}"
+ARM_RUN_SCRIPT="${ARM_RUN_SCRIPT:-scripts/heterogeneous-soc/guest-run-arm-phase1.sh}"
+RISCV_RUN_SCRIPT="${RISCV_RUN_SCRIPT:-scripts/heterogeneous-soc/guest-run-riscv-phase3.sh}"
 RISCV_BOOT_MODE="${RISCV_BOOT_MODE:-direct}"
 RISCV_KERNEL_CMDLINE="${RISCV_KERNEL_CMDLINE:-modules=loop,squashfs,sd-mod,usb-storage,9p,9pnet,9pnet_virtio console=ttyS0 earlycon=sbi irqpoll}"
 PHASE3_QEMU_MACHINE="${PHASE3_QEMU_MACHINE:-virt,aclint=on}"
 PHASE3_QEMU_CPU="${PHASE3_QEMU_CPU:-rv64}"
-SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/start-ivshmem-server.sh}"
-STOP_DEMO_GUESTS_SCRIPT="${STOP_DEMO_GUESTS_SCRIPT:-scripts/heterogeneous-soc/stop-demo-guests.sh}"
+SERVER_SCRIPT="${SERVER_SCRIPT:-scripts/heterogeneous-soc/guest-start-ivshmem-server.sh}"
+STOP_DEMO_GUESTS_SCRIPT="${STOP_DEMO_GUESTS_SCRIPT:-scripts/heterogeneous-soc/guest-stop-demo-guests.sh}"
 STOP_STALE_DEMO_GUESTS="${STOP_STALE_DEMO_GUESTS:-1}"
-AUTO_PREPARE_GUESTS_SCRIPT="${AUTO_PREPARE_GUESTS_SCRIPT:-scripts/heterogeneous-soc/demo-auto-prepare-guests.sh}"
+AUTO_PREPARE_GUESTS_SCRIPT="${AUTO_PREPARE_GUESTS_SCRIPT:-scripts/heterogeneous-soc/guest-demo-auto-prepare-guests.sh}"
 AUTO_PREPARE_GUESTS="${AUTO_PREPARE_GUESTS:-1}"
 LIMA_NAME="${LIMA_NAME:-qemu-dev}"
 RUN_IN_LIMA="${RUN_IN_LIMA:-auto}"
 CONTROL_MESSAGE="${CONTROL_MESSAGE:-Control-pane helpers:
-bash scripts/heterogeneous-soc/demo-prepare-guests.sh
-bash scripts/heterogeneous-soc/demo-run-pong.sh
-bash scripts/heterogeneous-soc/demo-run-ping.sh}"
+bash scripts/heterogeneous-soc/guest-demo-prepare-guests.sh
+bash scripts/heterogeneous-soc/guest-demo-guest-run-pong.sh
+bash scripts/heterogeneous-soc/guest-demo-guest-run-ping.sh}"
 ENV_SETUP_SCRIPT="${ENV_SETUP_SCRIPT:-}"
 HOST_TERM="${TERM:-}"
 FALLBACK_TERM="${FALLBACK_TERM:-xterm-256color}"
@@ -241,7 +241,7 @@ maybe_launch_server() {
     fi
 
     send_message_pane "${target}" \
-        "ivshmem server not launched. Expected binary under ${build_dir} (for example ${build_dir}/contrib/ivshmem-server/ivshmem-server). Build it first with scripts/heterogeneous-soc/build-ivshmem-tools.sh in the Linux/Lima environment, or set BUILD_DIR to the directory that already contains ivshmem-server."
+        "ivshmem server not launched. Expected binary under ${build_dir} (for example ${build_dir}/contrib/ivshmem-server/ivshmem-server). Build it first with scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh in the Linux/Lima environment, or set BUILD_DIR to the directory that already contains ivshmem-server."
 }
 
 maybe_launch_arm() {
@@ -256,7 +256,7 @@ maybe_launch_arm() {
         fi
     fi
 
-    if [[ "${ARM_RUN_SCRIPT}" == "scripts/heterogeneous-soc/run-arm-phase2.sh" ]]; then
+    if [[ "${ARM_RUN_SCRIPT}" == "scripts/heterogeneous-soc/guest-run-arm-phase2.sh" ]]; then
         if [[ -z "${ARM_LINUX_IMAGE:-}" ]]; then
             send_message_pane "${target}" \
                 "ARM Phase 2 not launched. Set ARM_LINUX_IMAGE to the ARM disk/ISO image, and if needed also ARM_TFA_QEMU_BIOS or ARM_TFA_BL1 plus ARM_TFA_FIP."
@@ -296,7 +296,7 @@ maybe_launch_riscv() {
 
     if [[ ! -f "${riscv_iso}" ]]; then
         send_message_pane "${target}" \
-            "RISC-V runner not launched. Missing installer ISO: ${riscv_iso}. Fetch assets first with scripts/heterogeneous-soc/fetch-images.sh in the Linux/Lima environment, or set RISCV_ISO to an existing image."
+            "RISC-V runner not launched. Missing installer ISO: ${riscv_iso}. Fetch assets first with scripts/heterogeneous-soc/guest-fetch-images.sh in the Linux/Lima environment, or set RISCV_ISO to an existing image."
         return
     fi
 

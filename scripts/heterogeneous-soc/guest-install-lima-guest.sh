@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ── Register foreign architectures for cross-arch kernel downloads ────────
-# fetch-images.sh uses apt-get download to pull kernel .deb packages
+# guest-fetch-images.sh uses apt-get download to pull kernel .deb packages
 # for arm64, riscv64, and mipsel.  dpkg needs each foreign arch registered
 # before apt-get update so the package indices include those architectures.
 for _arch in arm64 riscv64 mipsel; do

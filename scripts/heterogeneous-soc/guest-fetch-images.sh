@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fetch-images.sh
+# guest-fetch-images.sh
 #
 # Download versioned Debian kernel .deb packages for all three architectures.
 # Each package includes both vmlinuz AND initrd.img (unlike Ubuntu kernels which

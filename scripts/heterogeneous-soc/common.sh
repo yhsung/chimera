@@ -33,7 +33,7 @@ IVSHMEM_SOCKET="${IVSHMEM_SOCKET:-${IVSHMEM_DIR}/sock}"
 IVSHMEM_SIZE="${IVSHMEM_SIZE:-67108864}"
 IVSHMEM_VECTORS="${IVSHMEM_VECTORS:-4}"
 
-# ── Debian rootfs disk images (created by prepare-debian-rootfs.sh) ──────────
+# ── Debian rootfs disk images (created by guest-prepare-debian-rootfs.sh) ──────────
 ARM_DEBIAN_DISK="${ARM_DEBIAN_DISK:-${ASSET_DIR}/debian-arm64.qcow2}"
 RISCV_DEBIAN_DISK="${RISCV_DEBIAN_DISK:-${ASSET_DIR}/debian-riscv64.qcow2}"
 MIPS_DEBIAN_DISK="${MIPS_DEBIAN_DISK:-${ASSET_DIR}/debian-mips.qcow2}"

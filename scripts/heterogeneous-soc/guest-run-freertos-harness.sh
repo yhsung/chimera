@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# run-freertos-harness.sh — headless pass/fail harness for the FreeRTOS ivshmem demo.
+# guest-run-freertos-harness.sh — headless pass/fail harness for the FreeRTOS ivshmem demo.
 #
-# Runs everything in a detached tmux session (same layout as run-phase5-tmux.sh).
+# Runs everything in a detached tmux session (same layout as guest-run-phase5-tmux.sh).
 # FreeRTOS UART is captured to a log file via tmux pipe-pane.
 # auto_login_and_run() drives the Linux guests when the shell is ready.
 # Pass condition: FreeRTOS log contains "received hello from arm-linux".
@@ -50,14 +50,14 @@ rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVS
 # ── Build ────────────────────────────────────────────────────────────────────
 if [[ -z "${SKIP_BUILD:-}" ]]; then
     echo "[harness] Building showcase..."
-    bash "${SCRIPT_DIR}/build-freertos-showcase.sh" \
+    bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh" \
         > "${LOG_DIR}/build-${RUN_ID}.log" 2>&1 \
         || { echo "[harness] BUILD FAILED — see ${LOG_DIR}/build-${RUN_ID}.log"; exit 1; }
 fi
 require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 
 # ── tmux session ─────────────────────────────────────────────────────────────
-# Same pane layout as run-phase5-tmux.sh:
+# Same pane layout as guest-run-phase5-tmux.sh:
 #  pane 0: ARM ivshmem server
 #  pane 1: RISCV ivshmem server
 #  pane 2: MIPS ivshmem server
@@ -106,22 +106,22 @@ done
 # ── FreeRTOS QEMU ────────────────────────────────────────────────────────────
 echo "[harness] Starting FreeRTOS QEMU; UART → ${FREERTOS_LOG}"
 tmux send-keys -t "${SESSION}:0.3" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh'" Enter
 
 # Give FreeRTOS QEMU time to start and print its first line before anything else.
 sleep 2
 
 # ── Linux guests ─────────────────────────────────────────────────────────────
 tmux send-keys -t "${SESSION}:0.4" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-arm-phase5.sh'"    Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-arm-phase5.sh'"    Enter
 tmux send-keys -t "${SESSION}:0.5" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-riscv-phase5.sh'"  Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-phase5.sh'"  Enter
 tmux send-keys -t "${SESSION}:0.6" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-chimera.sh'"        Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-chimera.sh'"        Enter
 
 # ── auto_login_and_run ───────────────────────────────────────────────────────
 # Detect the guest shell and fire the hello binary.  Same logic as
-# run-phase5-tmux.sh: handles both interactive login: and autologin ~#.
+# guest-run-phase5-tmux.sh: handles both interactive login: and autologin ~#.
 auto_login_and_run() {
     local pane="$1"
     local hello_bin="$2"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run-debian-harness.sh — headless pass/fail harness for the Debian ivshmem demo.
+# guest-run-debian-harness.sh — headless pass/fail harness for the Debian ivshmem demo.
 #
 # Two-stage pipeline:
 #   Stage 1: Install prerequisites (debootstrap, qemu-user-static, cross-compilers).
@@ -87,7 +87,7 @@ if [[ -n "${SKIP_PREREQS:-}" ]]; then
     _warn "SKIP_PREREQS set — skipping apt install"
 else
     echo "[debian-harness] Checking and installing packages..."
-    bash "${SCRIPT_DIR}/install-lima-guest.sh" \
+    bash "${SCRIPT_DIR}/guest-install-lima-guest.sh" \
         > "${SETUP_LOG}" 2>&1 \
         || { _fail "Prerequisite installation failed — see ${SETUP_LOG}"; exit 1; }
     _ok "Prerequisites installed"
@@ -114,7 +114,7 @@ if [[ -n "${SKIP_FETCH:-}" ]]; then
     _warn "SKIP_FETCH set — skipping kernel .deb download"
 else
     echo "[debian-harness] Fetching Debian kernel packages..."
-    bash "${SCRIPT_DIR}/fetch-images.sh" \
+    bash "${SCRIPT_DIR}/guest-fetch-images.sh" \
         || { _fail "Failed to fetch Debian kernel packages"; exit 1; }
     _ok "Kernel .deb packages fetched"
 fi
@@ -134,7 +134,7 @@ else
         _ok "All three rootfs disks present — skipping debootstrap"
     else
         echo "[debian-harness] Creating Debian rootfs qcow2 disks (this may take several minutes)..."
-        bash "${SCRIPT_DIR}/prepare-debian-rootfs.sh" \
+        bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh" \
             2>&1 | tee -a "${SETUP_LOG}" \
             || { _fail "Rootfs creation failed — see ${SETUP_LOG}"; exit 1; }
     fi
@@ -143,7 +143,7 @@ fi
 # ── 2c. Extract kernels and initrds from .deb packages ───────────────────────
 
 echo "[debian-harness] Extracting kernels..."
-bash "${SCRIPT_DIR}/prepare-debian-boot-assets.sh" \
+bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh" \
     || { _fail "Kernel extraction failed"; exit 1; }
 _ok "Kernels and initrds extracted"
 
@@ -162,7 +162,7 @@ require_file "${MIPS_DEBIAN_DISK}"       "MIPS Debian rootfs disk"
 
 if [[ -z "${SKIP_BUILD:-}" ]]; then
     echo "[debian-harness] Building FreeRTOS showcase..."
-    bash "${SCRIPT_DIR}/build-freertos-showcase.sh" \
+    bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh" \
         > "${LOG_DIR}/build-${RUN_ID}.log" 2>&1 \
         || { _fail "BUILD FAILED — see ${LOG_DIR}/build-${RUN_ID}.log"; exit 1; }
     _ok "Showcase built"
@@ -179,7 +179,7 @@ for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}";
 done
 
 # ── 2e. Launch tmux session ──────────────────────────────────────────────────
-# Same 7-pane layout as run-phase5-tmux.sh:
+# Same 7-pane layout as guest-run-phase5-tmux.sh:
 #   pane 0: ARM ivshmem server
 #   pane 1: RISCV ivshmem server
 #   pane 2: MIPS ivshmem server
@@ -235,7 +235,7 @@ _ok "All three ivshmem servers listening"
 
 echo "[debian-harness] Starting FreeRTOS QEMU..."
 tmux send-keys -t "${SESSION}:0.3" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-riscv-freertos-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh'" Enter
 
 # Give FreeRTOS a head start — it is the slowest component.
 sleep 2
@@ -244,15 +244,15 @@ sleep 2
 
 echo "[debian-harness] Starting ARM Linux guest..."
 tmux send-keys -t "${SESSION}:0.4" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-arm-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-arm-phase5.sh'" Enter
 
 echo "[debian-harness] Starting RISC-V Linux guest..."
 tmux send-keys -t "${SESSION}:0.5" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-riscv-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-phase5.sh'" Enter
 
 echo "[debian-harness] Starting MIPS Linux guest..."
 tmux send-keys -t "${SESSION}:0.6" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/run-chimera.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-chimera.sh'" Enter
 
 # ── 2i. Auto-login and run hello binaries ────────────────────────────────────
 

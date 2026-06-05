@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# prepare-debian-rootfs.sh
+# guest-prepare-debian-rootfs.sh
 #
 # Create minimal Debian rootfs qcow2 disk images via debootstrap.
 # Each image is configured for serial-console auto-login and 9p virtio mount.

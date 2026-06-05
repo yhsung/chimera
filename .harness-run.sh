@@ -13,4 +13,4 @@ export HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-300}"
 export HARNESS_LOG_DIR=/home/yhsung.guest/harness-logs
 export SKIP_BUILD=1
 
-exec "${REPO_ROOT}/scripts/heterogeneous-soc/run-freertos-harness.sh" "$@"
+exec "${REPO_ROOT}/scripts/heterogeneous-soc/guest-run-freertos-harness.sh" "$@"
