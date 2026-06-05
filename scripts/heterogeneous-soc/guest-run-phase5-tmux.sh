@@ -114,7 +114,7 @@ auto_login_and_run() {
 
 auto_login_and_run "$SESSION:0.4" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
 auto_login_and_run "$SESSION:0.5" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
-auto_login_and_run "$SESSION:0.6" "/mnt/pingpong/freertos-showcase/hello-mips-linux"  &
+auto_login_and_run "$SESSION:0.6" "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/hello-mips-linux && /tmp/hello-mips-linux"  &
 
 # Focus FreeRTOS pane so FreeRTOS output is front-and-center on attach
 tmux select-pane -t "$SESSION:0.3"
