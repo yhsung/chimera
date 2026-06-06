@@ -72,6 +72,7 @@ LAUNCH_SCRIPTS=(
     "${SCRIPT_DIR}/guest-start-ivshmem-server-mips-freertos.sh"
     "${SCRIPT_DIR}/guest-start-ivshmem-server-stats.sh"
     "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
+    "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
 )
 for script in "${LAUNCH_SCRIPTS[@]}"; do
     [[ -f "${script}" ]] || die "required script not found: ${script}"
@@ -118,6 +119,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check python3-pip
     _pkg_check qemu-system-misc
     _pkg_check qemu-user-static
+    _pkg_check qemu-utils
     _pkg_check rsync
     _pkg_check tmux
     _pkg_check zlib1g-dev
@@ -205,6 +207,15 @@ fi
 _step "Debian rootfs images"
 _exec bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh"
 _ok "Debian rootfs disks ready"
+
+# ── Step 6.5: Install syslog daemons into guest disk images ──────────────────
+# Injects syslog-{arm,riscv,mips}-linux into /usr/local/bin/ of each qcow2 so
+# guests can run the daemon directly from their own filesystem.
+# Idempotent — safe to re-run after every binary rebuild.
+
+_step "Installing syslog daemons into guest images"
+_exec bash "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
+_ok "Syslog daemons installed"
 
 # ── Step 7: Extract kernel + initrd from .deb packages ─────────────────────────
 

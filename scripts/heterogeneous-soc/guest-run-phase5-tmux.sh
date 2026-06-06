@@ -160,11 +160,11 @@ auto_login_and_run() {
 
 auto_login_and_run "$SESSION:0.5" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
-    "/mnt/pingpong/freertos-showcase/syslog-arm-linux" &
+    "syslog-arm-linux" &
 auto_login_and_run "$SESSION:0.6" \
-    "/mnt/pingpong/freertos-showcase/syslog-riscv-linux" &
+    "syslog-riscv-linux" &
 auto_login_and_run "$SESSION:0.7" \
-    "cp /mnt/pingpong/freertos-showcase/syslog-mips-linux /tmp/syslog-mips-linux && /tmp/syslog-mips-linux" &
+    "syslog-mips-linux" &
 
 # Focus FreeRTOS pane so FreeRTOS output is front-and-center on attach
 tmux select-pane -t "$SESSION:0.4"
