@@ -23,6 +23,8 @@ exec "${qemu_bin}" \
     -append "${RISCV_KERNEL_CMDLINE}" \
     -chardev socket,id=ivshmem,path="${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
+    -chardev socket,id=ivshmem_boot,path="${IVSHMEM_BOOTLOG_SOCKET}" \
+    -device ivshmem-doorbell,chardev=ivshmem_boot,vectors=1 \
     -drive file="${RISCV_DEBIAN_DISK}",format=qcow2,if=virtio \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -netdev tap,id=net0,ifname=tap-riscv,script=no,downscript=no \

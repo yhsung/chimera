@@ -1,0 +1,24 @@
+#ifndef HETEROGENEOUS_SOC_FREERTOS_BOOT_LOG_H
+#define HETEROGENEOUS_SOC_FREERTOS_BOOT_LOG_H
+
+#include <stdint.h>
+
+#include "bootlog_proto.h"
+#include "freertos_ivshmem_flat.h"
+
+struct bootlog_monitor {
+    struct freertos_ivshmem_link link;
+    volatile struct hsoc_bootlog_header *header;
+    int64_t    boot_tick;
+    uint8_t    armed;
+    uint8_t    initialized;
+};
+
+void bootlog_init(struct bootlog_monitor *m,
+                  uintptr_t mmio_base, uintptr_t shmem_base,
+                  const char *name);
+
+/* Call once per main-loop iteration (~1 ms). Returns 1 if doorbell was rung. */
+int bootlog_tick(struct bootlog_monitor *m);
+
+#endif

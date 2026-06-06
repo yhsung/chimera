@@ -29,6 +29,22 @@ ifneq ($(HAVE_CC_MIPS),)
 SYSLOG_TARGETS += syslog-mips-linux
 endif
 
+BOOTLOG_TARGETS :=
+ifneq ($(HAVE_CC_ARM),)
+BOOTLOG_TARGETS += bootlog-arm-linux
+endif
+ifneq ($(HAVE_CC_RISCV),)
+BOOTLOG_TARGETS += bootlog-riscv-linux
+endif
+ifneq ($(HAVE_CC_MIPS),)
+BOOTLOG_TARGETS += bootlog-mips-linux
+endif
+
+BOOT_COLLECTOR_TARGETS :=
+ifneq ($(HAVE_CC_ARM),)
+BOOT_COLLECTOR_TARGETS += boot-collector
+endif
+
 FREERTOS_SRCS := \
 	$(FREERTOS_KERNEL_DIR)/tasks.c \
 	$(FREERTOS_KERNEL_DIR)/list.c \
@@ -39,15 +55,15 @@ FREERTOS_SRCS := \
 
 .PHONY: all clean
 
-all: $(SYSLOG_TARGETS) freertos-riscv-demo.elf
+all: $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-riscv-demo.elf
 ifeq ($(HAVE_CC_ARM),)
-	$(warning CC_ARM=$(CC_ARM) not found — syslog-arm-linux and linux-arm-stats skipped)
+	$(warning CC_ARM=$(CC_ARM) not found — syslog-arm-linux, linux-arm-stats, bootlog-arm-linux, boot-collector skipped)
 endif
 ifeq ($(HAVE_CC_RISCV),)
-	$(warning CC_RISCV=$(CC_RISCV) not found — syslog-riscv-linux skipped)
+	$(warning CC_RISCV=$(CC_RISCV) not found — syslog-riscv-linux, bootlog-riscv-linux skipped)
 endif
 ifeq ($(HAVE_CC_MIPS),)
-	$(warning CC_MIPS=$(CC_MIPS) not found — syslog-mips-linux skipped)
+	$(warning CC_MIPS=$(CC_MIPS) not found — syslog-mips-linux, bootlog-mips-linux skipped)
 endif
 
 syslog-arm-linux: linux_syslog.c hello_proto.h
@@ -71,17 +87,38 @@ syslog-mips-linux: linux_syslog.c hello_proto.h
 	  -DHSOC_SENDER_ID=HSOC_SENDER_MIPS_LINUX \
 	  -o $@ linux_syslog.c
 
-freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c \
+bootlog-arm-linux: bootlog_writer.c bootlog_proto.h
+	$(CC_ARM) $(CFLAGS_LINUX) \
+	  -DHSOC_BOOTLOG_GUEST=HSOC_GUEST_ARM_LINUX \
+	  -DHSOC_BOOTLOG_LABEL='"arm-linux"' \
+	  -o $@ bootlog_writer.c
+
+bootlog-riscv-linux: bootlog_writer.c bootlog_proto.h
+	$(CC_RISCV) $(CFLAGS_LINUX) \
+	  -DHSOC_BOOTLOG_GUEST=HSOC_GUEST_RISCV_LINUX \
+	  -DHSOC_BOOTLOG_LABEL='"riscv-linux"' \
+	  -o $@ bootlog_writer.c
+
+bootlog-mips-linux: bootlog_writer.c bootlog_proto.h
+	$(CC_MIPS) $(CFLAGS_LINUX) \
+	  -DHSOC_BOOTLOG_GUEST=HSOC_GUEST_MIPS_LINUX \
+	  -DHSOC_BOOTLOG_LABEL='"mips-linux"' \
+	  -o $@ bootlog_writer.c
+
+boot-collector: boot_collector.c bootlog_proto.h
+	$(CC_ARM) $(CFLAGS_LINUX) -o $@ boot_collector.c
+
+freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
-		hello_proto.h stats_proto.h $(FREERTOS_SRCS)
+		hello_proto.h stats_proto.h bootlog_proto.h boot_log.h $(FREERTOS_SRCS)
 	$(CC_BARE) $(CFLAGS_BARE) \
 	  -I. \
 	  -I$(FREERTOS_KERNEL_DIR)/include \
 	  -I$(FREERTOS_PORT_DIR) \
 	  -I$(FREERTOS_PORT_CHIP_DIR) \
-	  startup.S freertos_main.c freertos_ivshmem_flat.c freertos_libc.c \
+	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c freertos_libc.c \
 	  $(FREERTOS_SRCS) \
 	  $(LDFLAGS_BARE) -o $@
 
 clean:
-	rm -f $(SYSLOG_TARGETS) freertos-riscv-demo.elf
+	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-riscv-demo.elf
