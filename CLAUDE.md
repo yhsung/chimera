@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-Chimera is a QEMU fork that implements a heterogeneous SoC demo: ARM-Linux and RISCV-Linux guests exchange timestamped HELLO/ACK messages with a bare-metal RISCV FreeRTOS firmware over two independent ivshmem (inter-VM shared memory) channels.
+Chimera is a QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/tmp/freertos-stats.log`.
 
 ## Chimera-Specific Code
 
@@ -12,7 +12,7 @@ All custom code lives in a small surface area on top of upstream QEMU:
 
 | File | Purpose |
 |---|---|
-| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, two `ivshmem-flat` devices |
+| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, four `ivshmem-flat` devices (3 HELLO/ACK + 1 stats) |
 | `include/hw/riscv/chimera_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
 | `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
 | `include/hw/misc/ivshmem-flat.h` | Device state and interface |
@@ -23,6 +23,10 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 `CONFIG_CHIMERA_FREERTOS_DEMO` (`hw/riscv/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` for their respective targets.
 
+## Architecture
+
+See `README.md` → **Architecture** for the full component table, ivshmem channel map (MMIO/SHMEM addresses), and device type breakdown.
+
 ## Quick Start (two commands)
 
 **Step 1 — Deploy source and create Lima VM** (run on macOS host; re-run after every pull):
@@ -31,7 +35,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 bash scripts/heterogeneous-soc/host-install-lima-host.sh
 ```
 
-**Step 2 — Launch the full showcase** (inside Lima):
+**Step 2 — Launch the full showcase** (from macOS host; re-run any time):
 
 ```bash
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
@@ -141,17 +145,35 @@ Then iterate: run the harness → diagnose root cause from logs → apply a fix 
 
 ## Wire Protocol
 
-Defined in `contrib/heterogeneous-soc/freertos-showcase/hello_proto.h`. Each channel occupies two 4 KiB slots in shared memory (`struct hsoc_layout`): one slot for Linux→FreeRTOS, one for FreeRTOS→Linux. Each slot has a `volatile uint32_t flag` (0=empty, 1=ready) followed by a 96-byte `hsoc_hello_msg`.
+See `README.md` → **Wire Protocol** for the full message layout, shared memory layout, handshake sequence diagram, and stats snapshot protocol.
 
-**Critical implementation constraints:**
+**Critical implementation constraints (must not deviate):**
 - All copies to/from ivshmem BAR2 use explicit volatile byte loops — `memcpy` and struct assignment are forbidden. ARM NEON instructions SIGBUS on non-cacheable PCI BAR2; GCC `-O2` LICM hoists non-volatile reads out of poll loops.
 - `__sync_synchronize()` wraps every flag read/write (emits `fence iorw,iorw` on RISC-V, `dmb ish` on AArch64).
+
+## Guest Networking & Avahi
+
+See `README.md` → **Guest Networking & Avahi Discovery** for the full bridge/TAP layout, IP assignments, Avahi service browsing commands, SSH ProxyJump config, and instructions for rebuilding stale disk images that predate Avahi support.
+
+## CI / Headless Testing
+
+See `README.md` → **CI / Headless Testing** for the two harness scripts (`guest-run-debian-harness.sh`, `guest-run-freertos-harness.sh`), their pass conditions, timeouts, and environment overrides.
 
 ## Git Conventions
 
 - Commit and push incrementally as each logical step completes — not all at once at the end.
 - For commit/push tasks: stage, commit with a clear message, push, and (if a PR was opened) switch back to main after merge.
 - Always add OS cruft like `.DS_Store` to `.gitignore` when creating or updating gitignore files.
+
+## Git Worktree Usage for Multi-Agent Work
+
+When the master agent is working inside a git worktree (isolated branch), **all spawned subagents must operate in the same worktree**. This rule is non-negotiable:
+
+- Before spawning any subagent, determine the current worktree path (`git worktree list`).
+- Pass the worktree path explicitly in the subagent prompt so it changes into that directory first.
+- Subagents must never commit to `master` or any branch other than the worktree's checked-out branch.
+- After each subagent completes, verify that commits landed on the correct branch (`git log --oneline -1 --decorate` in the worktree), not on `master`.
+- If a subagent accidentally commits to `master`, do not silently proceed — surface it immediately and reset.
 
 ## Shell Scripting
 
@@ -167,5 +189,7 @@ All scripts inherit defaults from `scripts/heterogeneous-soc/common.sh`. Commonl
 | `FREERTOS_KERNEL_DIR` | `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel` | FreeRTOS source |
 | `IVSHMEM_ARM_FREERTOS_DIR` | `/tmp/ivshmem-arm-freertos` | ARM channel socket dir |
 | `IVSHMEM_RISCV_FREERTOS_DIR` | `/tmp/ivshmem-riscv-freertos` | RISCV channel socket dir |
-| `ASSET_DIR` | `$HOME/iso` | Alpine ISOs and disk images |
+| `IVSHMEM_MIPS_FREERTOS_DIR` | `/tmp/ivshmem-mips-freertos` | MIPS channel socket dir |
+| `IVSHMEM_STATS_FREERTOS_DIR` | `/tmp/ivshmem-stats-freertos` | Stats channel socket dir |
+| `ASSET_DIR` | `$HOME/iso` | Debian ISOs and disk images |
 | `LIMA_NAME` | `qemu-dev` | Lima VM name |
