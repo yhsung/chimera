@@ -75,6 +75,9 @@ pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
 pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5   # let the processes exit and release disk locks before QEMU restarts
 
+# Set up network bridge and TAP devices for Avahi L2 networking.
+bash "${SCRIPT_DIR}/guest-setup-network-bridge.sh"
+
 # Start ivshmem servers; wait for all four sockets before launching guests.
 tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh"   Enter
 tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh" Enter
