@@ -20,7 +20,7 @@ HAVE_CC_MIPS  := $(shell command -v $(CC_MIPS) 2>/dev/null)
 
 HELLO_TARGETS :=
 ifneq ($(HAVE_CC_ARM),)
-HELLO_TARGETS += hello-arm-linux
+HELLO_TARGETS += hello-arm-linux linux-arm-stats
 endif
 ifneq ($(HAVE_CC_RISCV),)
 HELLO_TARGETS += hello-riscv-linux
@@ -41,7 +41,7 @@ FREERTOS_SRCS := \
 
 all: $(HELLO_TARGETS) freertos-riscv-demo.elf
 ifeq ($(HAVE_CC_ARM),)
-	$(warning CC_ARM=$(CC_ARM) not found — hello-arm-linux skipped)
+	$(warning CC_ARM=$(CC_ARM) not found — hello-arm-linux and linux-arm-stats skipped)
 endif
 ifeq ($(HAVE_CC_RISCV),)
 	$(warning CC_RISCV=$(CC_RISCV) not found — hello-riscv-linux skipped)
@@ -55,6 +55,9 @@ hello-arm-linux: linux_hello.c hello_proto.h
 	  -DHSOC_SENDER_LABEL='"arm-linux"' \
 	  -DHSOC_SENDER_ID=HSOC_SENDER_ARM_LINUX \
 	  -o $@ linux_hello.c
+
+linux-arm-stats: linux_stats.c stats_proto.h
+	$(CC_ARM) $(CFLAGS_LINUX) -o $@ linux_stats.c
 
 hello-riscv-linux: linux_hello.c hello_proto.h
 	$(CC_RISCV) $(CFLAGS_LINUX) \
@@ -70,7 +73,7 @@ hello-mips-linux: linux_hello.c hello_proto.h
 
 freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
-		hello_proto.h $(FREERTOS_SRCS)
+		hello_proto.h stats_proto.h $(FREERTOS_SRCS)
 	$(CC_BARE) $(CFLAGS_BARE) \
 	  -I. \
 	  -I$(FREERTOS_KERNEL_DIR)/include \
