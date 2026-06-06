@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # guest-run-chimera-showcase.sh
 #
-# Full-stack launcher for the three-channel Chimera heterogeneous-SoC demo.
-# Handles all prerequisites, builds every binary, then opens the 7-pane tmux
-# showcase (ARM-Linux + RISCV-Linux + MIPS-Linux ↔ FreeRTOS over ivshmem).
+# Full-stack launcher for the four-channel Chimera heterogeneous-SoC demo.
+# Handles all prerequisites, builds every binary, then opens the 8-pane tmux
+# showcase (ARM-Linux + RISCV-Linux + MIPS-Linux ↔ FreeRTOS over ivshmem,
+# plus a stats channel where FreeRTOS pushes message-count snapshots to ARM).
 #
 # Run this from inside the Lima VM:
 #   limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
@@ -110,7 +111,7 @@ else
     bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     _ok "freertos-riscv-demo.elf built ($(du -sh "${FREERTOS_DEMO_ELF}" | cut -f1))"
 
-    for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}"; do
+    for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}" "${LINUX_ARM_STATS_BINARY}"; do
         if [[ -f "${bin}" ]]; then
             _ok "$(basename "${bin}") built ($(du -sh "${bin}" | cut -f1))"
         else
@@ -143,7 +144,7 @@ _ok "Kernels and initrds extracted"
 
 _step "Launching Chimera showcase"
 printf '  Session:  freertos-showcase\n'
-printf '  Layout:   3 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
+printf '  Layout:   4 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
 printf '  Navigate: Ctrl-b + arrow keys\n\n'
 
 # Pass SKIP_BUILD=1 so guest-run-phase5-tmux.sh goes straight to the tmux launch

@@ -1,6 +1,6 @@
 # Chimera — Heterogeneous SoC Demo
 
-A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each exchange timestamped HELLO/ACK messages with a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels.
+A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each exchange timestamped HELLO/ACK messages with a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/tmp/freertos-stats.log`.
 
 ---
 
@@ -11,10 +11,13 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
  │  ARM-Linux (aarch64)    │ ◄────────────────────────────► │                                  │
  │  Debian Linux           │  /tmp/ivshmem-arm-freertos/    │  RISCV FreeRTOS (bare-metal)     │
  │  QEMU virt (gic-ver.=3) │  IVSHMEM0_SHMEM=0x31000000     │  QEMU chimera-riscv-freertos-demo│
- └─────────────────────────┘                                │                                  │
-                                                            │  Polls all three channels every  │
- ┌─────────────────────────┐      ivshmem-riscv-freertos    │  1 ms; sends ACK with FreeRTOS   │
- │  RISCV-Linux (rv64)     │ ◄────────────────────────────► │  tick timestamp                  │
+ │                         │◄── ivshmem-stats-freertos ────  │                                  │
+ │  linux-arm-stats →      │  /tmp/ivshmem-stats-freertos/  │  Polls all three channels every  │
+ │  /tmp/freertos-stats.log│  IVSHMEM3_SHMEM=0x40000000     │  1 ms; sends ACK with FreeRTOS   │
+ └─────────────────────────┘                                │  tick timestamp; writes stats    │
+                                                            │  snapshot every 5 s              │
+ ┌─────────────────────────┐      ivshmem-riscv-freertos    │                                  │
+ │  RISCV-Linux (rv64)     │ ◄────────────────────────────► │                                  │
  │  Debian Linux           │  /tmp/ivshmem-riscv-freertos/  │                                  │
  │  QEMU virt (OpenSBI)    │  IVSHMEM1_SHMEM=0x36000000     │                                  │
  └─────────────────────────┘                                │                                  │
@@ -30,26 +33,28 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 
 | Component | Machine | OS | Role |
 |---|---|---|---|
-| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
+| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK; runs `linux-arm-stats` |
 | RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
 | MIPS-Linux | QEMU `malta` mips32 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
-| RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | Receives HELLO from all three, sends ACK |
+| RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
 | ivshmem-server (ARM) | Host process | — | Brokers shared memory for ARM↔FreeRTOS |
 | ivshmem-server (RISCV) | Host process | — | Brokers shared memory for RISCV↔FreeRTOS |
 | ivshmem-server (MIPS) | Host process | — | Brokers shared memory for MIPS↔FreeRTOS |
+| ivshmem-server (stats) | Host process | — | Brokers shared memory for FreeRTOS→ARM stats channel |
 
 ### ivshmem Device Types
 
 - **Linux guests** use `ivshmem-doorbell` (PCI device, BAR2 = 64 MiB shared memory window)
 - **FreeRTOS** uses `ivshmem-flat` (custom sysbus device, memory-mapped at fixed addresses)
 
-The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS to all three ivshmem servers simultaneously:
+The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS to all four ivshmem servers simultaneously:
 
-| Link | MMIO base | SHMEM base |
-|---|---|---|
-| ARM ↔ FreeRTOS | `0x30000000` | `0x31000000` |
-| RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` |
-| MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` |
+| Link | MMIO base | SHMEM base | Direction |
+|---|---|---|---|
+| ARM ↔ FreeRTOS | `0x30000000` | `0x31000000` | bidirectional (HELLO/ACK) |
+| RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` | bidirectional (HELLO/ACK) |
+| MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | bidirectional (HELLO/ACK) |
+| Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | FreeRTOS write only (stats snapshot) |
 
 ---
 
@@ -105,54 +110,77 @@ sequenceDiagram
     L->>S: flag = 0
 ```
 
+### Stats snapshot (`struct hsoc_stats_snapshot`, `stats_proto.h`)
+
+FreeRTOS writes a stats snapshot into IVSHMEM3 every 5 seconds (5000 1-ms ticks). ARM-Linux runs `linux-arm-stats` which polls the corresponding PCI BAR2 every 2 seconds and appends new snapshots to `/tmp/freertos-stats.log`.
+
+| Field | Type | Description |
+|---|---|---|
+| `magic` | `uint32_t` | `0x53544154` ("STAT") — identifies this BAR2 |
+| `generation` | `volatile uint32_t` | Monotonically incremented by FreeRTOS on each snapshot |
+| `arm_count` | `uint32_t` | Total HELLO messages received from ARM-Linux |
+| `riscv_count` | `uint32_t` | Total HELLO messages received from RISCV-Linux |
+| `mips_count` | `uint32_t` | Total HELLO messages received from MIPS-Linux |
+| `tick_sec` | `int64_t` | FreeRTOS tick time of this snapshot — seconds |
+| `tick_nsec` | `int64_t` | FreeRTOS tick time — nanoseconds |
+
+ARM-Linux detects a new snapshot when `generation` changes. It scans all PCI ivshmem devices (`vendor 0x1af4`) and identifies the stats BAR2 by the `STAT` magic value.
+
+Example log output:
+```
+[2026-06-06T12:34:56Z] gen=1 arm=0 riscv=0 mips=0 tick=5.000000000
+[2026-06-06T12:34:58Z] gen=2 arm=3 riscv=2 mips=1 tick=10.000000000
+```
+
 ---
 
 ## Tmux Pane Layout
 
 ```
-┌──────────────────────┬──────────────────────┬──────────────────────┐
-│  ivshmem-server      │  ivshmem-server      │  ivshmem-server      │
-│  (ARM ↔ FreeRTOS)    │  (RISCV ↔ FreeRTOS)  │  (MIPS ↔ FreeRTOS)   │
-│  pane 0              │  pane 1              │  pane 2              │
-├──────────────────────┴──────────────────────┴──────────────────────┤
-│                                                                    │
-│  RISCV FreeRTOS                                                    │
-│  (receives HELLO from all three Linux guests, sends ACK)           │
-│  pane 3                                                            │
-├──────────────────────┬──────────────────────┬──────────────────────┤
-│  ARM-Linux           │  RISCV-Linux         │  MIPS-Linux          │
-│  hello-arm-linux     │  hello-riscv-linux   │  hello-mips-linux    │
-│  pane 4              │  pane 5              │  pane 6              │
-└──────────────────────┴──────────────────────┴──────────────────────┘
+┌────────────┬────────────┬────────────┬────────────┐
+│ ivshmem-   │ ivshmem-   │ ivshmem-   │ ivshmem-   │
+│ server     │ server     │ server     │ server     │
+│ ARM↔FRT    │ RISCV↔FRT  │ MIPS↔FRT   │ stats→ARM  │
+│ pane 0     │ pane 1     │ pane 2     │ pane 3     │
+├────────────┴────────────┴────────────┴────────────┤
+│                                                    │
+│  RISCV FreeRTOS                                   │
+│  (HELLO/ACK all channels; stats snapshot every 5s)│
+│  pane 4                                            │
+├────────────────┬────────────────┬─────────────────┤
+│  ARM-Linux     │  RISCV-Linux   │  MIPS-Linux     │
+│  linux-arm-stats (bg)           │                 │
+│  hello-arm-linux│ hello-riscv-  │ hello-mips-     │
+│                │  linux         │ linux           │
+│  pane 5        │  pane 6        │  pane 7         │
+└────────────────┴────────────────┴─────────────────┘
 ```
 
-Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch the hello binary once the guest boots.
+Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their binaries once the guest boots. In pane 5, `linux-arm-stats` runs in the background before `hello-arm-linux` starts; stats are appended to `/tmp/freertos-stats.log` inside the ARM guest.
 
 ---
 
 ## Running the Demo
 
-### Quick start (two commands from macOS host)
+### Quick start (2 steps)
 
-**Step 1 — Deploy source tree and create the Lima VM** (run once on the macOS host):
+**Step 1 — Deploy source tree and create the Lima VM** (run once on the macOS host; re-run after every pull):
 
 ```bash
 bash scripts/heterogeneous-soc/host-install-lima-host.sh
 ```
 
-This creates the `qemu-dev` Lima VM (if it does not already exist) and rsyncs the `chimera-src` tree into `~/chimera-src` inside the VM.
-
-**Step 2 — Launch the full showcase** (run inside Lima, or via `limactl shell`):
+**Step 2 — launch the full showcase** (from the macOS host; re-run any time):
 
 ```bash
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
-Re-run Step 1 after pulling new commits to redeploy the source tree before Step 2.
+Step 2 handles everything: installing build dependencies, fetching disk images, building QEMU and all firmware binaries, and opening the 8-pane tmux showcase. Every stage is idempotent — re-running is safe and fast after the first run.
 
----
+### What the showcase launcher does
 
-`guest-run-chimera-showcase.sh` is the full-stack launcher. It runs 8 stages, each idempotent:
+`guest-run-chimera-showcase.sh` runs 8 stages:
 
 | Stage | What it does | Skip condition |
 |---|---|---|
@@ -160,10 +188,10 @@ Re-run Step 1 after pulling new commits to redeploy the source tree before Step 
 | 2 — kernel packages | Downloads ARM / RISCV / MIPS Debian kernel .deb packages | File already exists |
 | 3 — QEMU build | Builds `qemu-system-aarch64/riscv64/mipsel` + `ivshmem-server` | All binaries already in `BUILD_DIR` |
 | 4 — FreeRTOS kernel | Clones / pulls FreeRTOS-Kernel | Already cloned (pulls latest) |
-| 5 — Showcase binaries | Builds ELF + `hello-{arm,riscv,mips}-linux` | Warns if MIPS binary absent |
+| 5 — Showcase binaries | Builds ELF + `hello-{arm,riscv,mips}-linux` + `linux-arm-stats` | Warns if MIPS binary absent |
 | 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap | Skipped if disk exists |
 | 7 — boot assets | Extracts kernel + initramfs from Debian kernel .deb packages | Skipped if already extracted |
-| 8 — Launch | Opens 7-pane tmux session | — |
+| 8 — Launch | Opens 8-pane tmux session (4 ivshmem servers, FreeRTOS, 3 Linux guests) | — |
 
 **Environment overrides:**
 
@@ -214,7 +242,7 @@ Cross-compilation happens inside the Lima VM, which provides:
 
 | Cross-compiler | Target |
 |---|---|
-| `aarch64-linux-gnu-gcc` | ARM-Linux hello binary |
+| `aarch64-linux-gnu-gcc` | ARM-Linux hello binary + `linux-arm-stats` |
 | `riscv64-linux-gnu-gcc` | RISCV-Linux hello binary |
 | `mips-linux-gnu-gcc` | MIPS-Linux hello binary |
 | `riscv64-unknown-elf-gcc` | FreeRTOS bare-metal ELF |
@@ -233,9 +261,11 @@ contrib/heterogeneous-soc/
   ping.sh / pong.sh           — wrapper scripts that run the ping/pong binaries
   Makefile                    — cross-compiles ping + pong (static, ARM + RISCV)
   freertos-showcase/
-    hello_proto.h             — shared wire protocol (sender IDs, message structs)
+    hello_proto.h             — HELLO/ACK wire protocol (sender IDs, message structs)
+    stats_proto.h             — stats channel protocol (hsoc_stats_snapshot struct)
     linux_hello.c             — Linux sender (ARM, RISCV, and MIPS, compiled separately)
-    freertos_main.c           — FreeRTOS task: polls all three channels, sends ACK
+    linux_stats.c             — ARM-Linux stats poller: reads snapshot every 2 s, logs to /tmp/freertos-stats.log
+    freertos_main.c           — FreeRTOS task: polls all three channels, sends ACK, writes stats every 5 s
     freertos_ivshmem_flat.c   — ivshmem poll/send helpers (volatile byte access)
     freertos_ivshmem_flat.h
     Makefile
@@ -243,14 +273,14 @@ contrib/heterogeneous-soc/
 scripts/heterogeneous-soc/
   ── Main showcase launchers ──────────────────────────────────────────────────
   guest-run-chimera-showcase.sh               — full-stack launcher (prereqs + build + tmux)
-  guest-run-phase5-tmux.sh                    — 7-pane tmux session launcher (called by showcase)
+  guest-run-phase5-tmux.sh                    — 8-pane tmux session launcher (called by showcase)
 
   ── CI / headless harnesses ──────────────────────────────────────────────────
   guest-run-debian-harness.sh                 — headless pass/fail CI harness (all 3 guests)
   guest-run-freertos-harness.sh               — headless FreeRTOS harness (ARM-only pass string)
 
   ── Build scripts ────────────────────────────────────────────────────────────
-  guest-build-freertos-showcase.sh            — builds FreeRTOS ELF + hello-{arm,riscv,mips}-linux
+  guest-build-freertos-showcase.sh            — builds FreeRTOS ELF + hello-{arm,riscv,mips}-linux + linux-arm-stats
   guest-build-ivshmem-tools.sh                — builds QEMU + ivshmem-server inside Lima
   guest-build-pingpong.sh                     — builds ping/pong binaries (ARM↔RISCV demo)
   guest-build-arm-secure-stack.sh             — builds TF-A + Hafnium + OP-TEE secure stack
@@ -271,6 +301,7 @@ scripts/heterogeneous-soc/
   guest-start-ivshmem-server-arm-freertos.sh  — ARM ivshmem-server (showcase channel)
   guest-start-ivshmem-server-riscv-freertos.sh — RISCV ivshmem-server (showcase channel)
   guest-start-ivshmem-server-mips-freertos.sh — MIPS ivshmem-server (showcase channel)
+  guest-start-ivshmem-server-stats.sh         — stats ivshmem-server (FreeRTOS→ARM stats channel)
 
   ── QEMU guest launchers ─────────────────────────────────────────────────────
   guest-run-riscv-freertos-phase5.sh          — launches FreeRTOS QEMU
@@ -306,7 +337,7 @@ scripts/heterogeneous-soc/
   guest-prepare-mips-boot-assets.sh           — replaced by guest-prepare-debian-boot-assets.sh
   guest-prepare-riscv-uboot.sh                — replaced by direct OpenSBI boot
 
-hw/riscv/chimera_freertos_demo.c  — custom QEMU machine (3 ivshmem channels)
+hw/riscv/chimera_freertos_demo.c  — custom QEMU machine (4 ivshmem channels: 3 HELLO/ACK + 1 stats)
 hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by FreeRTOS)
 ```
 
