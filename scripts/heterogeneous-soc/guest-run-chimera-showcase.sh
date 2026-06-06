@@ -236,9 +236,9 @@ _avahi_present_in_image() {
 }
 
 if ! _avahi_present_in_image "${ARM_DEBIAN_DISK}"; then
-    die "Disk images predate Avahi support. Delete them to rebuild:
-  rm -f '${ARM_DEBIAN_DISK}' '${RISCV_DEBIAN_DISK}' '${MIPS_DEBIAN_DISK}'
-Then re-run this script."
+    _info "Disk images predate Avahi support. Auto-removing and rebuilding..."
+    rm -f "${ARM_DEBIAN_DISK}" "${RISCV_DEBIAN_DISK}" "${MIPS_DEBIAN_DISK}"
+    _exec bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh"
 fi
 _ok "Debian rootfs disks ready"
 
