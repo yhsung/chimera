@@ -31,16 +31,16 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 
 ### Components
 
-| Component | Machine | OS | Role |
-|---|---|---|---|
-| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
-| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
-| MIPS-Linux | QEMU `malta` mipsel | Debian Linux 12 (bookworm) | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
-| RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
-| ivshmem-server (ARM) | Host process | — | Brokers shared memory for ARM↔FreeRTOS |
-| ivshmem-server (RISCV) | Host process | — | Brokers shared memory for RISCV↔FreeRTOS |
-| ivshmem-server (MIPS) | Host process | — | Brokers shared memory for MIPS↔FreeRTOS |
-| ivshmem-server (stats) | Host process | — | Brokers shared memory for FreeRTOS→ARM stats channel |
+| Component | Machine | OS | IP | Hostname | Role |
+|---|---|---|---|---|---|
+| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
+| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
+| MIPS-Linux | QEMU `malta` mipsel | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
+| RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
+| ivshmem-server (ARM) | Host process | — | — | — | Brokers shared memory for ARM↔FreeRTOS |
+| ivshmem-server (RISCV) | Host process | — | — | — | Brokers shared memory for RISCV↔FreeRTOS |
+| ivshmem-server (MIPS) | Host process | — | — | — | Brokers shared memory for MIPS↔FreeRTOS |
+| ivshmem-server (stats) | Host process | — | — | — | Brokers shared memory for FreeRTOS→ARM stats channel |
 
 ### ivshmem Device Types
 
@@ -204,6 +204,84 @@ Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mou
 
 ---
 
+## Guest Networking & Avahi Discovery
+
+All three Linux guests share a flat L2 network managed by a Linux bridge inside the Lima VM:
+
+```
+Lima host  172.16.100.1
+     │
+chbr0 (172.16.100.0/24)
+     ├── tap-arm   → debian-arm64   (172.16.100.10)
+     ├── tap-riscv → debian-riscv64 (172.16.100.11)
+     └── tap-mips  → debian-mipsel  (172.16.100.12)
+```
+
+The bridge (`chbr0`) and TAP devices are created idempotently by `guest-setup-network-bridge.sh` each time the showcase or tmux launcher starts. mDNS multicast flows across the bridge so Avahi on every node can discover the others.
+
+Each guest runs:
+- `avahi-daemon` — advertises hostname, SSH, and the Chimera syslog service
+- `sshd` — starts on boot; root login enabled (no password)
+- `systemd-networkd` — configures the static IP on `eth0`/`ens*`
+
+### Browsing services from the Lima host
+
+```bash
+# List all Avahi services on the network
+avahi-browse -at
+
+# Watch for Chimera syslog daemons as they come online
+avahi-browse -rt _chimera-syslog._tcp
+
+# Watch for SSH services
+avahi-browse -rt _ssh._tcp
+```
+
+Example `avahi-browse -at` output once all guests are up:
+
+```
++  chbr0 IPv4 SSH on debian-arm64          _ssh._tcp            local
++  chbr0 IPv4 SSH on debian-riscv64        _ssh._tcp            local
++  chbr0 IPv4 SSH on debian-mipsel         _ssh._tcp            local
++  chbr0 IPv4 Chimera syslog on debian-arm64    _chimera-syslog._tcp  local
++  chbr0 IPv4 Chimera syslog on debian-riscv64  _chimera-syslog._tcp  local
++  chbr0 IPv4 Chimera syslog on debian-mipsel   _chimera-syslog._tcp  local
+```
+
+### Resolving `.local` hostnames
+
+```bash
+# From Lima host
+ping debian-arm64.local
+ping debian-riscv64.local
+ping debian-mipsel.local
+
+# SSH into any guest (no password)
+ssh root@debian-arm64.local
+ssh root@debian-riscv64.local
+ssh root@debian-mipsel.local
+```
+
+### Cross-guest discovery (from inside a guest)
+
+```bash
+# In the ARM guest tmux pane (pane 5)
+ping -c1 debian-riscv64.local
+avahi-browse -rt _chimera-syslog._tcp
+```
+
+### First run after this feature is added
+
+Existing disk images built before Avahi support was added do not contain `avahi-daemon` and will be rejected by the showcase launcher with a clear message. Delete them to trigger a fresh `debootstrap` build:
+
+```bash
+rm -f ~/iso/debian-arm64.qcow2 ~/iso/debian-riscv64.qcow2 ~/iso/debian-mips.qcow2
+```
+
+Then re-run `guest-run-chimera-showcase.sh` — Stage 6 will rebuild all three images (this takes several minutes).
+
+---
+
 ## Running the Demo
 
 ### Quick start (2 steps)
@@ -228,12 +306,13 @@ Step 2 handles everything: installing build dependencies, fetching disk images, 
 
 | Stage | What it does | Skip condition |
 |---|---|---|
+| 0.5 — Network bridge | Creates `chbr0` bridge + `tap-arm/riscv/mips` TAP devices via `guest-setup-network-bridge.sh` | Idempotent — runs every launch |
 | 1 — apt packages | Installs all build deps including `gcc-mipsel-linux-gnu`, `qemu-utils` | Already installed |
 | 2 — kernel packages | Downloads ARM / RISCV / MIPS Debian kernel .deb packages | File already exists |
 | 3 — QEMU build | Builds `qemu-system-aarch64/riscv64/mipsel` + `ivshmem-server` | All binaries already in `BUILD_DIR` |
 | 4 — FreeRTOS kernel | Clones / pulls FreeRTOS-Kernel | Already cloned (pulls latest) |
 | 5 — Showcase binaries | Builds ELF + `syslog-{arm,riscv,mips}-linux` + `linux-arm-stats` | Warns if MIPS binary absent |
-| 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap | Skipped if disk exists |
+| 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap (includes `avahi-daemon`, `sshd`, static IP) | Skipped if disk exists and contains avahi |
 | 6.5 — Inject daemons | Installs `syslog-*-linux` into each guest's `/usr/local/bin/` via `qemu-nbd` | Runs on every build |
 | 7 — boot assets | Extracts kernel + initramfs from Debian kernel .deb packages | Skipped if already extracted |
 | 8 — Launch | Opens 8-pane tmux session (4 ivshmem servers, FreeRTOS, 3 Linux guests) | — |
@@ -341,6 +420,9 @@ scripts/heterogeneous-soc/
   guest-prepare-debian-rootfs.sh              — creates minimal Debian qcow2 disks (debootstrap)
   guest-prepare-debian-boot-assets.sh         — extracts kernel + initrd from .deb packages
   guest-install-syslog-to-guests.sh           — injects syslog-{arm,riscv,mips}-linux into each guest's /usr/local/bin/ via qemu-nbd
+
+  ── Network setup ────────────────────────────────────────────────────────────
+  guest-setup-network-bridge.sh               — creates bridge chbr0 (172.16.100.1/24) + tap-arm/riscv/mips TAP devices; idempotent
 
   ── ivshmem-server wrappers ──────────────────────────────────────────────────
   guest-start-ivshmem-server.sh               — generic single-channel ivshmem-server wrapper
