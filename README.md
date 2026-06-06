@@ -262,6 +262,55 @@ ssh root@debian-riscv64.local
 ssh root@debian-mipsel.local
 ```
 
+### SSH from macOS (ProxyJump through Lima)
+
+The `172.16.100.x` subnet lives inside the Lima VM, so macOS has no direct route to the guests. Use Lima as a jump host:
+
+```bash
+# One-off (no config needed)
+ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+    -J yhsung@127.0.0.1:52704 root@172.16.100.10   # ARM
+ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+    -J yhsung@127.0.0.1:52704 root@172.16.100.11   # RISCV
+ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+    -J yhsung@127.0.0.1:52704 root@172.16.100.12   # MIPS
+```
+
+Or add this block to `~/.ssh/config` once and then use plain `ssh debian-arm64`:
+
+```
+Host lima-qemu-dev
+    HostName 127.0.0.1
+    Port 52704
+    User yhsung
+    IdentityFile ~/.lima/_config/user
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host debian-arm64
+    HostName 172.16.100.10
+    User root
+    ProxyJump lima-qemu-dev
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host debian-riscv64
+    HostName 172.16.100.11
+    User root
+    ProxyJump lima-qemu-dev
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+Host debian-mipsel
+    HostName 172.16.100.12
+    User root
+    ProxyJump lima-qemu-dev
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+```
+
+> **Note:** The Lima SSH port (52704 above) can change across `limactl stop`/`start` cycles. Check the current value with `limactl list`.
+
 ### Cross-guest discovery (from inside a guest)
 
 ```bash
