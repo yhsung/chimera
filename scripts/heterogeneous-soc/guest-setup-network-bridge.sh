@@ -15,6 +15,8 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     die "This script must run on Linux (inside the Lima VM)"
 fi
 
+sudo -v 2>/dev/null || die "sudo privileges are required; refresh your sudo token and re-run"
+
 BRIDGE_NAME="${CHIMERA_BRIDGE:-chbr0}"
 BRIDGE_IP="${CHIMERA_BRIDGE_IP:-172.16.100.1/24}"
 
@@ -43,8 +45,8 @@ for tap in tap-arm tap-riscv tap-mips; do
         sudo ip tuntap add dev "${tap}" mode tap user "$(id -un)"
     fi
     # Attach to bridge if not already a bridge member
-    if ! bridge link show 2>/dev/null | grep -q "\"${tap}\""; then
-        sudo ip link set "${tap}" master "${BRIDGE_NAME}"
+    if ! bridge link show 2>/dev/null | grep -qE "^[0-9]+: ${tap}[@:]"; then
+        sudo ip link set "${tap}" master "${BRIDGE_NAME}" || true
     fi
     sudo ip link set "${tap}" up
     _ok "${tap} up and attached to ${BRIDGE_NAME}"
