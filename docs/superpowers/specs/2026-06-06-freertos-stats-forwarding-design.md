@@ -47,8 +47,8 @@ FreeRTOS (RISC-V)                    ARM-Linux (AArch64)
 #define HSOC_STATS_MAGIC 0x53544154U  /* "STAT" */
 
 struct hsoc_stats_snapshot {
-    uint32_t magic;        /* HSOC_STATS_MAGIC, written once at FreeRTOS init */
-    uint32_t generation;   /* incremented by FreeRTOS after each snapshot write */
+    uint32_t         magic;       /* HSOC_STATS_MAGIC, written once at FreeRTOS init */
+    volatile uint32_t generation; /* incremented by FreeRTOS after each snapshot write */
     uint32_t arm_count;    /* total HELLOs received from ARM-Linux */
     uint32_t riscv_count;
     uint32_t mips_count;
@@ -98,7 +98,7 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
 ```
 Increments `*count` when a HELLO is successfully serviced. No other behavior change.
 
-**Stats write helper** (`write_stats_snapshot`): writes `hsoc_stats_snapshot` to `stats_link.layout` using the volatile byte loop pattern, then bumps `generation`. `stats_link.layout` is cast to `volatile struct hsoc_stats_snapshot *` — `freertos_ivshmem_poll_hello` is never called on it.
+**Stats write helper** (`write_stats_snapshot`): writes `hsoc_stats_snapshot` using a `volatile struct hsoc_stats_snapshot *stats_shmem` pointer initialized directly to `(volatile struct hsoc_stats_snapshot *)IVSHMEM3_SHMEM`. This avoids a type conflict with `stats_link.layout` (which is typed `struct hsoc_layout *`). `freertos_ivshmem_init` is still called on `stats_link` for MMIO register setup; shmem is accessed solely through `stats_shmem`.
 
 **Periodic trigger** — appended to the main showcase loop:
 ```c
@@ -114,7 +114,7 @@ At `configTICK_RATE_HZ = 1000` and `vTaskDelay(pdMS_TO_TICKS(1))` per iteration,
 
 ## Section 3 — ARM-Linux Binary (`linux_stats.c`)
 
-**Device discovery:** scans `/sys/bus/pci/devices` for vendor 0x1af4, maps each `resource2`, checks first 4 bytes against `HSOC_STATS_MAGIC`. Accepts optional `argv[1]` override.
+**Device discovery:** scans `/sys/bus/pci/devices` for vendor 0x1af4, maps each `resource2`, checks first 4 bytes against `HSOC_STATS_MAGIC`. Retries every 2 seconds for up to 30 seconds if no device found yet (FreeRTOS writes magic before `vTaskStartScheduler()`, but ARM-Linux may scan before FreeRTOS QEMU has started). Accepts optional `argv[1]` override to skip discovery entirely.
 
 **Poll loop:**
 ```c
