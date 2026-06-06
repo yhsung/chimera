@@ -138,14 +138,26 @@ create_debian_disk() {
         # guests can mount the virtio-blk root disk and the 9p pingpong share.
         sudo mkdir -p "${rootfs_dir}/etc/initramfs-tools"
         sudo tee "${rootfs_dir}/etc/initramfs-tools/modules" >/dev/null <<'MODS'
-# Force-load VirtIO drivers so the initrd can mount root=/dev/vda1
-virtio_pci
-virtio_blk
-virtio_mmio
+# Force-load drivers so the initrd can find the root block device.
+# Architecture-specific drivers are added by create_debian_disk() below
+# at call time; the common set is kept here.
 9p
 9pnet
 9pnet_virtio
 MODS
+
+        # Append architecture-specific block device drivers so the initrd can
+        # find the root disk.  ARM/RISCV use virtio-blk-pci; MIPS uses the
+        # Malta board's native PIIX4 IDE (ata_piix) because virtio-pci does
+        # not enumerate correctly on the Malta machine.
+        local block_driver
+        case "${target_arch}" in
+            mipsel) block_driver="ata_piix" ;;
+            *)      block_driver="virtio_pci virtio_blk virtio_mmio" ;;
+        esac
+        for d in ${block_driver}; do
+            echo "${d}" | sudo tee -a "${rootfs_dir}/etc/initramfs-tools/modules" >/dev/null
+        done
 
         local kern_basename
         kern_basename="$(basename "${kernel_deb}")"
