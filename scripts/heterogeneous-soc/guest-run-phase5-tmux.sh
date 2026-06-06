@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}"
+source "$(cd "$(dirname "$0")" && pwd)/common.sh"
+REPO="${CHIMERA_ROOT}"
 SESSION="freertos-showcase"
 ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf"
 
@@ -108,7 +109,7 @@ auto_login_and_run() {
         for cmd in "${cmds[@]}"; do
             printf '%s\n' "$cmd"
         done
-    } > "$REPO/contrib/heterogeneous-soc/r${pane_idx}.sh"
+    } > "$PINGPONG_DIR/r${pane_idx}.sh"
 
     _has_prompt() {
         tmux capture-pane -p -t "$pane" 2>/dev/null | grep -qE "root@[^:]+:[^#]*#[[:space:]]*$"
