@@ -13,20 +13,20 @@ CFLAGS_BARE ?= -O2 -Wall -Wextra -ffreestanding -fno-omit-frame-pointer \
 	-ffunction-sections -fdata-sections
 LDFLAGS_BARE ?= -nostdlib -static -Wl,--gc-sections -T linker.ld -lgcc
 
-# Build hello-riscv-linux only when the Linux-targeting cross-compiler is available.
+# Build syslog-*-linux only when the Linux-targeting cross-compilers are available.
 HAVE_CC_ARM   := $(shell command -v $(CC_ARM) 2>/dev/null)
 HAVE_CC_RISCV := $(shell command -v $(CC_RISCV) 2>/dev/null)
 HAVE_CC_MIPS  := $(shell command -v $(CC_MIPS) 2>/dev/null)
 
-HELLO_TARGETS :=
+SYSLOG_TARGETS :=
 ifneq ($(HAVE_CC_ARM),)
-HELLO_TARGETS += hello-arm-linux linux-arm-stats
+SYSLOG_TARGETS += syslog-arm-linux linux-arm-stats
 endif
 ifneq ($(HAVE_CC_RISCV),)
-HELLO_TARGETS += hello-riscv-linux
+SYSLOG_TARGETS += syslog-riscv-linux
 endif
 ifneq ($(HAVE_CC_MIPS),)
-HELLO_TARGETS += hello-mips-linux
+SYSLOG_TARGETS += syslog-mips-linux
 endif
 
 FREERTOS_SRCS := \
@@ -39,37 +39,37 @@ FREERTOS_SRCS := \
 
 .PHONY: all clean
 
-all: $(HELLO_TARGETS) freertos-riscv-demo.elf
+all: $(SYSLOG_TARGETS) freertos-riscv-demo.elf
 ifeq ($(HAVE_CC_ARM),)
-	$(warning CC_ARM=$(CC_ARM) not found — hello-arm-linux and linux-arm-stats skipped)
+	$(warning CC_ARM=$(CC_ARM) not found — syslog-arm-linux and linux-arm-stats skipped)
 endif
 ifeq ($(HAVE_CC_RISCV),)
-	$(warning CC_RISCV=$(CC_RISCV) not found — hello-riscv-linux skipped)
+	$(warning CC_RISCV=$(CC_RISCV) not found — syslog-riscv-linux skipped)
 endif
 ifeq ($(HAVE_CC_MIPS),)
-	$(warning CC_MIPS=$(CC_MIPS) not found — hello-mips-linux skipped)
+	$(warning CC_MIPS=$(CC_MIPS) not found — syslog-mips-linux skipped)
 endif
 
-hello-arm-linux: linux_hello.c hello_proto.h
+syslog-arm-linux: linux_syslog.c hello_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) \
 	  -DHSOC_SENDER_LABEL='"arm-linux"' \
 	  -DHSOC_SENDER_ID=HSOC_SENDER_ARM_LINUX \
-	  -o $@ linux_hello.c
+	  -o $@ linux_syslog.c
 
 linux-arm-stats: linux_stats.c stats_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) -o $@ linux_stats.c
 
-hello-riscv-linux: linux_hello.c hello_proto.h
+syslog-riscv-linux: linux_syslog.c hello_proto.h
 	$(CC_RISCV) $(CFLAGS_LINUX) \
 	  -DHSOC_SENDER_LABEL='"riscv-linux"' \
 	  -DHSOC_SENDER_ID=HSOC_SENDER_RISCV_LINUX \
-	  -o $@ linux_hello.c
+	  -o $@ linux_syslog.c
 
-hello-mips-linux: linux_hello.c hello_proto.h
+syslog-mips-linux: linux_syslog.c hello_proto.h
 	$(CC_MIPS) $(CFLAGS_LINUX) \
 	  -DHSOC_SENDER_LABEL='"mips-linux"' \
 	  -DHSOC_SENDER_ID=HSOC_SENDER_MIPS_LINUX \
-	  -o $@ linux_hello.c
+	  -o $@ linux_syslog.c
 
 freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
@@ -84,4 +84,4 @@ freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c \
 	  $(LDFLAGS_BARE) -o $@
 
 clean:
-	rm -f $(HELLO_TARGETS) freertos-riscv-demo.elf
+	rm -f $(SYSLOG_TARGETS) freertos-riscv-demo.elf
