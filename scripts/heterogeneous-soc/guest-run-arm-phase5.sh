@@ -24,6 +24,8 @@ exec "${qemu_bin}" \
     -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
     -chardev socket,id=ivshmem_stats,path="${IVSHMEM_STATS_FREERTOS_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem_stats,vectors="${IVSHMEM_VECTORS}" \
+    -chardev socket,id=ivshmem_boot,path="${IVSHMEM_BOOTLOG_SOCKET}" \
+    -device ivshmem-doorbell,chardev=ivshmem_boot,vectors=1 \
     -drive file="${ARM_DEBIAN_DISK}",format=qcow2,if=virtio \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -netdev tap,id=net0,ifname=tap-arm,script=no,downscript=no \
