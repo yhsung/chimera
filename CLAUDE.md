@@ -100,6 +100,15 @@ scripts/heterogeneous-soc/guest-run-chimera.sh                         # MIPS-Li
 
 The FreeRTOS machine requires all four ivshmem servers to be listening before it starts (the tmux script polls for the Unix sockets).
 
+**QEMU staleness enforcement:** Both `guest-run-chimera-showcase.sh` and
+`guest-run-phase5-tmux.sh` probe the built `qemu-system-riscv64` for expected
+machine properties (via `-M chimera-riscv-freertos-demo,help`) before
+declaring the build current. A stale binary built from an older commit will
+trigger a rebuild instead of failing at runtime with "Property not found".
+When adding new machine properties, no special action is needed — just add
+the property in C and reference it in the launch scripts; the probe will
+naturally detect staleness.
+
 ## Naming: mipsel, not mips
 
 The QEMU target for MIPS little-endian is `mipsel-softmmu`, producing `qemu-system-mipsel`. Build artifacts, binaries, and `pkill` patterns must use `mipsel` (not `mips`) throughout — the Debian Bookworm distro is also `mipsel`.
