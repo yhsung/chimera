@@ -37,7 +37,7 @@ bash scripts/heterogeneous-soc/host-install-lima-host.sh
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
-`guest-run-chimera-showcase.sh` handles all prerequisites, builds, and opens the 7-pane tmux session.
+`guest-run-chimera-showcase.sh` handles all prerequisites, builds, and opens the 8-pane tmux session.
 
 ---
 
@@ -56,7 +56,7 @@ BUILD_DIR=$HOME/chimera-build-linux VM_SOURCE_DIR=$HOME/chimera-src \
 
 Internally this runs:
 ```bash
-./configure --target-list=aarch64-softmmu,riscv64-softmmu --enable-debug
+./configure --target-list=aarch64-softmmu,riscv64-softmmu,mipsel-softmmu --enable-debug
 ninja contrib/ivshmem-server/ivshmem-server contrib/ivshmem-client/ivshmem-client
 ```
 
@@ -72,9 +72,9 @@ scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh
 make -C contrib/heterogeneous-soc/freertos-showcase/ clean all
 ```
 
-Outputs: `hello-arm-linux`, `hello-riscv-linux`, `freertos-riscv-demo.elf`.
+Outputs: `hello-arm-linux`, `hello-riscv-linux`, `hello-mips-linux`, `freertos-riscv-demo.elf`.
 
-Cross-compilers required: `aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `riscv64-unknown-elf-gcc`. The Makefile skips `hello-*-linux` targets silently if the corresponding compiler is absent.
+Cross-compilers required: `aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `riscv64-unknown-elf-gcc`, `gcc-mipsel-linux-gnu`. The Makefile skips `hello-*-linux` targets silently if the corresponding compiler is absent.
 
 `FREERTOS_KERNEL_DIR` defaults to `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel`.
 
@@ -84,18 +84,25 @@ Cross-compilers required: `aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `ris
 scripts/heterogeneous-soc/guest-run-phase5-tmux.sh
 ```
 
-On first run (no ELF present): does one-time Lima setup, disk image fetch, and ivshmem-server build. On every run: rebuilds FreeRTOS/Linux binaries, then opens a tmux session with five panes (2 ivshmem-servers, 1 FreeRTOS, 1 ARM-Linux, 1 RISCV-Linux). Navigate with **Ctrl-b + arrow keys**.
+On first run (no ELF present): does one-time Lima setup, disk image fetch, and ivshmem-server build. On every run: rebuilds FreeRTOS/Linux binaries, then opens a tmux session with eight panes (4 ivshmem-servers, 1 FreeRTOS, 1 ARM-Linux, 1 RISCV-Linux, 1 MIPS-Linux). Navigate with **Ctrl-b + arrow keys**.
 
 To launch components individually:
 ```bash
 scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh   # ARM channel
 scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh # RISCV channel
+scripts/heterogeneous-soc/guest-start-ivshmem-server-mips-freertos.sh  # MIPS channel
+scripts/heterogeneous-soc/guest-start-ivshmem-server-stats.sh          # Stats channel
 scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh           # FreeRTOS QEMU
 scripts/heterogeneous-soc/guest-run-arm-phase5.sh                      # ARM-Linux QEMU
 scripts/heterogeneous-soc/guest-run-riscv-phase5.sh                    # RISCV-Linux QEMU
+scripts/heterogeneous-soc/guest-run-chimera.sh                         # MIPS-Linux QEMU
 ```
 
-The FreeRTOS machine requires both ivshmem servers to be listening before it starts (the tmux script polls for the Unix sockets).
+The FreeRTOS machine requires all four ivshmem servers to be listening before it starts (the tmux script polls for the Unix sockets).
+
+## Naming: mipsel, not mips
+
+The QEMU target for MIPS little-endian is `mipsel-softmmu`, producing `qemu-system-mipsel`. Build artifacts, binaries, and `pkill` patterns must use `mipsel` (not `mips`) throughout — the Debian Bookworm distro is also `mipsel`.
 
 ## Debugging Sessions
 
