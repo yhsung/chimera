@@ -144,9 +144,15 @@ fi
 _step "Building ivshmem server / QEMU"
 _has_qemu_build() {
     find_ivshmem_server &>/dev/null || return 1
-    [[ -x "${BUILD_DIR}/qemu-system-riscv64" ]] && \
-    [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]] && \
-    [[ -x "${BUILD_DIR}/qemu-system-mipsel" ]]
+    local qemu_riscv="${BUILD_DIR}/qemu-system-riscv64"
+    [[ -x "${qemu_riscv}" ]] || return 1
+    [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]] || return 1
+    [[ -x "${BUILD_DIR}/qemu-system-mipsel" ]] || return 1
+    # Verify the QEMU binary is up-to-date by checking for the most recently
+    # added machine property. A stale binary (built from an older commit) would
+    # report "Property not found" at runtime, so we catch it here instead.
+    "${qemu_riscv}" -M chimera-riscv-freertos-demo,help 2>&1 | \
+        grep -q "ivshmem-stats-freertos" || return 1
 }
 
 if _has_qemu_build; then
