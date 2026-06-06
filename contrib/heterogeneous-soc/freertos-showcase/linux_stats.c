@@ -186,14 +186,21 @@ int main(int argc, char *argv[])
 
     uint32_t last_gen = 0;
     for (;;) {
-        struct hsoc_stats_snapshot snap;
-        shm_read(&snap, shm, sizeof(snap));
+        uint32_t gen = shm->generation;
         __sync_synchronize();
 
-        if (snap.magic == HSOC_STATS_MAGIC && snap.generation != last_gen) {
-            last_gen = snap.generation;
+        if (gen != last_gen) {
+            struct hsoc_stats_snapshot snap;
+            shm_read(&snap, shm, sizeof(snap));
+            __sync_synchronize();
+
+            if (snap.magic != HSOC_STATS_MAGIC) {
+                continue;
+            }
+
+            last_gen = gen;
             log_snapshot(log, &snap);
-            fprintf(stderr, "[stats] gen=%" PRIu32 " logged\n", snap.generation);
+            fprintf(stderr, "[stats] gen=%" PRIu32 " logged\n", gen);
         }
         sleep(2);
     }
