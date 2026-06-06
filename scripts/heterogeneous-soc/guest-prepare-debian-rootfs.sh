@@ -28,7 +28,7 @@ ROOTFS_SIZE="${ROOTFS_SIZE:-1G}"
 # initramfs-tools: generates initrd in kernel postinst
 # kmod: needed by depmod (called during kernel install)
 # linux-base: required by Debian kernel postinst scripts
-DEBIAN_INCLUDE_PKGS="${DEBIAN_INCLUDE_PKGS:-systemd,systemd-resolved,udev,dbus,initramfs-tools,kmod,linux-base}"
+DEBIAN_INCLUDE_PKGS="${DEBIAN_INCLUDE_PKGS:-systemd,systemd-resolved,udev,dbus,initramfs-tools,kmod,linux-base,avahi-daemon,libnss-mdns,iproute2,openssh-server}"
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -249,6 +249,46 @@ EOF
     if [[ -f "${rootfs}/etc/shadow" ]]; then
         sudo sed -i 's/^root:[^:]*:/root::/' "${rootfs}/etc/shadow"
     fi
+
+    # ── Network: static IP via systemd-networkd ──────────────────────────────
+    local guest_ip
+    case "${arch}" in
+        arm64)   guest_ip="172.16.100.10" ;;
+        riscv64) guest_ip="172.16.100.11" ;;
+        mipsel)  guest_ip="172.16.100.12" ;;
+        *)       guest_ip="172.16.100.99" ;;
+    esac
+
+    sudo mkdir -p "${rootfs}/etc/systemd/network"
+    sudo tee "${rootfs}/etc/systemd/network/10-eth.network" >/dev/null <<EOF
+[Match]
+Name=e*
+
+[Network]
+Address=${guest_ip}/24
+EOF
+
+    # ── NSS: .local mDNS resolution via libnss-mdns ──────────────────────────
+    if [[ -f "${rootfs}/etc/nsswitch.conf" ]]; then
+        sudo sed -i \
+            's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' \
+            "${rootfs}/etc/nsswitch.conf"
+    else
+        sudo tee "${rootfs}/etc/nsswitch.conf" >/dev/null <<'NSSEOF'
+passwd:         files
+group:          files
+hosts:          files mdns4_minimal [NOTFOUND=return] dns
+networks:       files
+protocols:      db files
+services:       db files
+NSSEOF
+    fi
+
+    # ── Enable systemd-networkd ───────────────────────────────────────────────
+    sudo mkdir -p "${rootfs}/etc/systemd/system/multi-user.target.wants"
+    sudo ln -sf /lib/systemd/system/systemd-networkd.service \
+        "${rootfs}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service" \
+        2>/dev/null || true
 
     _ok "Rootfs configured for ${arch} (tty=${tty})"
 }
