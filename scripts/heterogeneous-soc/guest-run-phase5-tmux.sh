@@ -100,7 +100,7 @@ tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-
 tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
 tmux send-keys -t "$SESSION:0.7" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter
 
-# Wait for the guest shell to be ready, then run the hello binary.
+# Wait for the guest shell to be ready, then run the syslog daemon.
 auto_login_and_run() {
     local pane="$1"
     shift
@@ -160,11 +160,11 @@ auto_login_and_run() {
 
 auto_login_and_run "$SESSION:0.5" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
-    "/mnt/pingpong/freertos-showcase/hello-arm-linux" &
+    "/mnt/pingpong/freertos-showcase/syslog-arm-linux" &
 auto_login_and_run "$SESSION:0.6" \
-    "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+    "/mnt/pingpong/freertos-showcase/syslog-riscv-linux" &
 auto_login_and_run "$SESSION:0.7" \
-    "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/hello-mips-linux && /tmp/hello-mips-linux" &
+    "cp /mnt/pingpong/freertos-showcase/syslog-mips-linux /tmp/syslog-mips-linux && /tmp/syslog-mips-linux" &
 
 # Focus FreeRTOS pane so FreeRTOS output is front-and-center on attach
 tmux select-pane -t "$SESSION:0.4"

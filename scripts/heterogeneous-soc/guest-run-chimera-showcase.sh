@@ -183,7 +183,7 @@ else
     _exec bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     _ok "freertos-riscv-demo.elf built ($(du -sh "${FREERTOS_DEMO_ELF}" | cut -f1))"
 
-    for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}" "${LINUX_ARM_STATS_BINARY}"; do
+    for bin in "${SYSLOG_ARM_BINARY}" "${SYSLOG_RISCV_BINARY}" "${SYSLOG_MIPS_BINARY}" "${LINUX_ARM_STATS_BINARY}"; do
         if [[ -f "${bin}" ]]; then
             _ok "$(basename "${bin}") built ($(du -sh "${bin}" | cut -f1))"
         else
@@ -191,9 +191,9 @@ else
         fi
     done
 
-    if [[ ! -f "${HELLO_MIPS_BINARY}" ]]; then
-        printf '\n\033[1;33mWARNING:\033[0m hello-mips-linux was not built.\n'
-        printf '  The MIPS guest will boot but the hello binary will not be present.\n'
+    if [[ ! -f "${SYSLOG_MIPS_BINARY}" ]]; then
+        printf '\n\033[1;33mWARNING:\033[0m syslog-mips-linux was not built.\n'
+        printf '  The MIPS guest will boot but the syslog daemon will not be present.\n'
         printf '  Install gcc-mipsel-linux-gnu and re-run to fix.\n\n'
     fi
 fi
