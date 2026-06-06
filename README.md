@@ -90,7 +90,7 @@ Each `hsoc_channel` holds a `volatile uint32_t flag` (0 = empty, 1 = ready) foll
 ```mermaid
 sequenceDiagram
     participant L as Linux
-    participant S as Shared Memory (BAR2)
+    participant S as "Shared Memory (BAR2)"
     participant F as FreeRTOS
 
     L->>S: shm_write(msg)
@@ -137,8 +137,8 @@ Example log output:
 ```mermaid
 sequenceDiagram
     participant F as FreeRTOS
-    participant S as IVSHMEM3 SHMEM<br/>(0x40000000)
-    participant A as ARM-Linux<br/>(linux-arm-stats)
+    participant S as "IVSHMEM3 SHMEM (0x40000000)"
+    participant A as "ARM-Linux (linux-arm-stats)"
 
     Note over F,S: Initialization — once at task start
     F->>S: magic = HSOC_STATS_MAGIC (volatile store)
@@ -153,12 +153,12 @@ sequenceDiagram
     end
     Note over A: BAR2 found — enter poll loop
 
-    loop Every 5 s  (stats_tick >= 5000 × 1 ms ticks)
+    loop Every 5 s (stats_tick >= 5000 * 1 ms ticks)
         F->>S: arm_count, riscv_count, mips_count, tick_sec, tick_nsec (volatile byte stores)
         Note over F: __sync_synchronize()
         F->>S: generation = generation + 1  (volatile store)
         Note over F: __sync_synchronize()
-        Note over F: log "[freertos] stats snapshot written"
+        Note over F: log [freertos] stats snapshot written
     end
 
     loop ARM-Linux polls every 2 s
