@@ -281,13 +281,14 @@ int main(int argc, char *argv[])
                   HSOC_BOOT_COMPLETE);
     __sync_synchronize();
 
-    /* Drain existing kernel messages */
+    /* Open /dev/kmsg once and keep it open so the reader position advances
+     * between polls. Re-opening each time resets to the ring-buffer start
+     * and produces duplicate entries. */
     int kmsg_fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
     if (kmsg_fd >= 0) {
         int n = drain_kmsg(kmsg_fd);
         fprintf(stderr, "[bootlog-writer:%s] drained %d existing kmsg lines\n",
                 HSOC_BOOTLOG_LABEL, n);
-        close(kmsg_fd);
     } else {
         fprintf(stderr, "[bootlog-writer:%s] warning: cannot open /dev/kmsg (%s)\n",
                 HSOC_BOOTLOG_LABEL, strerror(errno));
@@ -298,10 +299,8 @@ int main(int argc, char *argv[])
 
     for (;;) {
         sleep(2);
-        kmsg_fd = open("/dev/kmsg", O_RDONLY | O_NONBLOCK);
         if (kmsg_fd >= 0) {
             drain_kmsg(kmsg_fd);
-            close(kmsg_fd);
         }
     }
 }
