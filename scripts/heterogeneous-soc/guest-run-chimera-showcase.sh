@@ -89,6 +89,12 @@ _exec pkill -x "ivshmem-server"                            2>/dev/null || true
 sleep 0.3
 _ok "stale processes cleaned"
 
+# ── Step 0.5: Network bridge ──────────────────────────────────────────────────
+
+_step "Setting up network bridge"
+_exec bash "${SCRIPT_DIR}/guest-setup-network-bridge.sh"
+_ok "Bridge chbr0 and TAP devices ready"
+
 # ── Step 1: apt prerequisites ─────────────────────────────────────────────────
 
 if [[ -z "${SKIP_PREREQS:-}" ]]; then
@@ -206,6 +212,34 @@ fi
 
 _step "Debian rootfs images"
 _exec bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh"
+
+# Detect disk images built before Avahi support was added.
+_avahi_present_in_image() {
+    local disk="$1"
+    [[ -f "${disk}" ]] || return 0   # not yet built — will be created fresh
+    local nbd_dev="/dev/nbd0" mnt result=0
+    mnt="$(mktemp -d)"
+    sudo modprobe nbd max_part=0 2>/dev/null || true
+    if ! sudo qemu-nbd --connect="${nbd_dev}" "${disk}" 2>/dev/null; then
+        rmdir "${mnt}"; return 0     # can't mount → allow through
+    fi
+    sleep 0.3
+    if ! sudo mount "${nbd_dev}" "${mnt}" 2>/dev/null; then
+        sudo qemu-nbd --disconnect "${nbd_dev}" 2>/dev/null || true
+        rmdir "${mnt}"; return 0
+    fi
+    [[ -f "${mnt}/usr/sbin/avahi-daemon" ]] || result=1
+    sudo umount "${mnt}" 2>/dev/null || true
+    sudo qemu-nbd --disconnect "${nbd_dev}" 2>/dev/null || true
+    rmdir "${mnt}" 2>/dev/null || true
+    return "${result}"
+}
+
+if ! _avahi_present_in_image "${ARM_DEBIAN_DISK}"; then
+    die "Disk images predate Avahi support. Delete them to rebuild:
+  rm -f '${ARM_DEBIAN_DISK}' '${RISCV_DEBIAN_DISK}' '${MIPS_DEBIAN_DISK}'
+Then re-run this script."
+fi
 _ok "Debian rootfs disks ready"
 
 # ── Step 6.5: Install syslog daemons into guest disk images ──────────────────
