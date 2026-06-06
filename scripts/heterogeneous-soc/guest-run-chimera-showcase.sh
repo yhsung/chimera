@@ -6,6 +6,13 @@
 # showcase (ARM-Linux + RISCV-Linux + MIPS-Linux ↔ FreeRTOS over ivshmem,
 # plus a stats channel where FreeRTOS pushes message-count snapshots to ARM).
 #
+# Usage:
+#   bash guest-run-chimera-showcase.sh [OPTIONS]
+#
+# Options:
+#   --help, -h     Show this help and exit
+#   --dry-run      Print what would be done without doing it
+#
 # Run this from inside the Lima VM:
 #   limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 #
@@ -20,10 +27,66 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
+# ── Option parsing ───────────────────────────────────────────────────────────
+DRY_RUN=false
+for arg in "$@"; do
+    case "${arg}" in
+        --help|-h)
+            sed -n '/^# /{ s/^# //; /^!/q; p; }' "${BASH_SOURCE[0]}"
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        *)
+            echo "error: unknown option '${arg}'; use --help" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Redirect actual work behind dry-run.
+if "${DRY_RUN}"; then
+    _exec() { printf '  [dry-run] %s\n' "$*"; }
+else
+    _exec() { "$@"; }
+fi
+
 _step()  { printf '\n\033[1;34m=== %s ===\033[0m\n' "$*"; }
 _ok()    { printf '\033[0;32m  ✓ %s\033[0m\n' "$*"; }
 _skip()  { printf '\033[0;33m  ↷ skip: %s\033[0m\n' "$*"; }
 _info()  { printf '  %s\n' "$*"; }
+
+# ── Pre-flight checks ────────────────────────────────────────────────────────
+
+# tmux is required by the final launch step.
+if ! command -v tmux &>/dev/null; then
+    die "tmux is required but not installed; 'sudo apt-get install -y tmux' and re-run"
+fi
+
+# Validate that all downstream launch scripts exist before spending time on builds.
+LAUNCH_SCRIPTS=(
+    "${SCRIPT_DIR}/guest-run-phase5-tmux.sh"
+    "${SCRIPT_DIR}/guest-start-ivshmem-server-arm-freertos.sh"
+    "${SCRIPT_DIR}/guest-start-ivshmem-server-riscv-freertos.sh"
+    "${SCRIPT_DIR}/guest-start-ivshmem-server-mips-freertos.sh"
+    "${SCRIPT_DIR}/guest-start-ivshmem-server-stats.sh"
+    "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
+)
+for script in "${LAUNCH_SCRIPTS[@]}"; do
+    [[ -f "${script}" ]] || die "required script not found: ${script}"
+done
+
+# Kill any stale QEMU/ivshmem-server processes from a prior run that might
+# hold file locks or leave stale sockets behind.
+_info "Cleaning up stale processes from prior runs..."
+_exec pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+_exec pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
+_exec pkill -f "qemu-system-riscv64.*riscv-phase5"         2>/dev/null || true
+_exec pkill -f "qemu-system-mipsel.*run-chimera"           2>/dev/null || true
+_exec pkill -x "ivshmem-server"                            2>/dev/null || true
+sleep 0.3
+_ok "stale processes cleaned"
 
 # ── Step 1: apt prerequisites ─────────────────────────────────────────────────
 
@@ -31,9 +94,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _step "Checking apt packages"
 
     NEED_PKGS=()
-    _pkg_check() {
-        dpkg -s "$1" &>/dev/null || NEED_PKGS+=("$1")
-    }
+    _pkg_check() { dpkg -s "$1" &>/dev/null || NEED_PKGS+=("$1"); }
     _pkg_check build-essential
     _pkg_check bison
     _pkg_check flex
@@ -58,12 +119,13 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check qemu-system-misc
     _pkg_check qemu-user-static
     _pkg_check rsync
+    _pkg_check tmux
     _pkg_check zlib1g-dev
 
     if [[ ${#NEED_PKGS[@]} -gt 0 ]]; then
         _info "Installing: ${NEED_PKGS[*]}"
-        sudo apt-get update -qq
-        sudo apt-get install -y "${NEED_PKGS[@]}"
+        _exec sudo apt-get update -qq
+        _exec sudo apt-get install -y "${NEED_PKGS[@]}"
         _ok "packages installed"
     else
         _skip "all packages already present"
@@ -72,7 +134,7 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     # ── Step 2: Fetch Debian kernel packages ──────────────────────────────────
 
     _step "Fetching Debian kernel packages"
-    bash "${SCRIPT_DIR}/guest-fetch-images.sh"
+    _exec bash "${SCRIPT_DIR}/guest-fetch-images.sh"
     _ok "Debian kernel packages fetched"
 
 fi
@@ -80,25 +142,29 @@ fi
 # ── Step 3: Build ivshmem server (and full QEMU) ─────────────────────────────
 
 _step "Building ivshmem server / QEMU"
-_has_ivshmem() {
-    [[ -x "${BUILD_DIR}/ivshmem-server" ]] || \
-    [[ -x "${BUILD_DIR}/contrib/ivshmem-server/ivshmem-server" ]]
+_has_qemu_build() {
+    find_ivshmem_server &>/dev/null || return 1
+    [[ -x "${BUILD_DIR}/qemu-system-riscv64" ]] && \
+    [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]] && \
+    [[ -x "${BUILD_DIR}/qemu-system-mipsel" ]]
 }
 
-if _has_ivshmem && [[ -x "${BUILD_DIR}/qemu-system-riscv64" ]] && \
-                   [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]] && \
-                   [[ -x "${BUILD_DIR}/qemu-system-mipsel" ]]; then
+if _has_qemu_build; then
     _skip "QEMU and ivshmem-server already built in ${BUILD_DIR}"
 else
-    bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
+    _exec bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
     _ok "QEMU and ivshmem-server built"
 fi
 
 # ── Step 4: Fetch FreeRTOS kernel source ─────────────────────────────────────
 
 _step "FreeRTOS kernel source"
-bash "${SCRIPT_DIR}/guest-fetch-freertos-kernel.sh"
-_ok "FreeRTOS-Kernel at ${FREERTOS_KERNEL_DIR}"
+if [[ -d "${FREERTOS_KERNEL_DIR}/.git" ]]; then
+    _skip "FreeRTOS-Kernel already cloned at ${FREERTOS_KERNEL_DIR}"
+else
+    _exec bash "${SCRIPT_DIR}/guest-fetch-freertos-kernel.sh"
+    _ok "FreeRTOS-Kernel at ${FREERTOS_KERNEL_DIR}"
+fi
 
 # ── Step 5: Build showcase binaries ──────────────────────────────────────────
 
@@ -108,7 +174,7 @@ if [[ -n "${SKIP_BUILD:-}" ]]; then
     require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 else
     _step "Building FreeRTOS showcase"
-    bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
+    _exec bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     _ok "freertos-riscv-demo.elf built ($(du -sh "${FREERTOS_DEMO_ELF}" | cut -f1))"
 
     for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}" "${LINUX_ARM_STATS_BINARY}"; do
@@ -131,13 +197,13 @@ fi
 # These are created once and reused; the script skips existing images.
 
 _step "Debian rootfs images"
-bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh"
+_exec bash "${SCRIPT_DIR}/guest-prepare-debian-rootfs.sh"
 _ok "Debian rootfs disks ready"
 
 # ── Step 7: Extract kernel + initrd from .deb packages ─────────────────────────
 
 _step "Kernel extraction"
-bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
+_exec bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 _ok "Kernels and initrds extracted"
 
 # ── Step 8: Launch ────────────────────────────────────────────────────────────
@@ -146,6 +212,12 @@ _step "Launching Chimera showcase"
 printf '  Session:  freertos-showcase\n'
 printf '  Layout:   4 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
 printf '  Navigate: Ctrl-b + arrow keys\n\n'
+
+if "${DRY_RUN}"; then
+    printf '  [dry-run] would exec: SKIP_BUILD=1 bash %s\n' \
+        "${SCRIPT_DIR}/guest-run-phase5-tmux.sh"
+    exit 0
+fi
 
 # Pass SKIP_BUILD=1 so guest-run-phase5-tmux.sh goes straight to the tmux launch
 # without running guest-build-freertos-showcase.sh a second time.
