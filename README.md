@@ -1,6 +1,6 @@
 # Chimera — Heterogeneous SoC Demo
 
-A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each exchange timestamped HELLO/ACK messages with a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/tmp/freertos-stats.log`.
+A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/tmp/freertos-stats.log`.
 
 ---
 
@@ -33,9 +33,9 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 
 | Component | Machine | OS | Role |
 |---|---|---|---|
-| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK; runs `linux-arm-stats` |
-| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
-| MIPS-Linux | QEMU `malta` mips32 | Debian Linux 12 (bookworm) | Sends HELLO, waits for ACK |
+| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
+| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
+| MIPS-Linux | QEMU `malta` mipsel | Debian Linux 12 (bookworm) | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
 | RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
 | ivshmem-server (ARM) | Host process | — | Brokers shared memory for ARM↔FreeRTOS |
 | ivshmem-server (RISCV) | Host process | — | Brokers shared memory for RISCV↔FreeRTOS |
@@ -194,13 +194,13 @@ sequenceDiagram
 ├────────────────┬────────────────┬─────────────────┤
 │  ARM-Linux     │  RISCV-Linux   │  MIPS-Linux     │
 │  linux-arm-stats (bg)           │                 │
-│  hello-arm-linux│ hello-riscv-  │ hello-mips-     │
-│                │  linux         │ linux           │
+│  syslog-arm-   │ syslog-riscv-  │ syslog-mips-    │
+│  linux         │  linux         │ linux           │
 │  pane 5        │  pane 6        │  pane 7         │
 └────────────────┴────────────────┴─────────────────┘
 ```
 
-Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their binaries once the guest boots. In pane 5, `linux-arm-stats` runs in the background before `hello-arm-linux` starts; stats are appended to `/tmp/freertos-stats.log` inside the ARM guest.
+Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their daemons once the guest boots. The syslog daemons (`syslog-{arm,riscv,mips}-linux`) are pre-installed into each guest's `/usr/local/bin/` by `guest-install-syslog-to-guests.sh` and run directly from the guest filesystem. In pane 5, `linux-arm-stats` runs in the background before `syslog-arm-linux` starts; stats are appended to `/tmp/freertos-stats.log` inside the ARM guest.
 
 ---
 
@@ -228,12 +228,13 @@ Step 2 handles everything: installing build dependencies, fetching disk images, 
 
 | Stage | What it does | Skip condition |
 |---|---|---|
-| 1 — apt packages | Installs all build deps including `gcc-mips-linux-gnu` | Already installed |
+| 1 — apt packages | Installs all build deps including `gcc-mipsel-linux-gnu`, `qemu-utils` | Already installed |
 | 2 — kernel packages | Downloads ARM / RISCV / MIPS Debian kernel .deb packages | File already exists |
 | 3 — QEMU build | Builds `qemu-system-aarch64/riscv64/mipsel` + `ivshmem-server` | All binaries already in `BUILD_DIR` |
 | 4 — FreeRTOS kernel | Clones / pulls FreeRTOS-Kernel | Already cloned (pulls latest) |
-| 5 — Showcase binaries | Builds ELF + `hello-{arm,riscv,mips}-linux` + `linux-arm-stats` | Warns if MIPS binary absent |
+| 5 — Showcase binaries | Builds ELF + `syslog-{arm,riscv,mips}-linux` + `linux-arm-stats` | Warns if MIPS binary absent |
 | 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap | Skipped if disk exists |
+| 6.5 — Inject daemons | Installs `syslog-*-linux` into each guest's `/usr/local/bin/` via `qemu-nbd` | Runs on every build |
 | 7 — boot assets | Extracts kernel + initramfs from Debian kernel .deb packages | Skipped if already extracted |
 | 8 — Launch | Opens 8-pane tmux session (4 ivshmem servers, FreeRTOS, 3 Linux guests) | — |
 
@@ -286,9 +287,9 @@ Cross-compilation happens inside the Lima VM, which provides:
 
 | Cross-compiler | Target |
 |---|---|
-| `aarch64-linux-gnu-gcc` | ARM-Linux hello binary + `linux-arm-stats` |
-| `riscv64-linux-gnu-gcc` | RISCV-Linux hello binary |
-| `mips-linux-gnu-gcc` | MIPS-Linux hello binary |
+| `aarch64-linux-gnu-gcc` | ARM-Linux syslog daemon + `linux-arm-stats` |
+| `riscv64-linux-gnu-gcc` | RISCV-Linux syslog daemon |
+| `mipsel-linux-gnu-gcc` | MIPS-Linux syslog daemon |
 | `riscv64-unknown-elf-gcc` | FreeRTOS bare-metal ELF |
 
 > **MIPS OS note:** Debian dropped big-endian 32-bit MIPS (mips) after Debian 8 (jessie). The demo uses the `4kc-malta` kernel from the Debian 12 `debian-ports` archive. The MIPS rootfs is built via `debootstrap` using the `debian-ports` suite.
@@ -307,7 +308,7 @@ contrib/heterogeneous-soc/
   freertos-showcase/
     hello_proto.h             — HELLO/ACK wire protocol (sender IDs, message structs)
     stats_proto.h             — stats channel protocol (hsoc_stats_snapshot struct)
-    linux_hello.c             — Linux sender (ARM, RISCV, and MIPS, compiled separately)
+    linux_syslog.c            — sysinfo logging daemon (ARM, RISCV, and MIPS, compiled separately); reads /proc/loadavg, /proc/meminfo, /proc/uptime and sends over ivshmem
     linux_stats.c             — ARM-Linux stats poller: reads snapshot every 2 s, logs to /tmp/freertos-stats.log
     freertos_main.c           — FreeRTOS task: polls all three channels, sends ACK, writes stats every 5 s
     freertos_ivshmem_flat.c   — ivshmem poll/send helpers (volatile byte access)
@@ -324,7 +325,7 @@ scripts/heterogeneous-soc/
   guest-run-freertos-harness.sh               — headless FreeRTOS harness (ARM-only pass string)
 
   ── Build scripts ────────────────────────────────────────────────────────────
-  guest-build-freertos-showcase.sh            — builds FreeRTOS ELF + hello-{arm,riscv,mips}-linux + linux-arm-stats
+  guest-build-freertos-showcase.sh            — builds FreeRTOS ELF + syslog-{arm,riscv,mips}-linux + linux-arm-stats
   guest-build-ivshmem-tools.sh                — builds QEMU + ivshmem-server inside Lima
   guest-build-pingpong.sh                     — builds ping/pong binaries (ARM↔RISCV demo)
   guest-build-arm-secure-stack.sh             — builds TF-A + Hafnium + OP-TEE secure stack
@@ -339,6 +340,7 @@ scripts/heterogeneous-soc/
   ── Rootfs / boot-asset preparation ─────────────────────────────────────────
   guest-prepare-debian-rootfs.sh              — creates minimal Debian qcow2 disks (debootstrap)
   guest-prepare-debian-boot-assets.sh         — extracts kernel + initrd from .deb packages
+  guest-install-syslog-to-guests.sh           — injects syslog-{arm,riscv,mips}-linux into each guest's /usr/local/bin/ via qemu-nbd
 
   ── ivshmem-server wrappers ──────────────────────────────────────────────────
   guest-start-ivshmem-server.sh               — generic single-channel ivshmem-server wrapper
@@ -354,8 +356,8 @@ scripts/heterogeneous-soc/
   guest-run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
 
   ── In-guest binary helpers ──────────────────────────────────────────────────
-  guest-run-hello-arm.sh                      — runs hello-arm-linux inside the ARM guest
-  guest-run-hello-riscv.sh                    — runs hello-riscv-linux inside the RISCV guest
+  guest-run-hello-arm.sh                      — runs syslog-arm-linux inside the ARM guest (legacy name)
+  guest-run-hello-riscv.sh                    — runs syslog-riscv-linux inside the RISCV guest (legacy name)
   guest-run-ping.sh                           — runs ping binary inside the ARM guest
   guest-run-pong.sh                           — runs pong binary inside the RISCV guest
   guest-copy-pingpong.sh                      — SCP ping/pong binaries to guests over SSH
@@ -437,7 +439,7 @@ bash scripts/heterogeneous-soc/guest-demo-run-ping.sh         # start ARM ping
 
 All copies to/from ivshmem use explicit volatile byte loops instead of `memcpy`/struct assignment:
 
-- **ARM-Linux**: ARM `printf`/`memcpy` use NEON instructions, which SIGBUS on non-cacheable PCI BAR2 memory. The `shm_write`/`shm_read` helpers in `linux_hello.c` avoid this.
+- **ARM-Linux**: ARM `printf`/`memcpy` use NEON instructions, which SIGBUS on non-cacheable PCI BAR2 memory. The `shm_write`/`shm_read` helpers in `linux_syslog.c` avoid this.
 - **FreeRTOS**: GCC `-O2` loop-invariant code motion (LICM) hoists non-volatile struct reads out of the poll loop, returning stale zeros on every iteration. The `shmem_read`/`shmem_write` helpers in `freertos_ivshmem_flat.c` prevent this.
 
 ### Memory barriers
