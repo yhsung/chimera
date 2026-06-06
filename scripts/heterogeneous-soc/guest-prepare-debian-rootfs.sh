@@ -290,6 +290,47 @@ NSSEOF
         "${rootfs}/etc/systemd/system/multi-user.target.wants/systemd-networkd.service" \
         2>/dev/null || true
 
+    # ── Avahi service definitions ─────────────────────────────────────────────
+    local avahi_arch
+    case "${arch}" in
+        arm64)   avahi_arch="arm64" ;;
+        riscv64) avahi_arch="riscv64" ;;
+        mipsel)  avahi_arch="mipsel" ;;
+        *)       avahi_arch="unknown" ;;
+    esac
+
+    sudo mkdir -p "${rootfs}/etc/avahi/services"
+
+    sudo tee "${rootfs}/etc/avahi/services/ssh.service" >/dev/null <<'XMLEOF'
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">SSH on %h</name>
+  <service>
+    <type>_ssh._tcp</type>
+    <port>22</port>
+  </service>
+</service-group>
+XMLEOF
+
+    sudo tee "${rootfs}/etc/avahi/services/chimera-syslog.service" >/dev/null <<XMLEOF
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">Chimera syslog on %h</name>
+  <service>
+    <type>_chimera-syslog._tcp</type>
+    <port>0</port>
+    <txt-record>arch=${avahi_arch}</txt-record>
+  </service>
+</service-group>
+XMLEOF
+
+    # ── Enable avahi-daemon ───────────────────────────────────────────────────
+    sudo ln -sf /lib/systemd/system/avahi-daemon.service \
+        "${rootfs}/etc/systemd/system/multi-user.target.wants/avahi-daemon.service" \
+        2>/dev/null || true
+
     _ok "Rootfs configured for ${arch} (tty=${tty})"
 }
 
