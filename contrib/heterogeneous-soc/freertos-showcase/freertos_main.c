@@ -5,6 +5,8 @@
 
 #include "freertos_ivshmem_flat.h"
 #include "stats_proto.h"
+#include "bootlog_proto.h"
+#include "boot_log.h"
 
 #define UART0_BASE 0x10000000UL
 #define UART0_THR 0x0
@@ -19,6 +21,8 @@
 #define IVSHMEM2_SHMEM 0x3B000000UL
 #define IVSHMEM3_MMIO  0x3F000000UL
 #define IVSHMEM3_SHMEM 0x40000000UL
+#define IVSHMEM4_MMIO  0x44000000UL
+#define IVSHMEM4_SHMEM 0x45000000UL
 
 static struct freertos_ivshmem_link arm_link;
 static struct freertos_ivshmem_link riscv_link;
@@ -30,6 +34,7 @@ static uint32_t arm_count;
 static uint32_t riscv_count;
 static uint32_t mips_count;
 static uint32_t stats_tick;
+static struct bootlog_monitor bootlog;
 
 static void uart_putc(char ch)
 {
@@ -121,6 +126,7 @@ static void showcase_task(void *opaque)
     freertos_ivshmem_init(&arm_link,  IVSHMEM0_MMIO, IVSHMEM0_SHMEM, "arm-linux");
     freertos_ivshmem_init(&riscv_link, IVSHMEM1_MMIO, IVSHMEM1_SHMEM, "riscv-linux");
     freertos_ivshmem_init(&mips_link,  IVSHMEM2_MMIO, IVSHMEM2_SHMEM, "mips-linux");
+    bootlog_init(&bootlog, IVSHMEM4_MMIO, IVSHMEM4_SHMEM, "boot-log");
 
     stats_shmem->magic      = HSOC_STATS_MAGIC;
     stats_shmem->generation = 0;
@@ -161,6 +167,7 @@ static void showcase_task(void *opaque)
             log_uart("\n");
         }
 
+        bootlog_tick(&bootlog);
         vTaskDelay(pdMS_TO_TICKS(1));
     }
 }

@@ -71,15 +71,15 @@ syslog-mips-linux: linux_syslog.c hello_proto.h
 	  -DHSOC_SENDER_ID=HSOC_SENDER_MIPS_LINUX \
 	  -o $@ linux_syslog.c
 
-freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c \
+freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
-		hello_proto.h stats_proto.h $(FREERTOS_SRCS)
+		hello_proto.h stats_proto.h bootlog_proto.h boot_log.h $(FREERTOS_SRCS)
 	$(CC_BARE) $(CFLAGS_BARE) \
 	  -I. \
 	  -I$(FREERTOS_KERNEL_DIR)/include \
 	  -I$(FREERTOS_PORT_DIR) \
 	  -I$(FREERTOS_PORT_CHIP_DIR) \
-	  startup.S freertos_main.c freertos_ivshmem_flat.c freertos_libc.c \
+	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c freertos_libc.c \
 	  $(FREERTOS_SRCS) \
 	  $(LDFLAGS_BARE) -o $@
 

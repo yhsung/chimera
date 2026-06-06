@@ -59,4 +59,8 @@ _Static_assert(sizeof(struct hsoc_bootlog_header) == 80,
 #define BOOTLOG_TRUNC_MARKER      "--- truncated ---\n"
 #define BOOTLOG_TRUNC_MARKER_SIZE 18U   /* strlen(BOOTLOG_TRUNC_MARKER) */
 
+/* Sentinel written to collector_peer_id until ARM-Linux sets the real value.
+ * Must be non-zero since shmem zero-initializes and peer ID 0 is valid. */
+#define BOOTLOG_COLLECTOR_PEER_UNSET  0xFFFFFFFFU
+
 #endif
