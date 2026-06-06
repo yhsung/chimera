@@ -71,8 +71,10 @@ LAUNCH_SCRIPTS=(
     "${SCRIPT_DIR}/guest-start-ivshmem-server-riscv-freertos.sh"
     "${SCRIPT_DIR}/guest-start-ivshmem-server-mips-freertos.sh"
     "${SCRIPT_DIR}/guest-start-ivshmem-server-stats.sh"
+    "${SCRIPT_DIR}/guest-start-ivshmem-server-bootlog.sh"
     "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
+    "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
 )
 for script in "${LAUNCH_SCRIPTS[@]}"; do
     [[ -f "${script}" ]] || die "required script not found: ${script}"
@@ -160,7 +162,7 @@ _has_qemu_build() {
     # added machine property. A stale binary (built from an older commit) would
     # report "Property not found" at runtime, so we catch it here instead.
     "${qemu_riscv}" -M chimera-riscv-freertos-demo,help 2>&1 | \
-        grep -q "ivshmem-stats-freertos" || return 1
+        grep -q "ivshmem-bootlog-freertos" || return 1
 }
 
 if _has_qemu_build; then
@@ -251,6 +253,12 @@ _step "Installing syslog daemons into guest images"
 _exec bash "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
 _ok "Syslog daemons installed"
 
+# ── Step 6.75: Install boot-log daemons into guest disk images ───────────────
+
+_step "Installing boot-log daemons into guest images"
+_exec bash "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
+_ok "Boot-log daemons installed"
+
 # ── Step 7: Extract kernel + initrd from .deb packages ─────────────────────────
 
 _step "Kernel extraction"
@@ -261,7 +269,7 @@ _ok "Kernels and initrds extracted"
 
 _step "Launching Chimera showcase"
 printf '  Session:  freertos-showcase\n'
-printf '  Layout:   4 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
+printf '  Layout:   5 ivshmem servers | FreeRTOS | ARM / RISCV / MIPS Debian\n'
 printf '  Navigate: Ctrl-b + arrow keys\n\n'
 
 if "${DRY_RUN}"; then

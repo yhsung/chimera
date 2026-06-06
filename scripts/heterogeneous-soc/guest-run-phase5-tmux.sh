@@ -15,7 +15,7 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
         local qemu_riscv="${BUILD_DIR}/qemu-system-riscv64"
         [[ -x "${qemu_riscv}" ]] || return 1
         "${qemu_riscv}" -M chimera-riscv-freertos-demo,help 2>&1 | \
-            grep -q "ivshmem-stats-freertos" || return 1
+            grep -q "ivshmem-bootlog-freertos" || return 1
     }
 
     # One-time setup: Lima guest, disk images, and ivshmem server binary.
