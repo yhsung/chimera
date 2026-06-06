@@ -41,15 +41,6 @@ static void shm_read_buf(void *dst, const volatile void *src, size_t n)
     for (size_t i = 0; i < n; i++) d[i] = s[i];
 }
 
-static void shmem_write32(volatile void *addr, uint32_t val)
-{
-    volatile uint8_t *d = (volatile uint8_t *)addr;
-    d[0] = (uint8_t)(val >> 0);
-    d[1] = (uint8_t)(val >> 8);
-    d[2] = (uint8_t)(val >> 16);
-    d[3] = (uint8_t)(val >> 24);
-}
-
 static int write_guest_log(int guest_idx, const char *dir_path)
 {
     char file_path[PATH_MAX];
