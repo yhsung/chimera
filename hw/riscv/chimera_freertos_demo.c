@@ -42,10 +42,12 @@ static const MemMapEntry chimera_freertos_memmap[] = {
     [CHIMERA_FREERTOS_IVSHMEM3_MMIO] =  { 0x3F000000, 0x00001000 },
     [CHIMERA_FREERTOS_IVSHMEM3_SHMEM] = { 0x40000000,
                                           CHIMERA_FREERTOS_IVSHMEM_SIZE },
+    [CHIMERA_FREERTOS_IVSHMEM4_MMIO] =  { 0x44000000, 0x00001000 },
+    [CHIMERA_FREERTOS_IVSHMEM4_SHMEM] = { 0x45000000, 0x00500000 },  /* 5 MiB */
 };
 
 #define CHIMERA_FREERTOS_PLIC_HART_CONFIG "M"
-#define CHIMERA_FREERTOS_PLIC_NUM_SOURCES 20
+#define CHIMERA_FREERTOS_PLIC_NUM_SOURCES 21
 #define CHIMERA_FREERTOS_PLIC_NUM_PRIORITIES 7
 #define CHIMERA_FREERTOS_PLIC_PRIORITY_BASE 0x0
 #define CHIMERA_FREERTOS_PLIC_PENDING_BASE 0x1000
@@ -118,6 +120,22 @@ static void chimera_freertos_set_ivshmem_stats(Object *obj, const char *value,
     s->ivshmem_stats_freertos = g_strdup(value);
 }
 
+static char *chimera_freertos_get_ivshmem_bootlog(Object *obj, Error **errp)
+{
+    ChimeraFreeRTOSMachineState *s = CHIMERA_FREERTOS_MACHINE(obj);
+
+    return g_strdup(s->ivshmem_bootlog_freertos);
+}
+
+static void chimera_freertos_set_ivshmem_bootlog(Object *obj, const char *value,
+                                                  Error **errp)
+{
+    ChimeraFreeRTOSMachineState *s = CHIMERA_FREERTOS_MACHINE(obj);
+
+    g_free(s->ivshmem_bootlog_freertos);
+    s->ivshmem_bootlog_freertos = g_strdup(value);
+}
+
 static bool chimera_freertos_require_chardev(const char *id,
                                              const char *prop_name,
                                              Chardev **chr)
@@ -135,13 +153,14 @@ static bool chimera_freertos_require_chardev(const char *id,
 static void chimera_freertos_connect_ivshmem(DeviceState *irqchip, Chardev *chr,
                                              hwaddr mmio_base,
                                              hwaddr shmem_base,
+                                             uint32_t shmem_size,
                                              int irq_num)
 {
     DeviceState *dev = qdev_new(TYPE_IVSHMEM_FLAT);
     SysBusDevice *sbd = SYS_BUS_DEVICE(dev);
 
     qdev_prop_set_chr(dev, "chardev", chr);
-    qdev_prop_set_uint32(dev, "shmem-size", CHIMERA_FREERTOS_IVSHMEM_SIZE);
+    qdev_prop_set_uint32(dev, "shmem-size", shmem_size);
     sysbus_realize_and_unref(sbd, &error_fatal);
     sysbus_mmio_map(sbd, 0, mmio_base);
     sysbus_mmio_map(sbd, 1, shmem_base);
@@ -159,6 +178,7 @@ static void chimera_freertos_machine_init(MachineState *machine)
     Chardev *riscv_chr = NULL;
     Chardev *mips_chr  = NULL;
     Chardev *stats_chr = NULL;
+    Chardev *bootlog_chr = NULL;
     bool have_links    = true;
 
     have_links &= chimera_freertos_require_chardev(s->ivshmem_arm_freertos,
@@ -173,6 +193,14 @@ static void chimera_freertos_machine_init(MachineState *machine)
     /* stats chardev is optional — skip IVSHMEM3 if not wired */
     if (s->ivshmem_stats_freertos) {
         stats_chr = qemu_chr_find(s->ivshmem_stats_freertos);
+    }
+    /* boot-log chardev is optional — skip IVSHMEM4 if not wired */
+    if (s->ivshmem_bootlog_freertos) {
+        bootlog_chr = qemu_chr_find(s->ivshmem_bootlog_freertos);
+        if (!bootlog_chr) {
+            error_report("warning: chardev '%s' not found, IVSHMEM4 boot-log skipped",
+                         s->ivshmem_bootlog_freertos);
+        }
     }
     if (!have_links) {
         exit(EXIT_FAILURE);
@@ -236,16 +264,19 @@ static void chimera_freertos_machine_init(MachineState *machine)
         plic, arm_chr,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM0_MMIO].base,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM0_SHMEM].base,
+        CHIMERA_FREERTOS_IVSHMEM_SIZE,
         CHIMERA_FREERTOS_IVSHMEM0_IRQ);
     chimera_freertos_connect_ivshmem(
         plic, riscv_chr,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM1_MMIO].base,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM1_SHMEM].base,
+        CHIMERA_FREERTOS_IVSHMEM_SIZE,
         CHIMERA_FREERTOS_IVSHMEM1_IRQ);
     chimera_freertos_connect_ivshmem(
         plic, mips_chr,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM2_MMIO].base,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM2_SHMEM].base,
+        CHIMERA_FREERTOS_IVSHMEM_SIZE,
         CHIMERA_FREERTOS_IVSHMEM2_IRQ);
 
     if (stats_chr) {
@@ -253,7 +284,17 @@ static void chimera_freertos_machine_init(MachineState *machine)
             plic, stats_chr,
             chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM3_MMIO].base,
             chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM3_SHMEM].base,
+            CHIMERA_FREERTOS_IVSHMEM_SIZE,
             CHIMERA_FREERTOS_IVSHMEM3_IRQ);
+    }
+
+    if (bootlog_chr) {
+        chimera_freertos_connect_ivshmem(
+            plic, bootlog_chr,
+            chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM4_MMIO].base,
+            chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM4_SHMEM].base,
+            (uint32_t)chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM4_SHMEM].size,
+            CHIMERA_FREERTOS_IVSHMEM4_IRQ);
     }
 
     if (machine->firmware) {
@@ -305,6 +346,13 @@ static void chimera_freertos_machine_class_init(ObjectClass *oc,
     object_class_property_set_description(
         oc, CHIMERA_FREERTOS_PROP_IVSHMEM_STATS,
         "Chardev id for the stats FreeRTOS -> ARM-Linux ivshmem link");
+
+    object_class_property_add_str(oc, CHIMERA_FREERTOS_PROP_IVSHMEM_BOOTLOG,
+                                  chimera_freertos_get_ivshmem_bootlog,
+                                  chimera_freertos_set_ivshmem_bootlog);
+    object_class_property_set_description(
+        oc, CHIMERA_FREERTOS_PROP_IVSHMEM_BOOTLOG,
+        "Chardev id for the boot-log ivshmem link");
 }
 
 static const TypeInfo chimera_freertos_machine_type_info = {
