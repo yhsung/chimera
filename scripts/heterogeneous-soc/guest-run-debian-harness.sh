@@ -263,6 +263,20 @@ auto_login_and_run() {
     local timeout=300
     local elapsed=0
 
+    # Write PCI-enable + hello_bin to a short-named script in the 9p share dir
+    # so the guest only needs to receive a ~22-char path.  Long tmux send-keys
+    # strings (50+ chars for binary paths, 110+ chars for the PCI one-liner)
+    # drop characters on the slow RISCV UART emulation.
+    local pane_idx="${pane##*.}"
+    {
+        printf '#!/bin/sh\n'
+        # Enable any un-driven PCI ivshmem devices (needed on some kernels for BAR access)
+        printf 'for v in /sys/bus/pci/devices/*/vendor; do\n'
+        printf '    [ "$(cat "$v" 2>/dev/null)" = "0x1af4" ] && echo 1 > "$(dirname "$v")/enable" 2>/dev/null || true\n'
+        printf 'done\n'
+        printf '%s\n' "${hello_bin}"
+    } > "${PINGPONG_DIR}/r${pane_idx}.sh"
+
     while (( elapsed < timeout )); do
         local content
         content="$(tmux capture-pane -p -t "${pane}" 2>/dev/null)"
@@ -271,21 +285,13 @@ auto_login_and_run() {
             sleep 3
             tmux send-keys -t "${pane}" "mount /mnt/pingpong" Enter
             sleep 1
-            # Enable any un-driven PCI devices (needed on some kernels for BAR access)
-            tmux send-keys -t "${pane}" \
-                'for v in /sys/bus/pci/devices/*/vendor; do [ "$(cat $v 2>/dev/null)" = "0x1af4" ] && echo 1 > "$(dirname $v)/enable" 2>/dev/null || true; done' \
-                Enter
-            sleep 1
-            tmux send-keys -t "${pane}" "${hello_bin}" Enter
+            tmux send-keys -t "${pane}" "sh /mnt/pingpong/r${pane_idx}.sh" Enter
             echo "[debian-harness]   ${label}: logged in (login: prompt) and hello binary fired"
             return 0
         elif echo "${content}" | grep -qE "root@[^:]*:~?#"; then
-            # Enable PCI devices then fire hello
-            tmux send-keys -t "${pane}" \
-                'for v in /sys/bus/pci/devices/*/vendor; do [ "$(cat $v 2>/dev/null)" = "0x1af4" ] && echo 1 > "$(dirname $v)/enable" 2>/dev/null || true; done' \
-                Enter
+            tmux send-keys -t "${pane}" "mount /mnt/pingpong" Enter
             sleep 1
-            tmux send-keys -t "${pane}" "${hello_bin}" Enter
+            tmux send-keys -t "${pane}" "sh /mnt/pingpong/r${pane_idx}.sh" Enter
             echo "[debian-harness]   ${label}: auto-login detected, hello binary fired"
             return 0
         fi

@@ -127,13 +127,25 @@ tmux send-keys -t "${SESSION}:0.7" \
 
 # ── auto_login_and_run ───────────────────────────────────────────────────────
 # Detect the guest shell and fire the hello binary.  Same logic as
-# guest-run-phase5-tmux.sh: handles both interactive login: and autologin ~#.
+# handles both interactive login: and autologin ~#.
 auto_login_and_run() {
     local pane="$1"
     shift
     local cmds=("$@")
     local timeout=180
     local elapsed=0
+
+    # Write commands to a short-named bootstrap script in the 9p share dir so
+    # the guest receives a ~22-char path instead of a 50+ char binary path.
+    # Long tmux send-keys strings drop characters on the slow RISCV UART
+    # emulation; the short "sh /mnt/pingpong/rN.sh" path is immune.
+    local pane_idx="${pane##*.}"
+    {
+        printf '#!/bin/sh\n'
+        for cmd in "${cmds[@]}"; do
+            printf '%s\n' "$cmd"
+        done
+    } > "${PINGPONG_DIR}/r${pane_idx}.sh"
 
     while (( elapsed < timeout )); do
         local content
@@ -143,16 +155,12 @@ auto_login_and_run() {
             sleep 3
             tmux send-keys -t "${pane}" "mount /mnt/pingpong" Enter
             sleep 1
-            for cmd in "${cmds[@]}"; do
-                tmux send-keys -t "${pane}" "$cmd" Enter
-                sleep 1
-            done
+            tmux send-keys -t "${pane}" "sh /mnt/pingpong/r${pane_idx}.sh" Enter
             return 0
         elif echo "${content}" | grep -qE "root@[^:]*:~?#"; then
-            for cmd in "${cmds[@]}"; do
-                tmux send-keys -t "${pane}" "$cmd" Enter
-                sleep 1
-            done
+            tmux send-keys -t "${pane}" "mount /mnt/pingpong" Enter
+            sleep 1
+            tmux send-keys -t "${pane}" "sh /mnt/pingpong/r${pane_idx}.sh" Enter
             return 0
         fi
         sleep 3

@@ -98,6 +98,18 @@ auto_login_and_run() {
     local timeout=300
     local elapsed=0
 
+    # Write commands to a short-named bootstrap script in the 9p share dir so
+    # the guest receives a ~22-char path instead of a 50+ char binary path.
+    # Long tmux send-keys strings drop characters on the slow RISCV UART
+    # emulation; the short "sh /mnt/pingpong/rN.sh" path is immune.
+    local pane_idx="${pane##*.}"
+    {
+        printf '#!/bin/sh\n'
+        for cmd in "${cmds[@]}"; do
+            printf '%s\n' "$cmd"
+        done
+    } > "$REPO/contrib/heterogeneous-soc/r${pane_idx}.sh"
+
     _has_prompt() {
         tmux capture-pane -p -t "$pane" 2>/dev/null | grep -qE "root@[^:]+:[^#]*#[[:space:]]*$"
     }
@@ -125,11 +137,8 @@ auto_login_and_run() {
         if _has_prompt; then
             tmux send-keys -t "$pane" "mount /mnt/pingpong" Enter
             _wait_prompt 30 || true
-            sleep 0.5
-            for cmd in "${cmds[@]}"; do
-                tmux send-keys -t "$pane" "$cmd" Enter
-                sleep 1
-            done
+            sleep 1
+            tmux send-keys -t "$pane" "sh /mnt/pingpong/r${pane_idx}.sh" Enter
             return 0
         fi
 

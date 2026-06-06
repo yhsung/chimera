@@ -8,6 +8,7 @@ command -v limactl >/dev/null 2>&1 || brew install lima
 
 if limactl list | awk '{print $1}' | grep -qx "${LIMA_NAME}"; then
     echo "Lima VM ${LIMA_NAME} already exists"
+    limactl start "${LIMA_NAME}" 2>/dev/null || true
 else
     limactl start --name="${LIMA_NAME}" --vm-type=vz \
         --cpus="${LIMA_CPUS}" --memory="${LIMA_MEMORY}" --disk="${LIMA_DISK}" \
@@ -19,7 +20,14 @@ if [[ "${VM_SOURCE_DIR}" != "${CHIMERA_ROOT}" ]]; then
     prepare_vm_source_tree
     echo "Source tree deployed."
 else
-    echo "Repo is under \$HOME — Lima can access it directly at ${CHIMERA_ROOT}"
+    echo "Deploying chimera source tree to ~/chimera-src ..."
+    mkdir -p "${HOME}/chimera-src"
+    rsync -a \
+        --exclude '.git/' \
+        --exclude 'build-linux/' \
+        --exclude '.DS_Store' \
+        "${CHIMERA_ROOT}/" "${HOME}/chimera-src/"
+    echo "Source tree deployed to ~/chimera-src"
 fi
 
 echo "Lima VM ready. Enter it with:"
