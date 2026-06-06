@@ -21,7 +21,8 @@ exec "${qemu_bin}" \
     -append "${MIPS_KERNEL_CMDLINE}" \
     -chardev socket,id=ivshmem,path="${IVSHMEM_MIPS_FREERTOS_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
-    -drive file="${MIPS_DEBIAN_DISK}",format=qcow2,if=virtio \
+    -drive file="${MIPS_DEBIAN_DISK}",format=qcow2,if=none,id=drive0 \
+    -device virtio-blk-pci,drive=drive0 \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -netdev tap,id=net0,ifname=tap-mips,script=no,downscript=no \
     -device virtio-net-pci,netdev=net0 \

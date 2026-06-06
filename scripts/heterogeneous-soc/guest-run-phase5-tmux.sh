@@ -103,6 +103,19 @@ tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-
 tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
 tmux send-keys -t "$SESSION:0.7" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter
 
+# Send a string one character at a time with a per-char delay.
+# Slow UART emulation (notably RISC-V) drops characters when tmux send-keys
+# fires the whole string at once; this workaround prevents that.
+_send_keys_slow() {
+    local pane="$1" text="$2" delay="${3:-0.04}"
+    local i ch
+    for (( i=0; i<${#text}; i++ )); do
+        ch="${text:$i:1}"
+        tmux send-keys -t "$pane" "$ch"
+        sleep "${delay}"
+    done
+}
+
 # Wait for the guest shell to be ready, then run the syslog daemon.
 auto_login_and_run() {
     local pane="$1"
@@ -136,6 +149,28 @@ auto_login_and_run() {
         return 1
     }
 
+    _send_slow_and_verify() {
+        local cmd="$1" max_retries=3 retries=0
+        while (( retries < max_retries )); do
+            _send_keys_slow "$pane" "$cmd"
+            tmux send-keys -t "$pane" Enter
+            sleep 2
+            # Check that the command was received correctly (no dropped chars)
+            local pane_content
+            pane_content="$(tmux capture-pane -p -t "$pane" 2>/dev/null || true)"
+            if echo "$pane_content" | grep -qE "(command not found|No such file)"; then
+                (( retries++ ))
+                sleep 1
+                # Clear the line with Ctrl+C before retrying
+                tmux send-keys -t "$pane" C-c
+                sleep 0.5
+            else
+                return 0
+            fi
+        done
+        return 1
+    }
+
     while (( elapsed < timeout )); do
         local content
         content="$(tmux capture-pane -p -t "$pane" 2>/dev/null || true)"
@@ -143,15 +178,17 @@ auto_login_and_run() {
         # Match only a bare login: prompt — not the autologin echo line
         # "login: root (automatic login)" which also contains "login:".
         if echo "$content" | grep -qE 'login:[[:space:]]*$'; then
-            tmux send-keys -t "$pane" "root" Enter
+            _send_keys_slow "$pane" "root"
+            tmux send-keys -t "$pane" Enter
             _wait_prompt 60 || true
         fi
 
         if _has_prompt; then
-            tmux send-keys -t "$pane" "mount /mnt/pingpong" Enter
-            _wait_prompt 30 || true
+            _send_slow_and_verify "mount /mnt/pingpong"
+            # Even if verify gave up, try the script — it might have mounted OK.
             sleep 1
-            tmux send-keys -t "$pane" "sh /mnt/pingpong/r${pane_idx}.sh" Enter
+            _send_keys_slow "$pane" "sh /mnt/pingpong/r${pane_idx}.sh"
+            tmux send-keys -t "$pane" Enter
             return 0
         fi
 
