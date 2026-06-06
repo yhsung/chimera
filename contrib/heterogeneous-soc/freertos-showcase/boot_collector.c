@@ -43,6 +43,12 @@ static void shm_read_buf(void *dst, const volatile void *src, size_t n)
 
 static int write_guest_log(int guest_idx, const char *dir_path)
 {
+    if (guest_idx < 0 || guest_idx >= (int)BOOTLOG_NUM_GUESTS) {
+        fprintf(stderr, "[boot-collector] write_guest_log: invalid index %d\n",
+                guest_idx);
+        return -1;
+    }
+
     char file_path[PATH_MAX];
     snprintf(file_path, sizeof(file_path), "%s/%s.log",
              dir_path, guest_names[guest_idx]);
@@ -109,19 +115,17 @@ static volatile struct hsoc_bootlog_header *find_bootlog_shm(void)
             char res_path[PATH_MAX];
             snprintf(res_path, sizeof(res_path), "%s/%s/resource2",
                      sysfs_root, entry->d_name);
+            /* Don't close fd yet — if magic matches, reuse it */
             int fd = open(res_path, O_RDONLY | O_SYNC);
             if (fd < 0) continue;
 
             void *p = mmap(NULL, 4096, PROT_READ, MAP_SHARED, fd, 0);
-            close(fd);
-            if (p == MAP_FAILED) continue;
+            if (p == MAP_FAILED) { close(fd); continue; }
             uint32_t magic = *(volatile uint32_t *)p;
             __sync_synchronize();
             munmap(p, 4096);
 
             if (magic == BOOTLOG_MAGIC) {
-                fd = open(res_path, O_RDONLY | O_SYNC);
-                if (fd < 0) { closedir(dir); return NULL; }
                 void *full = mmap(NULL, BOOTLOG_BAR2_SIZE, PROT_READ,
                                   MAP_SHARED, fd, 0);
                 close(fd);
@@ -129,12 +133,14 @@ static volatile struct hsoc_bootlog_header *find_bootlog_shm(void)
                 closedir(dir);
                 return (volatile struct hsoc_bootlog_header *)full;
             }
+            close(fd);
         }
         closedir(dir);
         if (attempt == 0)
             fprintf(stderr, "[boot-collector] waiting for boot-log BAR2...\n");
         sleep(1);
     }
+    fprintf(stderr, "[boot-collector] timed out waiting for boot-log BAR2 after 30 attempts\n");
     return NULL;
 }
 
@@ -157,6 +163,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "[boot-collector] could not find boot-log ivshmem BAR2\n");
         return 1;
     }
+    __sync_synchronize();
     if (header->magic != BOOTLOG_MAGIC) {
         fprintf(stderr, "[boot-collector] bad magic 0x%08" PRIx32 "\n",
                 header->magic);
