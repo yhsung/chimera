@@ -29,7 +29,7 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
         echo "=== One-time setup complete ==="
     fi
 
-    # Always rebuild the FreeRTOS ELF and Linux hello binaries so source changes
+    # Always rebuild the FreeRTOS ELF and Linux syslog binaries so source changes
     # are picked up without manual intervention.
     echo "=== Building FreeRTOS showcase ==="
     scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
@@ -100,7 +100,7 @@ tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-
 tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
 tmux send-keys -t "$SESSION:0.7" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter
 
-# Wait for the guest shell to be ready, then run the hello binary.
+# Wait for the guest shell to be ready, then run the syslog daemon.
 auto_login_and_run() {
     local pane="$1"
     shift
@@ -160,18 +160,18 @@ auto_login_and_run() {
 
 auto_login_and_run "$SESSION:0.5" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
-    "/mnt/pingpong/freertos-showcase/hello-arm-linux" &
+    "syslog-arm-linux" &
 auto_login_and_run "$SESSION:0.6" \
-    "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+    "syslog-riscv-linux" &
 auto_login_and_run "$SESSION:0.7" \
-    "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/hello-mips-linux && /tmp/hello-mips-linux" &
+    "syslog-mips-linux" &
 
 # Focus FreeRTOS pane so FreeRTOS output is front-and-center on attach
 tmux select-pane -t "$SESSION:0.4"
 
 echo ""
 echo "=== Phase 5 showcase starting (session: $SESSION) ==="
-echo "    Guests will auto-login and run hello senders once booted."
+echo "    Guests will auto-login and run syslog daemons once booted."
 echo "    Navigate panes: Ctrl-b arrow keys"
 echo "    Attaching..."
 echo ""

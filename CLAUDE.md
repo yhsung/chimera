@@ -16,7 +16,7 @@ All custom code lives in a small surface area on top of upstream QEMU:
 | `include/hw/riscv/chimera_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
 | `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
 | `include/hw/misc/ivshmem-flat.h` | Device state and interface |
-| `contrib/heterogeneous-soc/freertos-showcase/` | FreeRTOS ELF and Linux hello binaries (wire protocol, build system) |
+| `contrib/heterogeneous-soc/freertos-showcase/` | FreeRTOS ELF and Linux syslog daemon binaries (wire protocol, build system) |
 | `scripts/heterogeneous-soc/` | All launch, build, and setup scripts |
 
 The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`; FreeRTOS uses it because bare-metal targets lack a PCI bus. Linux guests use the standard PCI `ivshmem-doorbell`.
@@ -64,17 +64,25 @@ ninja contrib/ivshmem-server/ivshmem-server contrib/ivshmem-client/ivshmem-clien
 
 ## Building the FreeRTOS Showcase Binaries
 
-```bash
-# Fetch FreeRTOS-Kernel source (needed once)
-scripts/heterogeneous-soc/guest-fetch-freertos-kernel.sh
+Cross-compilers (`aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `mipsel-linux-gnu-gcc`, `riscv64-unknown-elf-gcc`) are **only available inside the Lima VM** — they are not present on macOS. Always build freertos-showcase binaries via Lima.
 
-# Build all three binaries inside Lima (or natively on Linux with the right cross-compilers)
-make -C contrib/heterogeneous-soc/freertos-showcase/ clean all
+**From macOS** (recommended — rsyncs source then builds):
+```bash
+CHIMERA_ROOT=/Users/yhsung/dev-projects/chimera \
+    limactl shell qemu-dev -- bash /Users/yhsung/dev-projects/chimera/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
 ```
 
-Outputs: `hello-arm-linux`, `hello-riscv-linux`, `hello-mips-linux`, `freertos-riscv-demo.elf`.
+**From inside Lima** (after `limactl shell qemu-dev`):
+```bash
+CHIMERA_ROOT=/Users/yhsung/dev-projects/chimera \
+    bash ~/chimera-src/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
+```
 
-Cross-compilers required: `aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `riscv64-unknown-elf-gcc`, `gcc-mipsel-linux-gnu`. The Makefile skips `hello-*-linux` targets silently if the corresponding compiler is absent.
+Both commands rsync the current macOS source tree into `~/chimera-src` inside Lima before building, so they always pick up uncommitted or branch-local changes.
+
+Outputs (in `~/chimera-src/contrib/heterogeneous-soc/freertos-showcase/` inside Lima): `syslog-arm-linux`, `syslog-riscv-linux`, `syslog-mips-linux`, `linux-arm-stats`, `freertos-riscv-demo.elf`.
+
+The Makefile skips `syslog-*-linux` targets silently if the corresponding compiler is absent. `FREERTOS_KERNEL_DIR` defaults to `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel`.
 
 `FREERTOS_KERNEL_DIR` defaults to `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel`.
 
