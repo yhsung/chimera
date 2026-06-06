@@ -28,21 +28,22 @@ fi
 
 # Build a single-window layout:
 #
-#  ┌──────────────┬──────────────┬──────────────┐
-#  │  srv ARM-FT  │  srv RISCV-FT│  srv MIPS-FT │  panes 0, 1, 2  (equal thirds)
-#  ├──────────────┴──────────────┴──────────────┤
-#  │                  FreeRTOS                   │  pane 3
-#  ├──────────────┬──────────────┬──────────────┤
-#  │  ARM-Linux   │  RISCV-Linux │  MIPS-Linux  │  panes 4, 5, 6  (equal thirds)
-#  └──────────────┴──────────────┴──────────────┘
+#  ┌──────────┬──────────┬──────────┬──────────┐
+#  │srv ARM-FT│srv RSCV-F│srv MIPS-F│srv STATS │  panes 0,1,2,3  (equal quarters)
+#  ├──────────┴──────────┴──────────┴──────────┤
+#  │                  FreeRTOS                  │  pane 4
+#  ├──────────────┬──────────────┬─────────────┤
+#  │  ARM-Linux   │  RISCV-Linux │  MIPS-Linux │  panes 5,6,7  (equal thirds)
+#  └──────────────┴──────────────┴─────────────┘
 #
 # Split sequence (-l N% gives the new pane N% of the pane being split):
-#   split-v 80% on 0.0  → 0=top(20%),  1=rest(80%)
-#   split-v 45% on 0.1  → 0=top(20%),  1=mid(44%),   2=bot(36%)
-#   split-h 67% on 0.0  → 0=tl(33%),   1=tr(67%),    2=mid, 3=bot
-#   split-h 50% on 0.1  → 0=tl(33%),   1=tm(33%),    2=tr(33%), 3=mid, 4=bot
-#   split-h 67% on 0.4  → ...,          4=bl(33%),    5=br(67%)
-#   split-h 50% on 0.5  → ...,          4=bl(33%),    5=bm(33%), 6=br(33%)
+#   split-v 80% on 0.0  → 0=top(20%),    1=rest(80%)
+#   split-v 45% on 0.1  → 0=top(20%),    1=mid(44%),    2=bot(36%)
+#   split-h 75% on 0.0  → 0=tl(25%),     1=tr(75%),     2=mid, 3=bot
+#   split-h 67% on 0.1  → 0=tl(25%),     1=tm1(25%),    2=tm2+tr(50%), 3=mid, 4=bot
+#   split-h 50% on 0.2  → 0=tl(25%),     1=tm1(25%),    2=tm2(25%), 3=tr(25%), 4=mid, 5=bot
+#   split-h 67% on 0.5  → ...,            5=bl(33%),     6=br(67%)
+#   split-h 50% on 0.6  → ...,            5=bl(33%),     6=bm(33%), 7=br(33%)
 
 # Kill any existing session
 tmux kill-session -t "$SESSION" 2>/dev/null || true
@@ -51,10 +52,11 @@ tmux new-session -d -s "$SESSION" -x "${COLUMNS:-220}" -y "${LINES:-55}"
 
 tmux split-window -v -t "$SESSION:0.0" -l 80%
 tmux split-window -v -t "$SESSION:0.1" -l 45%
-tmux split-window -h -t "$SESSION:0.0" -l 67%
-tmux split-window -h -t "$SESSION:0.1" -l 50%
-tmux split-window -h -t "$SESSION:0.4" -l 67%
-tmux split-window -h -t "$SESSION:0.5" -l 50%
+tmux split-window -h -t "$SESSION:0.0" -l 75%
+tmux split-window -h -t "$SESSION:0.1" -l 67%
+tmux split-window -h -t "$SESSION:0.2" -l 50%
+tmux split-window -h -t "$SESSION:0.5" -l 67%
+tmux split-window -h -t "$SESSION:0.6" -l 50%
 
 # Kill any stale QEMU processes that outlived a previous session.
 pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
@@ -63,32 +65,36 @@ pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
 pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5   # let the processes exit and release disk locks before QEMU restarts
 
-# Start ivshmem servers first; wait for all three sockets before launching guests.
+# Start ivshmem servers; wait for all four sockets before launching guests.
 tmux send-keys -t "$SESSION:0.0" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh"   Enter
 tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh" Enter
 tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-mips-freertos.sh"  Enter
+tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-stats.sh"          Enter
 
 ARM_SOCK="${IVSHMEM_ARM_FREERTOS_DIR:-/tmp/ivshmem-arm-freertos}/sock"
 RISCV_SOCK="${IVSHMEM_RISCV_FREERTOS_DIR:-/tmp/ivshmem-riscv-freertos}/sock"
 MIPS_SOCK="${IVSHMEM_MIPS_FREERTOS_DIR:-/tmp/ivshmem-mips-freertos}/sock"
+STATS_SOCK="${IVSHMEM_STATS_FREERTOS_DIR:-/tmp/ivshmem-stats-freertos}/sock"
 for _i in $(seq 1 60); do
-    if [[ -S "$ARM_SOCK"  ]] && ss -xl | grep -Fq "$ARM_SOCK"  && \
+    if [[ -S "$ARM_SOCK"   ]] && ss -xl | grep -Fq "$ARM_SOCK"   && \
        [[ -S "$RISCV_SOCK" ]] && ss -xl | grep -Fq "$RISCV_SOCK" && \
-       [[ -S "$MIPS_SOCK"  ]] && ss -xl | grep -Fq "$MIPS_SOCK"; then
+       [[ -S "$MIPS_SOCK"  ]] && ss -xl | grep -Fq "$MIPS_SOCK"  && \
+       [[ -S "$STATS_SOCK" ]] && ss -xl | grep -Fq "$STATS_SOCK"; then
         break
     fi
     sleep 0.5
 done
 
-tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh" Enter
-tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-arm-phase5.sh"            Enter
-tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
-tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter
+tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-arm-phase5.sh"            Enter
+tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
+tmux send-keys -t "$SESSION:0.7" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter
 
 # Wait for the guest shell to be ready, then run the hello binary.
 auto_login_and_run() {
     local pane="$1"
-    local hello_bin="$2"
+    shift
+    local cmds=("$@")
     local timeout=300
     local elapsed=0
 
@@ -120,7 +126,10 @@ auto_login_and_run() {
             tmux send-keys -t "$pane" "mount /mnt/pingpong" Enter
             _wait_prompt 30 || true
             sleep 0.5
-            tmux send-keys -t "$pane" "$hello_bin" Enter
+            for cmd in "${cmds[@]}"; do
+                tmux send-keys -t "$pane" "$cmd" Enter
+                sleep 1
+            done
             return 0
         fi
 
@@ -130,12 +139,16 @@ auto_login_and_run() {
     echo "WARNING: timed out waiting for shell prompt in pane $pane" >&2
 }
 
-auto_login_and_run "$SESSION:0.4" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   &
-auto_login_and_run "$SESSION:0.5" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
-auto_login_and_run "$SESSION:0.6" "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/hello-mips-linux && /tmp/hello-mips-linux"  &
+auto_login_and_run "$SESSION:0.5" \
+    "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
+    "/mnt/pingpong/freertos-showcase/hello-arm-linux" &
+auto_login_and_run "$SESSION:0.6" \
+    "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+auto_login_and_run "$SESSION:0.7" \
+    "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/hello-mips-linux && /tmp/hello-mips-linux" &
 
 # Focus FreeRTOS pane so FreeRTOS output is front-and-center on attach
-tmux select-pane -t "$SESSION:0.3"
+tmux select-pane -t "$SESSION:0.4"
 
 echo ""
 echo "=== Phase 5 showcase starting (session: $SESSION) ==="
