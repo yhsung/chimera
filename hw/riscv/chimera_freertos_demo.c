@@ -170,9 +170,10 @@ static void chimera_freertos_machine_init(MachineState *machine)
     have_links &= chimera_freertos_require_chardev(s->ivshmem_mips_freertos,
                                                    CHIMERA_FREERTOS_PROP_IVSHMEM_MIPS,
                                                    &mips_chr);
-    have_links &= chimera_freertos_require_chardev(s->ivshmem_stats_freertos,
-                                                   CHIMERA_FREERTOS_PROP_IVSHMEM_STATS,
-                                                   &stats_chr);
+    /* stats chardev is optional — skip IVSHMEM3 if not wired */
+    if (s->ivshmem_stats_freertos) {
+        stats_chr = qemu_chr_find(s->ivshmem_stats_freertos);
+    }
     if (!have_links) {
         exit(EXIT_FAILURE);
     }
@@ -246,11 +247,14 @@ static void chimera_freertos_machine_init(MachineState *machine)
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM2_MMIO].base,
         chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM2_SHMEM].base,
         CHIMERA_FREERTOS_IVSHMEM2_IRQ);
-    chimera_freertos_connect_ivshmem(
-        plic, stats_chr,
-        chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM3_MMIO].base,
-        chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM3_SHMEM].base,
-        CHIMERA_FREERTOS_IVSHMEM3_IRQ);
+
+    if (stats_chr) {
+        chimera_freertos_connect_ivshmem(
+            plic, stats_chr,
+            chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM3_MMIO].base,
+            chimera_freertos_memmap[CHIMERA_FREERTOS_IVSHMEM3_SHMEM].base,
+            CHIMERA_FREERTOS_IVSHMEM3_IRQ);
+    }
 
     if (machine->firmware) {
         riscv_load_firmware(machine->firmware, &firmware_load_addr, NULL);
