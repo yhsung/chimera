@@ -26,6 +26,8 @@
 #define HSOC_SENDER_ID HSOC_SENDER_ARM_LINUX
 #endif
 
+static void shm_read(void *dst, const volatile void *src, size_t n);
+
 static bool read_first_line(const char *path, char *buf, size_t buf_size)
 {
     FILE *file = fopen(path, "r");
@@ -88,12 +90,38 @@ static const char *find_ivshmem_resource(void)
             continue;
         }
 
-        if (stat(candidate_path, &st) == 0) {
-            strncpy(resource_path, candidate_path, sizeof(resource_path) - 1);
-            resource_path[sizeof(resource_path) - 1] = '\0';
-            closedir(devices_dir);
-            return resource_path;
+        if (stat(candidate_path, &st) != 0) {
+            continue;
         }
+
+        /*
+         * Map BAR2 and skip stats channels (identified by HSOC_STATS_MAGIC
+         * in the first 4 bytes). This prevents hello-arm-linux from picking
+         * the stats ivshmem-doorbell when ARM-Linux has multiple doorbells.
+         */
+        int fd = open(candidate_path, O_RDONLY | O_SYNC);
+        if (fd < 0) {
+            continue;
+        }
+        void *p = mmap(NULL, 4096, PROT_READ, MAP_SHARED, fd, 0);
+        close(fd);
+        if (p == MAP_FAILED) {
+            continue;
+        }
+        uint32_t magic;
+        shm_read(&magic, p, sizeof(magic));
+        __sync_synchronize();
+        munmap(p, 4096);
+
+        /* 0x53544154 = "STAT" = HSOC_STATS_MAGIC */
+        if (magic == 0x53544154U) {
+            continue;
+        }
+
+        strncpy(resource_path, candidate_path, sizeof(resource_path) - 1);
+        resource_path[sizeof(resource_path) - 1] = '\0';
+        closedir(devices_dir);
+        return resource_path;
     }
 
     closedir(devices_dir);
