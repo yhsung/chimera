@@ -15,7 +15,7 @@ TMP_SHM=$(mktemp)
 dd if=/dev/zero of="${TMP_SHM}" bs=1M count=64 status=none
 chmod 600 "${TMP_SHM}"
 
-OUTPUT=$(timeout 8 "${BINARY}" "${TMP_SHM}" 2>/dev/null | head -1 || true)
+OUTPUT=$(timeout 8 "${BINARY}" "${TMP_SHM}" 2>/dev/null | grep -m1 "SYSINFO" || true)
 rm -f "${TMP_SHM}"
 
 if echo "${OUTPUT}" | grep -qE '\[arm-linux\] SYSINFO #0 ld=[0-9]+\.[0-9]+ mf=[0-9]+M up=[0-9]+s'; then

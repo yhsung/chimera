@@ -29,7 +29,7 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
         echo "=== One-time setup complete ==="
     fi
 
-    # Always rebuild the FreeRTOS ELF and Linux hello binaries so source changes
+    # Always rebuild the FreeRTOS ELF and Linux syslog binaries so source changes
     # are picked up without manual intervention.
     echo "=== Building FreeRTOS showcase ==="
     scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
@@ -171,7 +171,7 @@ tmux select-pane -t "$SESSION:0.4"
 
 echo ""
 echo "=== Phase 5 showcase starting (session: $SESSION) ==="
-echo "    Guests will auto-login and run hello senders once booted."
+echo "    Guests will auto-login and run syslog daemons once booted."
 echo "    Navigate panes: Ctrl-b arrow keys"
 echo "    Attaching..."
 echo ""
