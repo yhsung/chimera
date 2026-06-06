@@ -132,6 +132,50 @@ Example log output:
 [2026-06-06T12:34:58Z] gen=2 arm=3 riscv=2 mips=1 tick=10.000000000
 ```
 
+### Stats periodic sync sequence
+
+```mermaid
+sequenceDiagram
+    participant F as FreeRTOS
+    participant S as IVSHMEM3 SHMEM<br/>(0x40000000)
+    participant A as ARM-Linux<br/>(linux-arm-stats)
+
+    Note over F,S: Initialization — once at task start
+    F->>S: magic = HSOC_STATS_MAGIC (volatile store)
+    F->>S: generation = 0 (volatile store)
+    Note over F,S: __sync_synchronize()
+
+    Note over S,A: Discovery — ARM-Linux scans PCI sysfs at startup
+    loop retry every 1 s, up to 30 s
+        A->>S: shm_read(magic)
+        Note over A: __sync_synchronize()
+        Note over A: magic == HSOC_STATS_MAGIC?
+    end
+    Note over A: BAR2 found — enter poll loop
+
+    loop Every 5 s  (stats_tick >= 5000 × 1 ms ticks)
+        F->>S: arm_count, riscv_count, mips_count, tick_sec, tick_nsec (volatile byte stores)
+        Note over F: __sync_synchronize()
+        F->>S: generation = generation + 1  (volatile store)
+        Note over F: __sync_synchronize()
+        Note over F: log "[freertos] stats snapshot written"
+    end
+
+    loop ARM-Linux polls every 2 s
+        A->>S: gen = shm.generation  (volatile read)
+        Note over A: __sync_synchronize()
+        alt gen != last_gen
+            A->>S: shm_read(whole struct)
+            Note over A: __sync_synchronize()
+            Note over A: verify magic == HSOC_STATS_MAGIC
+            A->>A: last_gen = gen
+            A->>A: log_snapshot() → /tmp/freertos-stats.log
+        else gen == last_gen
+            Note over A: no new snapshot — sleep(2 s)
+        end
+    end
+```
+
 ---
 
 ## Tmux Pane Layout
