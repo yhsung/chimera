@@ -57,16 +57,13 @@ FREERTOS_SRCS := \
 
 all: $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-riscv-demo.elf
 ifeq ($(HAVE_CC_ARM),)
-	$(warning CC_ARM=$(CC_ARM) not found — syslog-arm-linux and linux-arm-stats skipped)
+	$(warning CC_ARM=$(CC_ARM) not found — syslog-arm-linux, linux-arm-stats, bootlog-arm-linux, boot-collector skipped)
 endif
 ifeq ($(HAVE_CC_RISCV),)
-	$(warning CC_RISCV=$(CC_RISCV) not found — syslog-riscv-linux skipped)
+	$(warning CC_RISCV=$(CC_RISCV) not found — syslog-riscv-linux, bootlog-riscv-linux skipped)
 endif
 ifeq ($(HAVE_CC_MIPS),)
-	$(warning CC_MIPS=$(CC_MIPS) not found — syslog-mips-linux skipped)
-endif
-ifeq ($(HAVE_CC_ARM),)
-	$(warning CC_ARM=$(CC_ARM) not found — boot-collector and bootlog-arm-linux skipped)
+	$(warning CC_MIPS=$(CC_MIPS) not found — syslog-mips-linux, bootlog-mips-linux skipped)
 endif
 
 syslog-arm-linux: linux_syslog.c hello_proto.h
