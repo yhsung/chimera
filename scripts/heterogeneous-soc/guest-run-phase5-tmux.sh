@@ -9,9 +9,18 @@ ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf"
 cd "$REPO"
 
 if [[ -z "${SKIP_BUILD:-}" ]]; then
+    # Check whether the existing QEMU binary supports the expected machine
+    # properties — a stale binary will fail at runtime with "Property not found".
+    _qemu_build_valid() {
+        local qemu_riscv="${BUILD_DIR}/qemu-system-riscv64"
+        [[ -x "${qemu_riscv}" ]] || return 1
+        "${qemu_riscv}" -M chimera-riscv-freertos-demo,help 2>&1 | \
+            grep -q "ivshmem-stats-freertos" || return 1
+    }
+
     # One-time setup: Lima guest, disk images, and ivshmem server binary.
-    # Gated on ELF absence as a proxy; none of these need to re-run on every launch.
-    if [[ ! -f "$ELF" ]]; then
+    # Re-triggered when the ELF is absent or the QEMU binary is stale.
+    if [[ ! -f "$ELF" ]] || ! _qemu_build_valid; then
         echo "=== One-time setup ==="
         scripts/heterogeneous-soc/guest-install-lima-guest.sh
         scripts/heterogeneous-soc/guest-fetch-images.sh
