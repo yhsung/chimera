@@ -331,6 +331,11 @@ XMLEOF
         "${rootfs}/etc/systemd/system/multi-user.target.wants/avahi-daemon.service" \
         2>/dev/null || true
 
+    # ── Enable sshd (Debian unit is ssh.service) ──────────────────────────────
+    sudo ln -sf /lib/systemd/system/ssh.service \
+        "${rootfs}/etc/systemd/system/multi-user.target.wants/ssh.service" \
+        2>/dev/null || true
+
     _ok "Rootfs configured for ${arch} (tty=${tty})"
 }
 
