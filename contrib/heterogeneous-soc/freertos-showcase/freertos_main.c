@@ -4,6 +4,7 @@
 #include "task.h"
 
 #include "freertos_ivshmem_flat.h"
+#include "stats_proto.h"
 
 #define UART0_BASE 0x10000000UL
 #define UART0_THR 0x0
@@ -16,10 +17,19 @@
 #define IVSHMEM1_SHMEM 0x36000000UL
 #define IVSHMEM2_MMIO  0x3A000000UL
 #define IVSHMEM2_SHMEM 0x3B000000UL
+#define IVSHMEM3_MMIO  0x3F000000UL
+#define IVSHMEM3_SHMEM 0x40000000UL
 
 static struct freertos_ivshmem_link arm_link;
 static struct freertos_ivshmem_link riscv_link;
 static struct freertos_ivshmem_link mips_link;
+
+static volatile struct hsoc_stats_snapshot *stats_shmem =
+    (volatile struct hsoc_stats_snapshot *)IVSHMEM3_SHMEM;
+static uint32_t arm_count;
+static uint32_t riscv_count;
+static uint32_t mips_count;
+static uint32_t stats_tick;
 
 static void uart_putc(char ch)
 {
@@ -52,8 +62,25 @@ static void tick_to_timestamp(int64_t *ts_sec, int64_t *ts_nsec)
     *ts_nsec = (ticks % configTICK_RATE_HZ) * ns_per_tick;
 }
 
+static void write_stats_snapshot(void)
+{
+    int64_t ts_sec, ts_nsec;
+
+    stats_shmem->arm_count   = arm_count;
+    stats_shmem->riscv_count = riscv_count;
+    stats_shmem->mips_count  = mips_count;
+    tick_to_timestamp(&ts_sec, &ts_nsec);
+    stats_shmem->tick_sec  = ts_sec;
+    stats_shmem->tick_nsec = ts_nsec;
+    __sync_synchronize();
+    stats_shmem->generation = stats_shmem->generation + 1;
+    __sync_synchronize();
+    log_uart("[freertos] stats snapshot written\n");
+}
+
 static void maybe_service_link(struct freertos_ivshmem_link *link,
-                               const char *log_message)
+                               const char *log_message,
+                               uint32_t *count)
 {
     struct hsoc_hello_msg hello;
     int64_t ts_sec;
@@ -66,6 +93,7 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     tick_to_timestamp(&ts_sec, &ts_nsec);
     log_uart(log_message);
     freertos_ivshmem_send_ack(link, hello.seq, ts_sec, ts_nsec);
+    (*count)++;
 }
 
 static void diag_print_hex32(uint32_t v)
@@ -90,22 +118,31 @@ static void showcase_task(void *opaque)
     (void)opaque;
     uint32_t diag_count = 0;
 
-    freertos_ivshmem_init(&arm_link, IVSHMEM0_MMIO, IVSHMEM0_SHMEM,
-                          "arm-linux");
-    freertos_ivshmem_init(&riscv_link, IVSHMEM1_MMIO, IVSHMEM1_SHMEM,
-                          "riscv-linux");
-    freertos_ivshmem_init(&mips_link, IVSHMEM2_MMIO, IVSHMEM2_SHMEM,
-                          "mips-linux");
+    freertos_ivshmem_init(&arm_link,  IVSHMEM0_MMIO, IVSHMEM0_SHMEM, "arm-linux");
+    freertos_ivshmem_init(&riscv_link, IVSHMEM1_MMIO, IVSHMEM1_SHMEM, "riscv-linux");
+    freertos_ivshmem_init(&mips_link,  IVSHMEM2_MMIO, IVSHMEM2_SHMEM, "mips-linux");
+
+    stats_shmem->magic      = HSOC_STATS_MAGIC;
+    stats_shmem->generation = 0;
+    __sync_synchronize();
 
     log_uart("[freertos] showcase task started\n");
 
     for (;;) {
         maybe_service_link(&arm_link,
-                           "[freertos] received hello from arm-linux\n");
+                           "[freertos] received hello from arm-linux\n",
+                           &arm_count);
         maybe_service_link(&riscv_link,
-                           "[freertos] received hello from riscv-linux\n");
+                           "[freertos] received hello from riscv-linux\n",
+                           &riscv_count);
         maybe_service_link(&mips_link,
-                           "[freertos] received hello from mips-linux\n");
+                           "[freertos] received hello from mips-linux\n",
+                           &mips_count);
+
+        if (++stats_tick >= 5000) {
+            stats_tick = 0;
+            write_stats_snapshot();
+        }
 
         if (++diag_count >= 3000) {
             diag_count = 0;
