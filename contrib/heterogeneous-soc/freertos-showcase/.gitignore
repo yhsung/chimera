@@ -1,0 +1,6 @@
+# Built binaries — only source files are tracked
+freertos-riscv-demo.elf
+hello-arm-linux
+hello-riscv-linux
+hello-mips-linux
+linux-arm-stats
