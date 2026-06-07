@@ -48,7 +48,7 @@ if [[ "${RISCV_BOOT_MODE}" == "direct" ]]; then
     exec qemu-system-riscv64 \
         -machine "${PHASE3_QEMU_MACHINE}" \
         -cpu "${PHASE3_QEMU_CPU}" \
-        -m 2G -smp 4 \
+        -m 512M -smp 4 \
         -bios "${RISCV_OPENSBI_BIOS}" \
         -kernel "${RISCV_KERNEL_IMAGE}" \
         -initrd "${RISCV_INITRAMFS_COMBINED}" \
@@ -69,7 +69,7 @@ fi
 exec qemu-system-riscv64 \
     -machine "${PHASE3_QEMU_MACHINE}" \
     -cpu "${PHASE3_QEMU_CPU}" \
-    -m 2G -smp 4 \
+    -m 512M -smp 4 \
     -kernel "${RISCV_UBOOT_BIN}" \
     -chardev socket,id=ivshmem,path="${IVSHMEM_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem,vectors="${IVSHMEM_VECTORS}" \
