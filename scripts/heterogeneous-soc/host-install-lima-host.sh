@@ -74,8 +74,10 @@ _main() {
     echo "After starting the showcase, connect to guests from macOS:"
     echo "  chimera-ssh root@debian-arm64.local"
     echo ""
-    echo "NOTE: chimera-ssh / chimera-keyinject are available in this shell."
-    echo "      To persist across shells, add them to ~/.zshrc manually."
+    local script_rel
+    script_rel="$(realpath "$0" 2>/dev/null || echo "$0")"
+    echo "To make chimera-ssh / chimera-keyinject available, run:"
+    echo "  source ${script_rel}"
 }
 
 # Only run _main if executed, not sourced.
