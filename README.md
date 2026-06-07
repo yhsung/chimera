@@ -338,16 +338,20 @@ Host debian-mipsel
     UserKnownHostsFile /dev/null
 ```
 
-**Note:** The `Port` in `lima-qemu-dev` is a static placeholder — if Lima changes it (check with `limactl list`), either update it or rely on this shell wrapper instead:
+**Note:** The `Port` in `lima-qemu-dev` is a static placeholder — Lima assigns a
+random SSH port on each `limactl start`. The `chimera-ssh` function below resolves
+it automatically by using Lima's generated `ssh.config`:
 
 ```bash
-# ~/.zshrc helper — resolves Lima's dynamic SSH port automatically
+# Source the deployment script to get chimera-ssh in your current shell:
+source scripts/heterogeneous-soc/host-install-lima-host.sh
+
+# Or define it manually:
 chimera-ssh() {
   local ssh_config="$HOME/.lima/qemu-dev/ssh.config"
-  [ ! -f "$ssh_config" ] && { echo "Lima VM not running (no ssh.config)"; return 1; }
+  [[ -f "$ssh_config" ]] || { echo "Lima VM not running (no ssh.config)"; return 1; }
   ssh -F "$ssh_config" \
       -o ProxyCommand="ssh -F '$ssh_config' -W %h:%p lima-qemu-dev" \
-      -i "$HOME/.lima/_config/user" \
       -o PasswordAuthentication=no \
       -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile=/dev/null \
@@ -359,7 +363,11 @@ Usage: `chimera-ssh root@debian-arm64.local`
 
 **Key injection:** The showcase script automatically injects your macOS SSH
 public key into all guest disk images each time it runs (step 6.8), so
-`chimera-ssh` works out of the box.
+`chimera-ssh` works out of the box. If you need to re-inject keys manually:
+
+```bash
+chimera-keyinject   # also defined by sourcing host-install-lima-host.sh
+```
 
 > **Note:** The Lima SSH port (52704 above) can change across `limactl stop`/`start` cycles. Check the current value with `limactl list`.
 
