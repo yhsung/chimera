@@ -70,13 +70,15 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS to all five ivshmem servers simultaneously:
 
-| Link | MMIO base | SHMEM base | Direction |
-|---|---|---|---|
-| ARM ↔ FreeRTOS | `0x30000000` | `0x31000000` | bidirectional (HELLO/ACK) |
-| RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` | bidirectional (HELLO/ACK) |
-| MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | bidirectional (HELLO/ACK) |
-| Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | FreeRTOS write only (stats snapshot) |
-| Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 3 Linux guests + FreeRTOS → ARM collector (kmsg boot logs) |
+| Link | MMIO base | SHMEM base | Vectors | Direction |
+|---|---|---|---|---|
+| ARM ↔ FreeRTOS | `0x30000000` | `0x31000000` | 4 | bidirectional (HELLO/ACK) |
+| RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` | 4 | bidirectional (HELLO/ACK) |
+| MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | 4 | bidirectional (HELLO/ACK) |
+| Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | 4 | FreeRTOS write only (stats snapshot) |
+| Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | 3 Linux guests + FreeRTOS → ARM collector (kmsg boot logs) |
+
+**Vector usage:** Each doorbell ring encodes `(peer_id << 16) | vector_number` into the MMIO DOORBELL register. On the HELLO/ACK channels, vector 0 signals Linux→FreeRTOS and vector 1 signals FreeRTOS→Linux. On the boot-log channel, FreeRTOS rings vector 0 to wake the ARM-side collector. The stats channel is polled by ARM via a generation counter — no doorbell is used in practice.
 
 ---
 
