@@ -4,6 +4,25 @@ A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux
 
 ---
 
+## Chimera-Specific Code
+
+All custom code lives in a small surface area on top of upstream QEMU:
+
+| File | Purpose |
+|---|---|
+| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, four `ivshmem-flat` devices (3 HELLO/ACK + 1 stats) |
+| `include/hw/riscv/chimera_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
+| `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
+| `include/hw/misc/ivshmem-flat.h` | Device state and interface |
+| `contrib/heterogeneous-soc/freertos-showcase/` | FreeRTOS ELF and Linux syslog daemon binaries (wire protocol, build system) |
+| `scripts/heterogeneous-soc/` | All launch, build, and setup scripts |
+
+The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`; FreeRTOS uses it because bare-metal targets lack a PCI bus. Linux guests use the standard PCI `ivshmem-doorbell`.
+
+`CONFIG_CHIMERA_FREERTOS_DEMO` (`hw/riscv/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` for their respective targets.
+
+---
+
 ## Architecture
 
 ```

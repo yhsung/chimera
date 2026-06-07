@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 # guest-configure-getty-clear.sh
 #
-# Install a serial-getty@.service drop-in into each Debian guest qcow2 image
-# so the terminal is cleared before the login: prompt is displayed.
+# Prepend a screen-clear escape sequence (ESC[2J ESC[H) to /etc/issue in each
+# Debian guest qcow2 image, so the screen is blank by the time the login:
+# prompt appears. agetty writes /etc/issue to the TTY verbatim just before
+# printing the prompt, so this rides along on output agetty already produces.
 #
-# serial-getty@.service already sets StandardOutput=tty / TTYPath=/dev/%I, so
-# an ExecStartPre that writes to stdout goes directly to the serial console.
-# The ANSI sequences used: ESC[2J = erase display, ESC[H = cursor home.
+# An earlier version of this script installed a serial-getty@.service
+# ExecStartPre drop-in that wrote the escape sequence directly to the TTY
+# (StandardOutput=tty / TTYPath=/dev/%I). That spawns a process which opens
+# the serial TTY for writing — open() on a serial line blocks waiting for
+# carrier-detect, so the control process intermittently hung, hit
+# "start-pre operation timed out", got SIGTERM'd, and sent the unit into an
+# endless restart loop (journalctl: "Scheduled restart job, restart counter
+# is at N" / "Failed with result 'timeout'"). The screen looked "clean"
+# because it kept resetting, but the shell never stayed up long enough for
+# the daemon-launch automation to run. Piggy-backing on /etc/issue avoids
+# spawning anything that touches the TTY, so no such race exists.
 #
-# Safe to run repeatedly — overwrites the drop-in on each invocation.
+# Safe to run repeatedly — skips an already-prefixed /etc/issue, and removes
+# any stale ExecStartPre drop-in left behind by the old approach.
 # Requires: qemu-nbd (qemu-utils), nbd kernel module, sudo.  Linux only.
 set -euo pipefail
 
@@ -22,17 +33,10 @@ _ok()   { printf '\033[0;32m  ✓ %s\033[0m\n' "$*"; }
 _info() { printf '  %s\n' "$*"; }
 _skip() { printf '\033[0;33m  ↷ skip: %s\033[0m\n' "$*"; }
 
-DROPIN_DIR="etc/systemd/system/serial-getty@.service.d"
-DROPIN_NAME="clear-screen.conf"
+CLEAR_PREFIX=$'\033[2J\033[H'
+STALE_DROPIN="etc/systemd/system/serial-getty@.service.d/clear-screen.conf"
 
-# ExecStartPre runs with StandardOutput=tty inherited from the unit, so printf
-# writes to the serial console.  \033[2J clears the screen; \033[H homes the
-# cursor.  Double-backslash so the shell inside -c receives a single backslash.
-DROPIN_CONTENT='[Service]
-ExecStartPre=/bin/sh -c "printf \"\\033[2J\\033[H\""
-'
-
-install_getty_clear() {
+configure_issue_clear() {
     local disk="$1"
     local label="$2"
 
@@ -41,9 +45,6 @@ install_getty_clear() {
         return 0
     fi
 
-    local dest_path="${DROPIN_DIR}/${DROPIN_NAME}"
-
-    # Skip if the drop-in is already current.
     local nbd_dev="/dev/nbd0"
     local mnt
     mnt="$(mktemp -d)"
@@ -59,24 +60,23 @@ install_getty_clear() {
     sleep 0.3
     sudo mount "${nbd_dev}" "${mnt}"
 
-    if [[ -f "${mnt}/${dest_path}" ]] &&
-       [[ "$(sudo cat "${mnt}/${dest_path}")" == "${DROPIN_CONTENT}" ]]; then
-        sudo umount "${mnt}"
-        sudo qemu-nbd --disconnect "${nbd_dev}"
-        rmdir "${mnt}"
-        trap - RETURN
-        _skip "${label}: getty clear drop-in already current"
-        return 0
+    # Remove the stale ExecStartPre drop-in from the earlier (broken) approach
+    # — it sends the getty unit into a restart loop if left in place.
+    if [[ -f "${mnt}/${STALE_DROPIN}" ]]; then
+        sudo rm -f "${mnt}/${STALE_DROPIN}"
+        _info "${label}: removed stale getty drop-in that caused a restart loop"
     fi
 
-    sudo mkdir -p "${mnt}/${DROPIN_DIR}"
-    printf '%s' "${DROPIN_CONTENT}" | sudo tee "${mnt}/${dest_path}" > /dev/null
-    sudo umount "${mnt}"
-    sudo qemu-nbd --disconnect "${nbd_dev}"
-    rmdir "${mnt}"
-    trap - RETURN
+    local issue_path="${mnt}/etc/issue"
+    local current=""
+    [[ -f "${issue_path}" ]] && current="$(sudo cat "${issue_path}")"
 
-    _ok "${label}: getty clear drop-in installed ($(basename "${disk}"))"
+    if [[ "${current}" == "${CLEAR_PREFIX}"* ]]; then
+        _skip "${label}: /etc/issue already prefixed with screen-clear"
+    else
+        printf '%s%s' "${CLEAR_PREFIX}" "${current}" | sudo tee "${issue_path}" > /dev/null
+        _ok "${label}: screen-clear prefix installed in /etc/issue ($(basename "${disk}"))"
+    fi
 }
 
 sudo modprobe nbd max_part=0 2>/dev/null || true
@@ -87,6 +87,6 @@ pkill -f "qemu-system-riscv64.*riscv-phase5" 2>/dev/null || true
 pkill -f "qemu-system-mipsel.*run-chimera"   2>/dev/null || true
 sleep 0.5
 
-install_getty_clear "${ARM_DEBIAN_DISK}"   "arm"
-install_getty_clear "${RISCV_DEBIAN_DISK}" "riscv"
-install_getty_clear "${MIPS_DEBIAN_DISK}"  "mips"
+configure_issue_clear "${ARM_DEBIAN_DISK}"   "arm"
+configure_issue_clear "${RISCV_DEBIAN_DISK}" "riscv"
+configure_issue_clear "${MIPS_DEBIAN_DISK}"  "mips"

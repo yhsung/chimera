@@ -248,9 +248,12 @@ _step "Installing boot-log daemons into guest images"
 _exec bash "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
 _ok "Boot-log daemons installed"
 
-# ── Step 6.8: Install getty clear drop-in into guest disk images ─────────────
-# Clears the serial console (ESC[2J ESC[H) before the login: prompt so boot
-# messages don't clutter the screen and don't confuse the prompt detector.
+# ── Step 6.8: Configure pre-login screen clear in guest disk images ──────────
+# Prepends ESC[2J ESC[H to /etc/issue (which agetty prints just before the
+# login: prompt) so boot messages don't clutter the screen or confuse the
+# prompt detector. Deliberately does NOT use a serial-getty ExecStartPre
+# drop-in — writing to the TTY from a control process blocks on carrier-detect
+# and sends the getty unit into a restart loop (see script header for detail).
 
 _step "Configuring getty screen-clear in guest images"
 _exec bash "${SCRIPT_DIR}/guest-configure-getty-clear.sh"

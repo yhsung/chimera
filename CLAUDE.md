@@ -8,20 +8,7 @@ Chimera is a QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and
 
 ## Chimera-Specific Code
 
-All custom code lives in a small surface area on top of upstream QEMU:
-
-| File | Purpose |
-|---|---|
-| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, four `ivshmem-flat` devices (3 HELLO/ACK + 1 stats) |
-| `include/hw/riscv/chimera_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
-| `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
-| `include/hw/misc/ivshmem-flat.h` | Device state and interface |
-| `contrib/heterogeneous-soc/freertos-showcase/` | FreeRTOS ELF and Linux syslog daemon binaries (wire protocol, build system) |
-| `scripts/heterogeneous-soc/` | All launch, build, and setup scripts |
-
-The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`; FreeRTOS uses it because bare-metal targets lack a PCI bus. Linux guests use the standard PCI `ivshmem-doorbell`.
-
-`CONFIG_CHIMERA_FREERTOS_DEMO` (`hw/riscv/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` for their respective targets.
+See `README.md` → **Chimera-Specific Code** for the full file/purpose table, ivshmem-flat vs ivshmem-doorbell explanation, and Kconfig relationships.
 
 ## Architecture
 
@@ -47,79 +34,11 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run
 
 ## Building QEMU
 
-QEMU must be built inside the Lima VM (`qemu-dev`) because `ivshmem-server` requires Linux `eventfd`. Cross-compilation toolchains are also only available there.
-
-```bash
-# One-time: create Lima VM and install deps (runs apt-get inside the VM)
-scripts/heterogeneous-soc/guest-install-lima-guest.sh
-
-# Build QEMU + ivshmem-server (runs inside Lima)
-BUILD_DIR=$HOME/chimera-build-linux VM_SOURCE_DIR=$HOME/chimera-src \
-    scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
-```
-
-Internally this runs:
-```bash
-./configure --target-list=aarch64-softmmu,riscv64-softmmu,mipsel-softmmu --enable-debug
-ninja contrib/ivshmem-server/ivshmem-server contrib/ivshmem-client/ivshmem-client
-```
-
-`BUILD_DIR` defaults to `<repo>/build-linux` when the repo is under `/Users/` and writable, otherwise `$HOME/chimera-build-linux`. `common.sh` has the exact logic.
+See `README.md` → **Building QEMU** for build commands, configure flags, and `BUILD_DIR` logic.
 
 ## Building the FreeRTOS Showcase Binaries
 
-Cross-compilers (`aarch64-linux-gnu-gcc`, `riscv64-linux-gnu-gcc`, `mipsel-linux-gnu-gcc`, `riscv64-unknown-elf-gcc`) are **only available inside the Lima VM** — they are not present on macOS. Always build freertos-showcase binaries via Lima.
-
-**From macOS** (recommended — rsyncs source then builds):
-```bash
-CHIMERA_ROOT=/Users/yhsung/dev-projects/chimera \
-    limactl shell qemu-dev -- bash /Users/yhsung/dev-projects/chimera/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
-```
-
-**From inside Lima** (after `limactl shell qemu-dev`):
-```bash
-CHIMERA_ROOT=/Users/yhsung/dev-projects/chimera \
-    bash ~/chimera-src/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
-```
-
-Both commands rsync the current macOS source tree into `~/chimera-src` inside Lima before building, so they always pick up uncommitted or branch-local changes.
-
-Outputs (in `~/chimera-src/contrib/heterogeneous-soc/freertos-showcase/` inside Lima): `syslog-arm-linux`, `syslog-riscv-linux`, `syslog-mips-linux`, `linux-arm-stats`, `freertos-riscv-demo.elf`.
-
-The Makefile skips `syslog-*-linux` targets silently if the corresponding compiler is absent. `FREERTOS_KERNEL_DIR` defaults to `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel`.
-
-`FREERTOS_KERNEL_DIR` defaults to `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel`.
-
-## Running the Demo
-
-```bash
-scripts/heterogeneous-soc/guest-run-phase5-tmux.sh
-```
-
-On first run (no ELF present): does one-time Lima setup, disk image fetch, and ivshmem-server build. On every run: rebuilds FreeRTOS/Linux binaries, then opens a tmux session with eight panes (4 ivshmem-servers, 1 FreeRTOS, 1 ARM-Linux, 1 RISCV-Linux, 1 MIPS-Linux). Navigate with **Ctrl-b + arrow keys**.
-
-To launch components individually:
-```bash
-scripts/heterogeneous-soc/guest-start-ivshmem-server-arm-freertos.sh   # ARM channel
-scripts/heterogeneous-soc/guest-start-ivshmem-server-riscv-freertos.sh # RISCV channel
-scripts/heterogeneous-soc/guest-start-ivshmem-server-mips-freertos.sh  # MIPS channel
-scripts/heterogeneous-soc/guest-start-ivshmem-server-stats.sh          # Stats channel
-scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh           # FreeRTOS QEMU
-scripts/heterogeneous-soc/guest-run-arm-phase5.sh                      # ARM-Linux QEMU
-scripts/heterogeneous-soc/guest-run-riscv-phase5.sh                    # RISCV-Linux QEMU
-scripts/heterogeneous-soc/guest-run-chimera.sh                         # MIPS-Linux QEMU
-```
-
-The FreeRTOS machine requires all four ivshmem servers to be listening before it starts (the tmux script polls for the Unix sockets).
-
-**QEMU staleness enforcement:** Both `guest-run-chimera-showcase.sh` and
-`guest-run-phase5-tmux.sh` probe the built `qemu-system-riscv64` for expected
-machine properties (via `-M chimera-riscv-freertos-demo,help`) before
-declaring the build current. A stale binary built from an older commit will
-trigger a rebuild instead of failing at runtime with "Property not found".
-When adding new machine properties, no special action is needed — just add
-the property in C and reference it in the launch scripts; the probe will
-naturally detect staleness.
+See `README.md` → **Building the FreeRTOS Showcase Binaries** for cross-compiler requirements, build commands, and expected outputs.
 
 ## Naming: mipsel, not mips
 
