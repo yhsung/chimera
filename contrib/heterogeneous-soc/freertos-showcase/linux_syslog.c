@@ -99,10 +99,16 @@ static uint32_t read_cpu_pct_x100(void)
     unsigned long long total = user + nice + system + idle + iowait + irq + softirq + steal;
     unsigned long long busy_idle = idle + iowait;
 
+    /* First call has no baseline yet, so have_prev is false and pct_x100 stays 0. */
     uint32_t pct_x100 = 0;
     if (have_prev && total > prev_total) {
         unsigned long long dtotal = total - prev_total;
-        unsigned long long didle = busy_idle - prev_idle;
+        /* Clamp against underflow: aggregate idle/iowait counters can decrease
+         * between samples on some kernels (e.g. around CPU hotplug events),
+         * so guard both the subtraction and the dtotal - didle below. */
+        unsigned long long didle = (busy_idle >= prev_idle) ? (busy_idle - prev_idle) : 0;
+        if (didle > dtotal)
+            didle = dtotal;
         pct_x100 = (uint32_t)(10000ULL * (dtotal - didle) / dtotal);
     }
     have_prev = true;
