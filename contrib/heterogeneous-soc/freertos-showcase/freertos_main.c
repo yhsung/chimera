@@ -103,7 +103,7 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     (*count)++;
 }
 
-static void diag_print_hex32(uint32_t v)
+static void log_hex32_uart(uint32_t v)
 {
     static const char hex[] = "0123456789abcdef";
     char buf[11];
@@ -136,6 +136,47 @@ static void showcase_task(void *opaque)
 
     log_uart("[freertos] showcase task started\n");
 
+    /* ── Startup diagnostics ──────────────────────────────────────────────── */
+    {
+        log_uart("[diag] tick_rate_hz=");
+        log_hex32_uart(configTICK_RATE_HZ);
+        log_uart(" heap_free=");
+        log_hex32_uart((uint32_t)xPortGetFreeHeapSize());
+        log_uart("\n");
+
+        log_uart("[diag] uart_base=");
+        log_hex32_uart(UART0_BASE);
+        log_uart(" plic_sources=");
+        log_hex32_uart(21);
+        log_uart("\n");
+
+        log_uart("[diag] IVPOSITION:");
+        {
+            uint32_t ivp;
+            ivp = arm_link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
+            log_uart(" arm="); log_hex32_uart(ivp);
+            ivp = riscv_link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
+            log_uart(" riscv="); log_hex32_uart(ivp);
+            ivp = mips_link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
+            log_uart(" mips="); log_hex32_uart(ivp);
+            ivp = bootlog.link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
+            log_uart(" bootlog="); log_hex32_uart(ivp);
+        }
+        log_uart("\n");
+
+        log_uart("[diag] shmem bases: arm=");
+        log_hex32_uart(IVSHMEM0_SHMEM);
+        log_uart(" riscv=");
+        log_hex32_uart(IVSHMEM1_SHMEM);
+        log_uart(" mips=");
+        log_hex32_uart(IVSHMEM2_SHMEM);
+        log_uart(" stats=");
+        log_hex32_uart(IVSHMEM3_SHMEM);
+        log_uart(" bootlog=");
+        log_hex32_uart(IVSHMEM4_SHMEM);
+        log_uart("\n");
+    }
+
     for (;;) {
         maybe_service_link(&arm_link,
                            "[freertos] received hello from arm-linux\n",
@@ -155,18 +196,33 @@ static void showcase_task(void *opaque)
         if (++diag_count >= 3000) {
             diag_count = 0;
             log_uart("[diag] arm_flag=");
-            diag_print_hex32(arm_link.layout->linux_to_freertos.flag);
+            log_hex32_uart(arm_link.layout->linux_to_freertos.flag);
             log_uart(" arm_magic=");
-            diag_print_hex32(arm_link.layout->linux_to_freertos.msg.magic);
+            log_hex32_uart(arm_link.layout->linux_to_freertos.msg.magic);
             log_uart(" riscv_flag=");
-            diag_print_hex32(riscv_link.layout->linux_to_freertos.flag);
+            log_hex32_uart(riscv_link.layout->linux_to_freertos.flag);
             log_uart(" riscv_magic=");
-            diag_print_hex32(riscv_link.layout->linux_to_freertos.msg.magic);
+            log_hex32_uart(riscv_link.layout->linux_to_freertos.msg.magic);
             log_uart(" mips_flag=");
-            diag_print_hex32(mips_link.layout->linux_to_freertos.flag);
+            log_hex32_uart(mips_link.layout->linux_to_freertos.flag);
             log_uart(" mips_magic=");
-            diag_print_hex32(mips_link.layout->linux_to_freertos.msg.magic);
+            log_hex32_uart(mips_link.layout->linux_to_freertos.msg.magic);
             log_uart("\n");
+        }
+
+        /* Periodic heap/stack report every 10 seconds */
+        {
+            static uint32_t health_tick;
+            if (++health_tick >= 10000) {
+                health_tick = 0;
+                log_uart("[diag] heap_free=");
+                log_hex32_uart((uint32_t)xPortGetFreeHeapSize());
+                log_uart(" stack_hiwat=");
+                log_hex32_uart((uint32_t)uxTaskGetStackHighWaterMark(NULL));
+                log_uart(" uptime_s=");
+                log_hex32_uart((uint32_t)(xTaskGetTickCount() / configTICK_RATE_HZ));
+                log_uart("\n");
+            }
         }
 
         bootlog_tick(&bootlog);

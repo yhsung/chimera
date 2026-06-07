@@ -3,6 +3,7 @@
 #include "boot_log.h"
 
 extern void log_uart(const char *msg);
+extern void log_hex32_uart(uint32_t v);
 
 #define BOOTLOG_TIMEOUT_TICKS 600000  /* 600 s at 1 ms/tick */
 
@@ -44,10 +45,31 @@ int bootlog_tick(struct bootlog_monitor *m)
     uint32_t peer_id = m->header->collector_peer_id;
 
     if (peer_id == BOOTLOG_COLLECTOR_PEER_UNSET || peer_id > 0xFFFF) {
+        /* Collector not yet connected — log once per second */
+        if ((m->boot_tick % 1000) == 0) {
+            log_uart("[bootlog] waiting for collector (collector_peer_id still UNSET)\n");
+        }
         return 0;
     }
 
+    /* Collector just connected — log the peer ID once */
+    {
+        static uint8_t collector_logged;
+        if (!collector_logged) {
+            collector_logged = 1;
+            log_uart("[bootlog] collector connected, peer_id=");
+            log_hex32_uart(peer_id);
+            log_uart("\n");
+        }
+    }
+
     int all_done = 1;
+    static const char *guest_labels[] = {
+        [HSOC_GUEST_ARM_LINUX]   = "arm",
+        [HSOC_GUEST_RISCV_LINUX] = "riscv",
+        [HSOC_GUEST_MIPS_LINUX]  = "mips",
+        [HSOC_GUEST_FREERTOS]    = "freertos",
+    };
     for (int i = 0; i < (int)BOOTLOG_NUM_GUESTS; i++) {
         __sync_synchronize();
         if (m->header->guests[i].status != HSOC_BOOT_COMPLETE) {
@@ -61,6 +83,18 @@ int bootlog_tick(struct bootlog_monitor *m)
     }
 
     if (!all_done) {
+        /* Log remaining guests every 5 seconds */
+        if ((m->boot_tick % 5000) == 0) {
+            log_uart("[bootlog] waiting for guests:");
+            for (int i = 0; i < (int)BOOTLOG_NUM_GUESTS; i++) {
+                __sync_synchronize();
+                if (m->header->guests[i].status != HSOC_BOOT_COMPLETE) {
+                    log_uart(" ");
+                    log_uart(guest_labels[i]);
+                }
+            }
+            log_uart("\n");
+        }
         return 0;
     }
 
