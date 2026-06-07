@@ -78,7 +78,8 @@ _main() {
     echo "      To persist across shells, add them to ~/.zshrc manually."
 }
 
-# Only run _main if executed, not sourced
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+# Only run _main if executed, not sourced.
+# Portable check works in both bash and zsh.
+if ! (return 0 2>/dev/null); then
     _main "$@"
 fi
