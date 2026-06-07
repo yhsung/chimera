@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-Chimera is a QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/tmp/freertos-stats.log`.
+Chimera is a QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/var/log/chimera-log/chimera-cross-domain.log`.
 
 ## Chimera-Specific Code
 
@@ -113,7 +113,7 @@ limactl shell qemu-dev -- <command>
 limactl shell qemu-dev -- tmux capture-pane -p -t freertos-showcase:0.6 | tail -50
 
 # Send a command to a running guest pane
-limactl shell qemu-dev -- tmux send-keys -t freertos-showcase:0.6 "ls /var/log/boot-logs/" Enter
+limactl shell qemu-dev -- tmux send-keys -t freertos-showcase:0.6 "ls /var/log/chimera-log/boot-log/" Enter
 ```
 
 ### Accessing guest serial consoles (via chimera-ssh)
@@ -124,7 +124,7 @@ limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHo
 
 ### Getting boot logs from ARM guest
 ```bash
-limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost 'ls -la /var/log/boot-logs/'
+limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost 'ls -la /var/log/chimera-log/boot-log/'
 ```
 
 ## Key Environment Variables

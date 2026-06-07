@@ -70,7 +70,6 @@ syslog-arm-linux: linux_syslog.c hello_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) \
 	  -DHSOC_SENDER_LABEL='"arm-linux"' \
 	  -DHSOC_SENDER_ID=HSOC_SENDER_ARM_LINUX \
-	  -DHSOC_LOG_FILE='"/var/log/chimera-log/chimera-cross-domain.log"' \
 	  -o $@ linux_syslog.c
 
 linux-arm-stats: linux_stats.c stats_proto.h

@@ -35,9 +35,9 @@ messages to a bare-metal RISC-V FreeRTOS firmware over ivshmem shared memory.
 | File | Targets | Purpose |
 |---|---|---|
 | `linux_syslog.c` | `syslog-arm-linux` / `syslog-riscv-linux` / `syslog-mips-linux` | Reads `/proc/loadavg`, `/proc/meminfo`, `/proc/uptime`, writes a `hsoc_hello_msg` to ivshmem BAR2, waits for FreeRTOS ACK, repeats on configurable interval (default 5 s, `SYSLOG_INTERVAL_SEC` env var) |
-| `linux_stats.c` | `linux-arm-stats` (ARM only) | Polls `hsoc_stats_snapshot` generation counter on the stats ivshmem channel, logs each new snapshot to `/tmp/freertos-stats.log` (or `FREERTOS_STATS_LOG` env var) |
+| `linux_stats.c` | `linux-arm-stats` (ARM only) | Polls `hsoc_stats_snapshot` generation counter on the stats ivshmem channel, logs each new snapshot to `/var/log/chimera-log/chimera-cross-domain.log` (or `FREERTOS_STATS_LOG` env var) |
 | `bootlog_writer.c` | `bootlog-arm-linux` / `bootlog-riscv-linux` / `bootlog-mips-linux` | Opens `/dev/kmsg`, writes kernel log lines into the guest's 1 MiB boot-log slot; ARM variant additionally reads `IVPOSITION` from BAR0 and writes `collector_peer_id` |
-| `boot_collector.c` | `boot-collector` (ARM only) | Polls boot-log header generation counter every 2 s, harvests completed guest slots to `/var/log/boot-logs/guest-{arm,riscv,mips,freertos}.log` |
+| `boot_collector.c` | `boot-collector` (ARM only) | Polls boot-log header generation counter every 2 s, harvests completed guest slots to `/var/log/chimera-log/boot-log/guest-{arm,riscv,mips,freertos}.log` |
 
 ### Build & Test
 

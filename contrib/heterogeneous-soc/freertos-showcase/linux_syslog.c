@@ -28,12 +28,6 @@
 #define HSOC_SENDER_ID HSOC_SENDER_ARM_LINUX
 #endif
 
-/* Optional cross-domain log file, set via -DHSOC_LOG_FILE at build time.
- * Currently used only by syslog-arm-linux. */
-#ifdef HSOC_LOG_FILE
-static FILE *cross_log_file;
-#endif
-
 static bool read_first_line(const char *path, char *buf, size_t n)
 {
     FILE *f = fopen(path, "r");
@@ -222,18 +216,6 @@ static int main_loop(struct hsoc_layout *shm, unsigned int interval)
                    (long long)ack.ts_sec, (long long)ack.ts_nsec,
                    hello_count, ack_count);
             fflush(stdout);
-#ifdef HSOC_LOG_FILE
-            if (cross_log_file) {
-                fprintf(cross_log_file, "[%s] SYSINFO #%" PRIu32 " %s\n",
-                        HSOC_SENDER_LABEL, seq, msg.text);
-                fprintf(cross_log_file,
-                        "[%s] ACK   #%" PRIu32 " freertos_tick=%lld.%09lld  [hello=%" PRIu32 " ack=%" PRIu32 "]\n",
-                        HSOC_SENDER_LABEL, ack.seq,
-                        (long long)ack.ts_sec, (long long)ack.ts_nsec,
-                        hello_count, ack_count);
-                fflush(cross_log_file);
-            }
-#endif
         }
 
         seq++;
@@ -254,18 +236,6 @@ int main(int argc, char *argv[])
     int interval_val = interval_str ? atoi(interval_str) : 0;
     unsigned int interval = (interval_val >= 1) ? (unsigned int)interval_val : 5;
 
-#ifdef HSOC_LOG_FILE
-    cross_log_file = fopen(HSOC_LOG_FILE, "a");
-    if (cross_log_file) {
-        printf("[%s] logging cross-domain sync to %s\n",
-               HSOC_SENDER_LABEL, HSOC_LOG_FILE);
-        fflush(stdout);
-    } else {
-        fprintf(stderr, "[%s] warning: cannot open %s: %s\n",
-                HSOC_SENDER_LABEL, HSOC_LOG_FILE, strerror(errno));
-    }
-#endif
-
     int fd = open(bar2_path, O_RDWR | O_SYNC);
     if (fd < 0) { perror("open BAR2"); return 1; }
 
@@ -280,8 +250,5 @@ int main(int argc, char *argv[])
     int rc = main_loop(shm, interval);
     munmap(shm, HSOC_BAR2_SIZE);
     close(fd);
-#ifdef HSOC_LOG_FILE
-    if (cross_log_file) fclose(cross_log_file);
-#endif
     return rc;
 }

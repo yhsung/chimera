@@ -149,7 +149,7 @@ int main(int argc, char *argv[])
 {
     const char *log_path = getenv("FREERTOS_STATS_LOG");
     if (!log_path) {
-        log_path = "/tmp/freertos-stats.log";
+        log_path = "/var/log/chimera-log/chimera-cross-domain.log";
     }
 
     volatile struct hsoc_stats_snapshot *shm;
@@ -174,6 +174,24 @@ int main(int argc, char *argv[])
     if (!shm) {
         fprintf(stderr, "[stats] could not find stats ivshmem BAR2\n");
         return 1;
+    }
+
+    /* Ensure parent directory exists */
+    {
+        char parent[PATH_MAX];
+        size_t len = strlen(log_path);
+        if (len > 0 && len < sizeof(parent)) {
+            memcpy(parent, log_path, len);
+            parent[len] = '\0';
+            char *slash = strrchr(parent, '/');
+            if (slash && slash != parent) {
+                *slash = '\0';
+                if (mkdir(parent, 0755) != 0 && errno != EEXIST) {
+                    perror(parent);
+                    return 1;
+                }
+            }
+        }
     }
 
     FILE *log = fopen(log_path, "a");

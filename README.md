@@ -1,6 +1,6 @@
 # Chimera — Heterogeneous SoC Demo
 
-A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux (logged to `/tmp/freertos-stats.log`), and a fifth boot-log channel collects kernel boot logs from all guests into `/var/log/boot-logs/` on ARM-Linux.
+A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux (logged to `/var/log/chimera-log/chimera-cross-domain.log`), and a fifth boot-log channel collects kernel boot logs from all guests into `/var/log/chimera-log/boot-log/` on ARM-Linux.
 
 ---
 
@@ -32,7 +32,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
  │  QEMU virt (gic-ver.=3) │  IVSHMEM0_SHMEM=0x31000000     │  QEMU chimera-riscv-freertos-demo│
  │                         │◄── ivshmem-stats-freertos ────  │                                  │
  │  linux-arm-stats →      │  /tmp/ivshmem-stats-freertos/  │  Polls all three channels every  │
- │  /tmp/freertos-stats.log│  IVSHMEM3_SHMEM=0x40000000     │  1 ms; sends ACK with FreeRTOS   │
+ │  /var/log/chimera-log/chimera-cross-domain.log│  IVSHMEM3_SHMEM=0x40000000     │  1 ms; sends ACK with FreeRTOS   │
  └─────────────────────────┘                                │  tick timestamp; writes stats    │
                                                             │  snapshot every 5 s              │
  ┌─────────────────────────┐      ivshmem-riscv-freertos    │                                  │
@@ -133,7 +133,7 @@ sequenceDiagram
     end
 
     Note over COL: generation changed: 0 → 1
-    COL->>SHM: read 4 guest slots → /var/log/boot-logs/guest-*.log
+    COL->>SHM: read 4 guest slots → /var/log/chimera-log/boot-log/guest-*.log
 ```
 
 ---
@@ -192,7 +192,7 @@ sequenceDiagram
 
 ### Stats snapshot (`struct hsoc_stats_snapshot`, `stats_proto.h`)
 
-FreeRTOS writes a stats snapshot into IVSHMEM3 every 5 seconds (5000 1-ms ticks). ARM-Linux runs `linux-arm-stats` which polls the corresponding PCI BAR2 every 2 seconds and appends new snapshots to `/tmp/freertos-stats.log`.
+FreeRTOS writes a stats snapshot into IVSHMEM3 every 5 seconds (5000 1-ms ticks). ARM-Linux runs `linux-arm-stats` which polls the corresponding PCI BAR2 every 2 seconds and appends new snapshots to `/var/log/chimera-log/chimera-cross-domain.log`.
 
 | Field | Type | Description |
 |---|---|---|
@@ -249,7 +249,7 @@ sequenceDiagram
             Note over A: __sync_synchronize()
             Note over A: verify magic == HSOC_STATS_MAGIC
             A->>A: last_gen = gen
-            A->>A: log_snapshot() → /tmp/freertos-stats.log
+            A->>A: log_snapshot() → /var/log/chimera-log/chimera-cross-domain.log
         else gen == last_gen
             Note over A: no new snapshot — sleep(2 s)
         end
@@ -280,7 +280,7 @@ sequenceDiagram
 └────────────────┴────────────────┴─────────────────┘
 ```
 
-Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their daemons once the guest boots. The syslog daemons (`syslog-{arm,riscv,mips}-linux`) are pre-installed into each guest's `/usr/local/bin/` by `guest-install-syslog-to-guests.sh` and run directly from the guest filesystem. In pane 5, `linux-arm-stats` runs in the background before `syslog-arm-linux` starts; stats are appended to `/tmp/freertos-stats.log` inside the ARM guest.
+Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their daemons once the guest boots. The syslog daemons (`syslog-{arm,riscv,mips}-linux`) are pre-installed into each guest's `/usr/local/bin/` by `guest-install-syslog-to-guests.sh` and run directly from the guest filesystem. In pane 5, `linux-arm-stats` runs in the background before `syslog-arm-linux` starts; stats are appended to `/var/log/chimera-log/chimera-cross-domain.log` inside the ARM guest.
 
 ---
 
@@ -558,7 +558,7 @@ contrib/heterogeneous-soc/
     hello_proto.h             — HELLO/ACK wire protocol (sender IDs, message structs)
     stats_proto.h             — stats channel protocol (hsoc_stats_snapshot struct)
     linux_syslog.c            — sysinfo logging daemon (ARM, RISCV, and MIPS, compiled separately); reads /proc/loadavg, /proc/meminfo, /proc/uptime and sends over ivshmem
-    linux_stats.c             — ARM-Linux stats poller: reads snapshot every 2 s, logs to /tmp/freertos-stats.log
+    linux_stats.c             — ARM-Linux stats poller: reads snapshot every 2 s, logs to /var/log/chimera-log/chimera-cross-domain.log
     freertos_main.c           — FreeRTOS task: polls all three channels, sends ACK, writes stats every 5 s
     freertos_ivshmem_flat.c   — ivshmem poll/send helpers (volatile byte access)
     freertos_ivshmem_flat.h
