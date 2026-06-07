@@ -2,8 +2,8 @@
 # shellcheck disable=SC2154
 #
 # One-shot deployment of the Chimera Lima VM on macOS.
-# Source this script to also get chimera-ssh / chimera-keyinject in your
-# current shell:
+# Source this script to also get chimera-ssh / chimera-scp / chimera-keyinject
+# in your current shell:
 #
 #   source scripts/heterogeneous-soc/host-install-lima-host.sh
 
@@ -19,6 +19,16 @@ chimera-ssh() {
   local ssh_config="${HOME}/.lima/${LIMA_NAME}/ssh.config"
   [[ -f "${ssh_config}" ]] || { echo "Lima VM not running (no ssh.config)"; return 1; }
   ssh -F "${ssh_config}" \
+      -o ProxyCommand="ssh -F '${ssh_config}' -W %h:%p lima-${LIMA_NAME}" \
+      -o PasswordAuthentication=no \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      "$@"
+}
+chimera-scp() {
+  local ssh_config="${HOME}/.lima/${LIMA_NAME}/ssh.config"
+  [[ -f "${ssh_config}" ]] || { echo "Lima VM not running (no ssh.config)"; return 1; }
+  scp -F "${ssh_config}" \
       -o ProxyCommand="ssh -F '${ssh_config}' -W %h:%p lima-${LIMA_NAME}" \
       -o PasswordAuthentication=no \
       -o StrictHostKeyChecking=no \
@@ -75,7 +85,7 @@ _main() {
     echo ""
     local script_rel
     script_rel="$(realpath "$0" 2>/dev/null || echo "$0")"
-    echo "To make chimera-ssh / chimera-keyinject available, run:"
+    echo "To make chimera-ssh / chimera-scp / chimera-keyinject available, run:"
     echo "  source ${script_rel}"
 }
 
