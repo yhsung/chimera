@@ -15,7 +15,7 @@
 
 #include "bootlog_proto.h"
 
-#define COLLECT_LOG_DIR      "/var/log/boot-logs"
+#define COLLECT_LOG_DIR      "/var/log/chimera-log/boot-log"
 #define POLL_INTERVAL_US     2000000  /* 2 seconds */
 
 static const char *guest_names[] = {
@@ -168,6 +168,24 @@ int main(int argc, char *argv[])
         fprintf(stderr, "[boot-collector] bad magic 0x%08" PRIx32 "\n",
                 header->magic);
         return 1;
+    }
+
+    /* Ensure parent directory exists before creating the leaf */
+    {
+        char parent[PATH_MAX];
+        size_t len = strlen(COLLECT_LOG_DIR);
+        if (len > 0 && len < sizeof(parent)) {
+            memcpy(parent, COLLECT_LOG_DIR, len);
+            parent[len] = '\0';
+            char *slash = strrchr(parent, '/');
+            if (slash && slash != parent) {
+                *slash = '\0';
+                if (mkdir(parent, 0755) != 0 && errno != EEXIST) {
+                    perror(parent);
+                    return 1;
+                }
+            }
+        }
     }
 
     if (mkdir(COLLECT_LOG_DIR, 0755) != 0 && errno != EEXIST) {
