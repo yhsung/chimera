@@ -256,6 +256,60 @@ sequenceDiagram
     end
 ```
 
+### `linux_stats.c` lifecycle (ARM-Linux side)
+
+A focused view of the code in `contrib/heterogeneous-soc/freertos-showcase/linux_stats.c`, showing the two startup paths (direct BAR2 path vs. PCI sysfs auto-discovery) and the main poll loop with explicit volatile byte copies:
+
+```mermaid
+sequenceDiagram
+    participant ST as linux-arm-stats (linux_stats.c)
+    participant SYS as PCI Sysfs
+    participant SHM as Stats Shared Memory (BAR2)
+    participant LOG as chimera-cross-domain.log
+
+    Note over ST: main() — startup
+
+    alt argv[1] provided
+        Note over ST: Direct BAR2 path (manual test)
+        ST->>ST: open(argv[1], O_RDONLY|O_SYNC) + mmap
+    else auto-discovery: find_stats_shm()
+        Note over ST: IVSHMEM_SYSFS_ROOT or /sys/bus/pci/devices
+        loop retry every 1 s, up to 30 s
+            ST->>SYS: scan each entry */vendor for 0x1af4
+            Note over ST: [found] mmap BAR2 of matching ivshmem device
+            ST->>SHM: shm_read(&magic, p, sizeof(magic))
+            Note over ST: volatile byte loop (no memcpy)
+            Note over ST: __sync_synchronize()
+            Note over ST: magic == HSOC_STATS_MAGIC?
+        end
+    end
+
+    Note over ST: BAR2 found — log file setup
+
+    ST->>ST: ensure parent dir exists (mkdir)
+    ST->>LOG: fopen(log_path, "a")
+    Note over ST: last_gen = 0
+
+    loop main loop: poll every 2 s
+        ST->>SHM: gen = generation (volatile read)
+        Note over ST: __sync_synchronize()
+
+        alt gen != last_gen
+            ST->>SHM: shm_read(&snap, shm, sizeof(snap))
+            Note over ST: explicit volatile byte loop
+            Note over ST: — avoids NEON SIGBUS on non-cacheable BAR2
+            Note over ST: __sync_synchronize()
+            Note over ST: verify snap.magic == HSOC_STATS_MAGIC
+            ST->>ST: last_gen = gen
+            ST->>LOG: log_snapshot():
+            Note over LOG: "[2026-06-06T12:34:56Z] gen=1 arm=3 riscv=2 mips=1 tick=10.000000000"
+            Note over ST: fflush(log)
+        else gen == last_gen
+            Note over ST: sleep(2) — no new snapshot
+        end
+    end
+```
+
 ---
 
 ## Tmux Pane Layout
