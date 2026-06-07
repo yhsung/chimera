@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define HSOC_HELLO_MAGIC 0x48454c4fU
-#define HSOC_PROTO_VERSION 1U
+#define HSOC_PROTO_VERSION 2U
 #define HSOC_TEXT_LEN 64U
 
 enum hsoc_msg_type {
@@ -27,6 +27,8 @@ struct hsoc_hello_msg {
     uint32_t sender_id;
     int64_t ts_sec;
     int64_t ts_nsec;
+    uint32_t cpu_pct_x100;       /* aggregate CPU busy %, x100 fixed-point (1234 = 12.34%) */
+    uint32_t mem_used_pct_x100;  /* used-memory %, x100 fixed-point */
     char text[HSOC_TEXT_LEN];
 };
 
