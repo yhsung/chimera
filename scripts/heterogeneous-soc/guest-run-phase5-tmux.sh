@@ -204,6 +204,7 @@ auto_login_and_run() {
 
 auto_login_and_run "$SESSION:0.6" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
+    "syslog-arm-linux &" \
     "bootlog-arm-linux &" \
     "boot-collector" &
 auto_login_and_run "$SESSION:0.7" \

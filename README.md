@@ -274,8 +274,10 @@ Example `avahi-browse -at` output once all guests are up:
 ping debian-arm64.local
 ping debian-riscv64.local
 ping debian-mipsel.local
+```
 
-# SSH into any guest (no password)
+### SSH into any guest (no password)
+```bash
 ssh root@debian-arm64.local
 ssh root@debian-riscv64.local
 ssh root@debian-mipsel.local
