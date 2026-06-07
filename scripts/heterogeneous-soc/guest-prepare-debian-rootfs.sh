@@ -148,11 +148,15 @@ MODS
 
         # Append architecture-specific block device drivers so the initrd can
         # find the root disk.  ARM/RISCV use virtio-blk-pci; MIPS uses the
-        # Malta board's native PIIX4 IDE (ata_piix) because virtio-pci does
-        # not enumerate correctly on the Malta machine.
+        # Malta board's native PIIX4 IDE (ata_piix) for the root disk because
+        # virtio-pci does not enumerate correctly on the Malta machine for
+        # the disk controller.  However the network is still on virtio-net-pci,
+        # so the initrd must also pull in virtio_pci + virtio_net or the
+        # interface never comes up (the kernel can't enumerate the PCI virtio
+        # device until those modules are loaded).
         local block_driver
         case "${target_arch}" in
-            mipsel) block_driver="ata_piix" ;;
+            mipsel) block_driver="ata_piix virtio_pci virtio_net" ;;
             *)      block_driver="virtio_pci virtio_blk virtio_mmio" ;;
         esac
         for d in ${block_driver}; do
