@@ -3,7 +3,7 @@
 /*
  * log_uart is defined in freertos_main.c; used here for diagnostic output.
  */
-extern void log_uart(const char *msg);
+extern void log_uart(uint32_t level, const char *msg);
 
 /*
  * Volatile byte helpers prevent GCC's loop-invariant code motion (LICM) from
@@ -16,7 +16,7 @@ extern void log_uart(const char *msg);
  * fields are not — they need the same treatment.
  */
 
-static void log_hex32(uint32_t v)
+static void log_hex32(uint32_t level, uint32_t v)
 {
     static const char hex[] = "0123456789abcdef";
     char buf[11];
@@ -30,7 +30,7 @@ static void log_hex32(uint32_t v)
     buf[8] = hex[(v >> 4) & 0xf];
     buf[9] = hex[v & 0xf];
     buf[10] = '\0';
-    log_uart(buf);
+    log_uart(level, buf);
 }
 
 static void shmem_read(void *dst, const volatile void *src, uint32_t n)
@@ -89,9 +89,9 @@ int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
         return 0;
     }
 
-    log_uart("[diag] flag=1 on ");
-    log_uart(link->name);
-    log_uart("\n");
+    log_uart(HSOC_LOG_VERBOSE, "[diag] flag=1 on ");
+    log_uart(HSOC_LOG_VERBOSE, link->name);
+    log_uart(HSOC_LOG_VERBOSE, "\n");
 
     __sync_synchronize();
     shmem_read(msg, &link->layout->linux_to_freertos.msg, sizeof(*msg));
@@ -101,13 +101,13 @@ int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
     if (msg->magic != HSOC_HELLO_MAGIC ||
         msg->version != HSOC_PROTO_VERSION ||
         msg->msg_type != HSOC_MSG_HELLO) {
-        log_uart("[diag] validation failed: magic=");
-        log_hex32(msg->magic);
-        log_uart(" ver=");
-        log_hex32(msg->version);
-        log_uart(" type=");
-        log_hex32(msg->msg_type);
-        log_uart("\n");
+        log_uart(HSOC_LOG_ERROR, "[diag] validation failed: magic=");
+        log_hex32(HSOC_LOG_ERROR, msg->magic);
+        log_uart(HSOC_LOG_ERROR, " ver=");
+        log_hex32(HSOC_LOG_ERROR, msg->version);
+        log_uart(HSOC_LOG_ERROR, " type=");
+        log_hex32(HSOC_LOG_ERROR, msg->msg_type);
+        log_uart(HSOC_LOG_ERROR, "\n");
         return 0;
     }
 

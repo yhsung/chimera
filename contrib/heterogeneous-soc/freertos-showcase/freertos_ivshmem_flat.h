@@ -10,6 +10,14 @@
 #define FREERTOS_IVSHMEM_IVPOSITION 0x8
 #define FREERTOS_IVSHMEM_DOORBELL 0xc
 
+/* Log severity levels for log_uart / log_hex32_uart */
+enum hsoc_log_level {
+    HSOC_LOG_VERBOSE = 0,
+    HSOC_LOG_INFO    = 1,
+    HSOC_LOG_WARN    = 2,
+    HSOC_LOG_ERROR   = 3,
+};
+
 struct freertos_ivshmem_link {
     volatile uint32_t *mmio_base;
     struct hsoc_layout *layout;

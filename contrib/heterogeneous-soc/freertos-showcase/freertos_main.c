@@ -8,6 +8,12 @@
 #include "bootlog_proto.h"
 #include "boot_log.h"
 
+/* Minimum log severity for output. Messages below this level are suppressed.
+ * Override at build time with -DFREERTOS_LOG_LEVEL=HSOC_LOG_VERBOSE etc. */
+#ifndef FREERTOS_LOG_LEVEL
+#define FREERTOS_LOG_LEVEL HSOC_LOG_INFO
+#endif
+
 #define UART0_BASE 0x10000000UL
 #define UART0_THR 0x0
 #define UART0_LSR 0x5
@@ -47,16 +53,96 @@ static void uart_putc(char ch)
     *thr = (uint8_t)ch;
 }
 
-void log_uart(const char *msg)
+static char *utoa_dec(char *buf, uint32_t val)
 {
+    char tmp[12];
+    int i, j;
+
+    if (val == 0) {
+        tmp[0] = '0';
+        i = 1;
+    } else {
+        i = 0;
+
+        while (val > 0) {
+            tmp[i++] = '0' + (val % 10);
+            val /= 10;
+        }
+    }
+
+    for (j = 0; j < i; j++) {
+        buf[j] = tmp[i - 1 - j];
+    }
+
+    buf[j] = '\0';
+    return buf + j;
+}
+
+void log_uart(uint32_t level, const char *msg)
+{
+    char prefix[40];
+    TickType_t ticks;
+    uint32_t msec;
+    char *p;
+    const char *m;
+    const char *tag;
+
+    /* Suppress messages below the configured log level */
+    if (level < FREERTOS_LOG_LEVEL) {
+        return;
+    }
+
+    switch (level) {
+    case HSOC_LOG_ERROR:   tag = "E"; break;
+    case HSOC_LOG_WARN:    tag = "W"; break;
+    case HSOC_LOG_VERBOSE: tag = "V"; break;
+    default:               tag = "I"; break;
+    }
+
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
+        ticks = xTaskGetTickCount();
+    } else {
+        ticks = 0;
+    }
+
+    msec = (ticks % configTICK_RATE_HZ) * 1000U / configTICK_RATE_HZ;
+
+    p = prefix;
+    p[0] = '[';
+    p = utoa_dec(p + 1, ticks / configTICK_RATE_HZ);
+    p[0] = '.';
+    p[1] = '0' + (msec / 100) % 10;
+    p[2] = '0' + (msec / 10) % 10;
+    p[3] = '0' + msec % 10;
+    p[4] = ']';
+    p[5] = ' ';
+    p[6] = '[';
+    p[7] = tag[0];
+    p[8] = ']';
+    p[9] = ' ';
+    p[10] = '\0';
+
+    bootlog_write(&bootlog, prefix);
     bootlog_write(&bootlog, msg);
 
-    while (*msg != '\0') {
-        if (*msg == '\n') {
+    p = prefix;
+
+    while (*p != '\0') {
+        if (*p == '\n') {
             uart_putc('\r');
         }
 
-        uart_putc(*msg++);
+        uart_putc(*p++);
+    }
+
+    m = msg;
+
+    while (*m != '\0') {
+        if (*m == '\n') {
+            uart_putc('\r');
+        }
+
+        uart_putc(*m++);
     }
 }
 
@@ -82,7 +168,7 @@ static void write_stats_snapshot(void)
     __sync_synchronize();
     stats_shmem->generation = stats_shmem->generation + 1;
     __sync_synchronize();
-    log_uart("[freertos] stats snapshot written\n");
+    log_uart(HSOC_LOG_INFO, "[freertos] stats snapshot written\n");
 }
 
 static void maybe_service_link(struct freertos_ivshmem_link *link,
@@ -98,12 +184,12 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     }
 
     tick_to_timestamp(&ts_sec, &ts_nsec);
-    log_uart(log_message);
+    log_uart(HSOC_LOG_INFO, log_message);
     freertos_ivshmem_send_ack(link, hello.seq, ts_sec, ts_nsec);
     (*count)++;
 }
 
-void log_hex32_uart(uint32_t v)
+void log_hex32_uart(uint32_t level, uint32_t v)
 {
     static const char hex[] = "0123456789abcdef";
     char buf[11];
@@ -117,7 +203,7 @@ void log_hex32_uart(uint32_t v)
     buf[8] = hex[(v >> 4) & 0xf];
     buf[9] = hex[v & 0xf];
     buf[10] = '\0';
-    log_uart(buf);
+    log_uart(level, buf);
 }
 
 static void showcase_task(void *opaque)
@@ -133,47 +219,47 @@ static void showcase_task(void *opaque)
     stats_shmem->generation = 0;
     __sync_synchronize();
 
-    log_uart("[freertos] showcase task started\n");
+    log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
 
     /* ── Startup diagnostics ──────────────────────────────────────────────── */
     {
-        log_uart("[diag] tick_rate_hz=");
-        log_hex32_uart(configTICK_RATE_HZ);
-        log_uart(" heap_free=");
-        log_hex32_uart((uint32_t)xPortGetFreeHeapSize());
-        log_uart("\n");
+        log_uart(HSOC_LOG_VERBOSE, "[diag] tick_rate_hz=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, configTICK_RATE_HZ);
+        log_uart(HSOC_LOG_VERBOSE, " heap_free=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, (uint32_t)xPortGetFreeHeapSize());
+        log_uart(HSOC_LOG_VERBOSE, "\n");
 
-        log_uart("[diag] uart_base=");
-        log_hex32_uart(UART0_BASE);
-        log_uart(" plic_sources=");
-        log_hex32_uart(21);
-        log_uart("\n");
+        log_uart(HSOC_LOG_VERBOSE, "[diag] uart_base=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, UART0_BASE);
+        log_uart(HSOC_LOG_VERBOSE, " plic_sources=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, 21);
+        log_uart(HSOC_LOG_VERBOSE, "\n");
 
-        log_uart("[diag] IVPOSITION:");
+        log_uart(HSOC_LOG_VERBOSE, "[diag] IVPOSITION:");
         {
             uint32_t ivp;
             ivp = arm_link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
-            log_uart(" arm="); log_hex32_uart(ivp);
+            log_uart(HSOC_LOG_VERBOSE, " arm="); log_hex32_uart(HSOC_LOG_VERBOSE, ivp);
             ivp = riscv_link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
-            log_uart(" riscv="); log_hex32_uart(ivp);
+            log_uart(HSOC_LOG_VERBOSE, " riscv="); log_hex32_uart(HSOC_LOG_VERBOSE, ivp);
             ivp = mips_link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
-            log_uart(" mips="); log_hex32_uart(ivp);
+            log_uart(HSOC_LOG_VERBOSE, " mips="); log_hex32_uart(HSOC_LOG_VERBOSE, ivp);
             ivp = bootlog.link.mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
-            log_uart(" bootlog="); log_hex32_uart(ivp);
+            log_uart(HSOC_LOG_VERBOSE, " bootlog="); log_hex32_uart(HSOC_LOG_VERBOSE, ivp);
         }
-        log_uart("\n");
+        log_uart(HSOC_LOG_VERBOSE, "\n");
 
-        log_uart("[diag] shmem bases: arm=");
-        log_hex32_uart(IVSHMEM0_SHMEM);
-        log_uart(" riscv=");
-        log_hex32_uart(IVSHMEM1_SHMEM);
-        log_uart(" mips=");
-        log_hex32_uart(IVSHMEM2_SHMEM);
-        log_uart(" stats=");
-        log_hex32_uart(IVSHMEM3_SHMEM);
-        log_uart(" bootlog=");
-        log_hex32_uart(IVSHMEM4_SHMEM);
-        log_uart("\n");
+        log_uart(HSOC_LOG_VERBOSE, "[diag] shmem bases: arm=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, IVSHMEM0_SHMEM);
+        log_uart(HSOC_LOG_VERBOSE, " riscv=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, IVSHMEM1_SHMEM);
+        log_uart(HSOC_LOG_VERBOSE, " mips=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, IVSHMEM2_SHMEM);
+        log_uart(HSOC_LOG_VERBOSE, " stats=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, IVSHMEM3_SHMEM);
+        log_uart(HSOC_LOG_VERBOSE, " bootlog=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, IVSHMEM4_SHMEM);
+        log_uart(HSOC_LOG_VERBOSE, "\n");
     }
 
     for (;;) {
@@ -192,35 +278,37 @@ static void showcase_task(void *opaque)
             write_stats_snapshot();
         }
 
+#if defined(FREERTOS_DIAG_LOOP)
         if (++diag_count >= 3000) {
             diag_count = 0;
-            log_uart("[diag] arm_flag=");
-            log_hex32_uart(arm_link.layout->linux_to_freertos.flag);
-            log_uart(" arm_magic=");
-            log_hex32_uart(arm_link.layout->linux_to_freertos.msg.magic);
-            log_uart(" riscv_flag=");
-            log_hex32_uart(riscv_link.layout->linux_to_freertos.flag);
-            log_uart(" riscv_magic=");
-            log_hex32_uart(riscv_link.layout->linux_to_freertos.msg.magic);
-            log_uart(" mips_flag=");
-            log_hex32_uart(mips_link.layout->linux_to_freertos.flag);
-            log_uart(" mips_magic=");
-            log_hex32_uart(mips_link.layout->linux_to_freertos.msg.magic);
-            log_uart("\n");
+            log_uart(HSOC_LOG_VERBOSE, "[diag] arm_flag=");
+            log_hex32_uart(HSOC_LOG_VERBOSE, arm_link.layout->linux_to_freertos.flag);
+            log_uart(HSOC_LOG_VERBOSE, " arm_magic=");
+            log_hex32_uart(HSOC_LOG_VERBOSE, arm_link.layout->linux_to_freertos.msg.magic);
+            log_uart(HSOC_LOG_VERBOSE, " riscv_flag=");
+            log_hex32_uart(HSOC_LOG_VERBOSE, riscv_link.layout->linux_to_freertos.flag);
+            log_uart(HSOC_LOG_VERBOSE, " riscv_magic=");
+            log_hex32_uart(HSOC_LOG_VERBOSE, riscv_link.layout->linux_to_freertos.msg.magic);
+            log_uart(HSOC_LOG_VERBOSE, " mips_flag=");
+            log_hex32_uart(HSOC_LOG_VERBOSE, mips_link.layout->linux_to_freertos.flag);
+            log_uart(HSOC_LOG_VERBOSE, " mips_magic=");
+            log_hex32_uart(HSOC_LOG_VERBOSE, mips_link.layout->linux_to_freertos.msg.magic);
+            log_uart(HSOC_LOG_VERBOSE, "\n");
         }
+#endif // #if defined(FREERTOS_DIAG_LOOP)
 
         /* Periodic heap/stack report every 10 seconds */
         {
             static uint32_t health_tick;
             if (++health_tick >= 10000) {
                 health_tick = 0;
-                log_uart("[diag] heap_free=");
-                log_hex32_uart((uint32_t)xPortGetFreeHeapSize());
-                log_uart(" stack_hiwat=");
-                log_hex32_uart((uint32_t)uxTaskGetStackHighWaterMark(NULL));
-                log_uart(" uptime_s=");
-                log_hex32_uart((uint32_t)(xTaskGetTickCount() / configTICK_RATE_HZ));
-                log_uart("\n");
+                log_uart(HSOC_LOG_VERBOSE, "[diag] heap_free=");
+                log_hex32_uart(HSOC_LOG_VERBOSE, (uint32_t)xPortGetFreeHeapSize());
+                log_uart(HSOC_LOG_VERBOSE, " stack_hiwat=");
+                log_hex32_uart(HSOC_LOG_VERBOSE, (uint32_t)uxTaskGetStackHighWaterMark(NULL));
+                log_uart(HSOC_LOG_VERBOSE, " uptime_s=");
+                log_hex32_uart(HSOC_LOG_VERBOSE, (uint32_t)(xTaskGetTickCount() / configTICK_RATE_HZ));
+                log_uart(HSOC_LOG_VERBOSE, "\n");
             }
         }
 
@@ -231,7 +319,7 @@ static void showcase_task(void *opaque)
 
 void vApplicationMallocFailedHook(void)
 {
-    log_uart("[freertos] malloc failed\n");
+    log_uart(HSOC_LOG_ERROR, "[freertos] malloc failed\n");
     for (;;) {
     }
 }
@@ -241,7 +329,7 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char *task_name)
     (void)task;
     (void)task_name;
 
-    log_uart("[freertos] stack overflow\n");
+    log_uart(HSOC_LOG_ERROR, "[freertos] stack overflow\n");
     for (;;) {
     }
 }
@@ -252,16 +340,16 @@ int main(void)
 
     bootlog_init(&bootlog, IVSHMEM4_MMIO, IVSHMEM4_SHMEM, "boot-log");
 
-    log_uart("[freertos] booting demo firmware\n");
+    log_uart(HSOC_LOG_INFO, "[freertos] booting demo firmware\n");
     rc = xTaskCreate(showcase_task, "showcase", 2048, 0,
                      tskIDLE_PRIORITY + 1, 0);
     if (rc != pdPASS) {
-        log_uart("[freertos] failed to create showcase task\n");
+        log_uart(HSOC_LOG_ERROR, "[freertos] failed to create showcase task\n");
         return 1;
     }
 
     vTaskStartScheduler();
-    log_uart("[freertos] scheduler exited unexpectedly\n");
+    log_uart(HSOC_LOG_ERROR, "[freertos] scheduler exited unexpectedly\n");
 
     for (;;) {
     }
