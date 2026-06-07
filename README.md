@@ -285,19 +285,27 @@ ssh root@debian-mipsel.local
 
 ### SSH from macOS (ProxyJump through Lima)
 
-The `172.16.100.x` subnet lives inside the Lima VM, so macOS has no direct route to the guests. Use Lima as a jump host:
+The `172.16.100.x` subnet lives inside the Lima VM, so macOS has no direct route to the guests. Use Lima as a jump host.
+
+Lima assigns a **random SSH port** on each VM start. Look it up with `limactl list`:
 
 ```bash
-# One-off (no config needed)
-ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
-    -J yhsung@127.0.0.1:52704 root@172.16.100.10   # ARM
-ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
-    -J yhsung@127.0.0.1:52704 root@172.16.100.11   # RISCV
-ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
-    -J yhsung@127.0.0.1:52704 root@172.16.100.12   # MIPS
+limactl list    # SSH column shows 127.0.0.1:<port>
 ```
 
-Or add this block to `~/.ssh/config` once and then use plain `ssh debian-arm64`:
+You can also use the guest's mDNS hostname (`debian-arm64.local`) instead of the IP — the jump host resolves it via Avahi:
+
+```bash
+# One-off (no config needed) — replace <PORT> with the actual port
+ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+    -J yhsung@127.0.0.1:<PORT> root@debian-arm64.local    # ARM
+ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+    -J yhsung@127.0.0.1:<PORT> root@debian-riscv64.local  # RISCV
+ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+    -J yhsung@127.0.0.1:<PORT> root@debian-mipsel.local   # MIPS
+```
+
+Or add this to `~/.ssh/config` to use mDNS hostnames with auto-detected port:
 
 ```
 Host lima-qemu-dev
@@ -309,26 +317,40 @@ Host lima-qemu-dev
     UserKnownHostsFile /dev/null
 
 Host debian-arm64
-    HostName 172.16.100.10
+    HostName debian-arm64.local
     User root
     ProxyJump lima-qemu-dev
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host debian-riscv64
-    HostName 172.16.100.11
+    HostName debian-riscv64.local
     User root
     ProxyJump lima-qemu-dev
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 
 Host debian-mipsel
-    HostName 172.16.100.12
+    HostName debian-mipsel.local
     User root
     ProxyJump lima-qemu-dev
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
 ```
+
+**Note:** The `Port` in `lima-qemu-dev` is a static placeholder — if Lima changes it (check with `limactl list`), either update it or rely on this shell wrapper instead:
+
+```bash
+# ~/.zshrc helper — resolves Lima's dynamic SSH port automatically
+chimera-ssh() {
+  local port=$(limactl list qemu-dev --format '{{.SSH}}' 2>/dev/null | grep -oE '[0-9]+$')
+  [ -z "$port" ] && { echo "Lima VM not running"; return 1; }
+  ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
+      -J "yhsung@127.0.0.1:$port" "$@"
+}
+```
+
+Usage: `chimera-ssh root@debian-arm64.local`
 
 > **Note:** The Lima SSH port (52704 above) can change across `limactl stop`/`start` cycles. Check the current value with `limactl list`.
 
