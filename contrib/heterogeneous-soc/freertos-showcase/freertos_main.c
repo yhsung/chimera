@@ -40,6 +40,9 @@ static uint32_t arm_count;
 static uint32_t riscv_count;
 static uint32_t mips_count;
 static uint32_t stats_tick;
+static TickType_t arm_last_hello_ticks;
+static TickType_t riscv_last_hello_ticks;
+static TickType_t mips_last_hello_ticks;
 static struct bootlog_monitor bootlog;
 
 static void uart_putc(char ch)
@@ -168,12 +171,13 @@ static void write_stats_snapshot(void)
     __sync_synchronize();
     stats_shmem->generation = stats_shmem->generation + 1;
     __sync_synchronize();
-    log_uart(HSOC_LOG_INFO, "[freertos] stats snapshot written\n");
+    log_uart(HSOC_LOG_VERBOSE, "[freertos] stats snapshot written\n");
 }
 
 static void maybe_service_link(struct freertos_ivshmem_link *link,
                                const char *log_message,
-                               uint32_t *count)
+                               uint32_t *count,
+                               TickType_t *last_hello_ticks)
 {
     struct hsoc_hello_msg hello;
     int64_t ts_sec;
@@ -184,9 +188,10 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     }
 
     tick_to_timestamp(&ts_sec, &ts_nsec);
-    log_uart(HSOC_LOG_INFO, log_message);
+    log_uart(HSOC_LOG_VERBOSE, log_message);
     freertos_ivshmem_send_ack(link, hello.seq, ts_sec, ts_nsec);
     (*count)++;
+    *last_hello_ticks = xTaskGetTickCount();
 }
 
 void log_hex32_uart(uint32_t level, uint32_t v)
@@ -220,6 +225,9 @@ static void showcase_task(void *opaque)
     __sync_synchronize();
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
+    arm_last_hello_ticks = xTaskGetTickCount();
+    riscv_last_hello_ticks = xTaskGetTickCount();
+    mips_last_hello_ticks = xTaskGetTickCount();
 
     /* ── Startup diagnostics ──────────────────────────────────────────────── */
     {
@@ -265,17 +273,34 @@ static void showcase_task(void *opaque)
     for (;;) {
         maybe_service_link(&arm_link,
                            "[freertos] received hello from arm-linux\n",
-                           &arm_count);
+                           &arm_count, &arm_last_hello_ticks);
         maybe_service_link(&riscv_link,
                            "[freertos] received hello from riscv-linux\n",
-                           &riscv_count);
+                           &riscv_count, &riscv_last_hello_ticks);
         maybe_service_link(&mips_link,
                            "[freertos] received hello from mips-linux\n",
-                           &mips_count);
+                           &mips_count, &mips_last_hello_ticks);
 
         if (++stats_tick >= 5000) {
             stats_tick = 0;
             write_stats_snapshot();
+
+            /* Heartbeat: error if any guest has been silent >30s */
+            {
+                TickType_t now = xTaskGetTickCount();
+                if (now - arm_last_hello_ticks > pdMS_TO_TICKS(30000)) {
+                    log_uart(HSOC_LOG_ERROR,
+                             "[freertos] heartbeat: arm-linux silent >30s\n");
+                }
+                if (now - riscv_last_hello_ticks > pdMS_TO_TICKS(30000)) {
+                    log_uart(HSOC_LOG_ERROR,
+                             "[freertos] heartbeat: riscv-linux silent >30s\n");
+                }
+                if (now - mips_last_hello_ticks > pdMS_TO_TICKS(30000)) {
+                    log_uart(HSOC_LOG_ERROR,
+                             "[freertos] heartbeat: mips-linux silent >30s\n");
+                }
+            }
         }
 
 #if defined(FREERTOS_DIAG_LOOP)
