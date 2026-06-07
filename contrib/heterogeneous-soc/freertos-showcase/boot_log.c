@@ -115,6 +115,21 @@ int bootlog_tick(struct bootlog_monitor *m)
     return 1;
 }
 
+int bootlog_all_booted(struct bootlog_monitor *m)
+{
+    if (!m->initialized) {
+        return 0;
+    }
+
+    for (int i = 0; i < (int)BOOTLOG_NUM_GUESTS; i++) {
+        __sync_synchronize();
+        if (m->header->guests[i].status != HSOC_BOOT_COMPLETE) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 /* ── FreeRTOS boot-log writer ──────────────────────────────────────────────── */
 
 static void shmem_write32(volatile void *addr, uint32_t val)

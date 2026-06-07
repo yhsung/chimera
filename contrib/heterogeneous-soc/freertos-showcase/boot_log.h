@@ -22,6 +22,9 @@ void bootlog_init(struct bootlog_monitor *m,
 /* Call once per main-loop iteration (~1 ms). Returns 1 if doorbell was rung. */
 int bootlog_tick(struct bootlog_monitor *m);
 
+/* Returns 1 once all Linux guests have reported HSOC_BOOT_COMPLETE. */
+int bootlog_all_booted(struct bootlog_monitor *m);
+
 /* Append a message to the FreeRTOS boot-log slot.  Safe to call before
  * bootlog_init() — the message is dropped silently. */
 void bootlog_write(struct bootlog_monitor *m, const char *msg);

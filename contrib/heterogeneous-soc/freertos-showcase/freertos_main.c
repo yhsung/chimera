@@ -225,9 +225,6 @@ static void showcase_task(void *opaque)
     __sync_synchronize();
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
-    arm_last_hello_ticks = xTaskGetTickCount();
-    riscv_last_hello_ticks = xTaskGetTickCount();
-    mips_last_hello_ticks = xTaskGetTickCount();
 
     /* ── Startup diagnostics ──────────────────────────────────────────────── */
     {
@@ -285,20 +282,33 @@ static void showcase_task(void *opaque)
             stats_tick = 0;
             write_stats_snapshot();
 
-            /* Heartbeat: error if any guest has been silent >30s */
+            /* Heartbeat: monitor after all guests have booted */
             {
+                static uint8_t boot_armed;
                 TickType_t now = xTaskGetTickCount();
-                if (now - arm_last_hello_ticks > pdMS_TO_TICKS(30000)) {
-                    log_uart(HSOC_LOG_ERROR,
-                             "[freertos] heartbeat: arm-linux silent >30s\n");
+
+                if (!boot_armed) {
+                    if (bootlog_all_booted(&bootlog)) {
+                        boot_armed = 1;
+                        arm_last_hello_ticks = now;
+                        riscv_last_hello_ticks = now;
+                        mips_last_hello_ticks = now;
+                    }
                 }
-                if (now - riscv_last_hello_ticks > pdMS_TO_TICKS(30000)) {
-                    log_uart(HSOC_LOG_ERROR,
-                             "[freertos] heartbeat: riscv-linux silent >30s\n");
-                }
-                if (now - mips_last_hello_ticks > pdMS_TO_TICKS(30000)) {
-                    log_uart(HSOC_LOG_ERROR,
-                             "[freertos] heartbeat: mips-linux silent >30s\n");
+
+                if (boot_armed) {
+                    if (now - arm_last_hello_ticks > pdMS_TO_TICKS(30000)) {
+                        log_uart(HSOC_LOG_ERROR,
+                                 "[freertos] heartbeat: arm-linux silent >30s\n");
+                    }
+                    if (now - riscv_last_hello_ticks > pdMS_TO_TICKS(30000)) {
+                        log_uart(HSOC_LOG_ERROR,
+                                 "[freertos] heartbeat: riscv-linux silent >30s\n");
+                    }
+                    if (now - mips_last_hello_ticks > pdMS_TO_TICKS(30000)) {
+                        log_uart(HSOC_LOG_ERROR,
+                                 "[freertos] heartbeat: mips-linux silent >30s\n");
+                    }
                 }
             }
         }
