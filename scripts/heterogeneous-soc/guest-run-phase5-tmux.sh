@@ -9,25 +9,19 @@ ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf"
 cd "$REPO"
 
 if [[ -z "${SKIP_BUILD:-}" ]]; then
-    # Check whether the existing QEMU binary supports the expected machine
-    # properties — a stale binary will fail at runtime with "Property not found".
-    _qemu_build_valid() {
-        local qemu_riscv="${BUILD_DIR}/qemu-system-riscv64"
-        [[ -x "${qemu_riscv}" ]] || return 1
-        "${qemu_riscv}" -M chimera-riscv-freertos-demo,help 2>&1 | \
-            grep -q "ivshmem-bootlog-freertos" || return 1
-    }
-
-    # One-time setup: Lima guest, disk images, and ivshmem server binary.
-    # Re-triggered when the ELF is absent or the QEMU binary is stale.
-    if [[ ! -f "$ELF" ]] || ! _qemu_build_valid; then
+    # One-time setup: Lima guest and disk images.
+    # Re-triggered only when the ELF is absent (first run or after a clean).
+    if [[ ! -f "$ELF" ]]; then
         echo "=== One-time setup ==="
         scripts/heterogeneous-soc/guest-install-lima-guest.sh
         scripts/heterogeneous-soc/guest-fetch-images.sh
-        BUILD_DIR="$HOME/chimera-build-linux" VM_SOURCE_DIR="$HOME/chimera-src" \
-            scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
         echo "=== One-time setup complete ==="
     fi
+
+    # Always rebuild QEMU and ivshmem-server via ninja (incremental; no-op when
+    # nothing changed, fast partial rebuild when only .c files changed).
+    BUILD_DIR="$HOME/chimera-build-linux" VM_SOURCE_DIR="$HOME/chimera-src" \
+        scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
 
     # Always rebuild the FreeRTOS ELF and Linux syslog binaries so source changes
     # are picked up without manual intervention.
@@ -143,7 +137,11 @@ auto_login_and_run() {
     } > "$PINGPONG_DIR/r${pane_idx}.sh"
 
     _has_prompt() {
-        tmux capture-pane -p -t "$pane" 2>/dev/null | grep -qE "root@[^:]+:[^#]*#[[:space:]]*$"
+        # Match a shell prompt that may have systemd boot messages interleaved on
+        # the same terminal line (e.g. "root@host:~# [ OK ] Started foo.service").
+        # Anchoring to ^ avoids false positives; dropping the $ avoids missing the
+        # prompt when a concurrent kernel/systemd message lands after the '#'.
+        tmux capture-pane -p -t "$pane" 2>/dev/null | grep -qE "^root@[^:]+:[^#]*#"
     }
 
     _wait_prompt() {

@@ -15,9 +15,10 @@
 
 #include "hello_proto.h"
 
-#define HSOC_BAR2_SIZE   (64U * 1024U * 1024U)
-#define HSOC_VENDOR_ID   "0x1af4"
-#define HSOC_STATS_MAGIC 0x53544154U
+#define HSOC_BAR2_SIZE      (64U * 1024U * 1024U)
+#define HSOC_VENDOR_ID      "0x1af4"
+#define HSOC_STATS_MAGIC    0x53544154U
+#define HSOC_BOOTLOG_MAGIC  0x424C5447U  /* "BLTG" — boot-log channel, skip */
 
 #ifndef HSOC_SENDER_LABEL
 #define HSOC_SENDER_LABEL "arm-linux"
@@ -149,7 +150,7 @@ static const char *find_ivshmem_resource(void)
         __sync_synchronize();
         munmap(p, 4096);
 
-        if (magic == HSOC_STATS_MAGIC) continue;
+        if (magic == HSOC_STATS_MAGIC || magic == HSOC_BOOTLOG_MAGIC) continue;
 
         strncpy(resource_path, candidate, sizeof(resource_path) - 1);
         resource_path[sizeof(resource_path) - 1] = '\0';

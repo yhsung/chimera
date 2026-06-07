@@ -43,7 +43,7 @@ static const MemMapEntry chimera_freertos_memmap[] = {
     [CHIMERA_FREERTOS_IVSHMEM3_SHMEM] = { 0x40000000,
                                           CHIMERA_FREERTOS_IVSHMEM_SIZE },
     [CHIMERA_FREERTOS_IVSHMEM4_MMIO] =  { 0x44000000, 0x00001000 },
-    [CHIMERA_FREERTOS_IVSHMEM4_SHMEM] = { 0x45000000, 0x00500000 },  /* 5 MiB */
+    [CHIMERA_FREERTOS_IVSHMEM4_SHMEM] = { 0x45000000, 0x00800000 },  /* 8 MiB */
 };
 
 #define CHIMERA_FREERTOS_PLIC_HART_CONFIG "M"

@@ -75,6 +75,7 @@ LAUNCH_SCRIPTS=(
     "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
     "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
+    "${SCRIPT_DIR}/guest-configure-getty-clear.sh"
 )
 for script in "${LAUNCH_SCRIPTS[@]}"; do
     [[ -f "${script}" ]] || die "required script not found: ${script}"
@@ -152,25 +153,13 @@ fi
 # ── Step 3: Build ivshmem server (and full QEMU) ─────────────────────────────
 
 _step "Building ivshmem server / QEMU"
-_has_qemu_build() {
-    find_ivshmem_server &>/dev/null || return 1
-    local qemu_riscv="${BUILD_DIR}/qemu-system-riscv64"
-    [[ -x "${qemu_riscv}" ]] || return 1
-    [[ -x "${BUILD_DIR}/qemu-system-aarch64" ]] || return 1
-    [[ -x "${BUILD_DIR}/qemu-system-mipsel" ]] || return 1
-    # Verify the QEMU binary is up-to-date by checking for the most recently
-    # added machine property. A stale binary (built from an older commit) would
-    # report "Property not found" at runtime, so we catch it here instead.
-    "${qemu_riscv}" -M chimera-riscv-freertos-demo,help 2>&1 | \
-        grep -q "ivshmem-bootlog-freertos" || return 1
-}
-
-if _has_qemu_build; then
-    _skip "QEMU and ivshmem-server already built in ${BUILD_DIR}"
-else
-    _exec bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
-    _ok "QEMU and ivshmem-server built"
-fi
+# Always run the build script. guest-build-ivshmem-tools.sh delegates to ninja,
+# which is incremental: a no-op when nothing changed, a fast partial rebuild
+# when only .c files changed (e.g. machine memory-map constants). Skipping this
+# step based on binary existence is unreliable because the binary's behaviour
+# can change without its timestamp updating (e.g. a machine-code constant fix).
+_exec bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
+_ok "QEMU and ivshmem-server up-to-date"
 
 # ── Step 4: Fetch FreeRTOS kernel source ─────────────────────────────────────
 
@@ -258,6 +247,14 @@ _ok "Syslog daemons installed"
 _step "Installing boot-log daemons into guest images"
 _exec bash "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
 _ok "Boot-log daemons installed"
+
+# ── Step 6.8: Install getty clear drop-in into guest disk images ─────────────
+# Clears the serial console (ESC[2J ESC[H) before the login: prompt so boot
+# messages don't clutter the screen and don't confuse the prompt detector.
+
+_step "Configuring getty screen-clear in guest images"
+_exec bash "${SCRIPT_DIR}/guest-configure-getty-clear.sh"
+_ok "Getty screen-clear configured"
 
 # ── Step 7: Extract kernel + initrd from .deb packages ─────────────────────────
 
