@@ -7,8 +7,6 @@
 #
 #   source scripts/heterogeneous-soc/host-install-lima-host.sh
 
-set -euo pipefail
-
 # Defaults (common.sh sets these too, but for sourced mode we need them early)
 LIMA_NAME="${LIMA_NAME:-qemu-dev}"
 LIMA_CPUS="${LIMA_CPUS:-4}"
@@ -38,6 +36,7 @@ chimera-keyinject() {
 # ── Main provisioning logic (skipped when sourced) ──────────────────────────────
 
 _main() {
+    set -euo pipefail
     source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 
     command -v brew >/dev/null 2>&1 || die "Homebrew is required on the macOS host"
