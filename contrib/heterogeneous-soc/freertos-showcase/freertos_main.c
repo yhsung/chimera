@@ -128,7 +128,6 @@ static void showcase_task(void *opaque)
     freertos_ivshmem_init(&arm_link,  IVSHMEM0_MMIO, IVSHMEM0_SHMEM, "arm-linux");
     freertos_ivshmem_init(&riscv_link, IVSHMEM1_MMIO, IVSHMEM1_SHMEM, "riscv-linux");
     freertos_ivshmem_init(&mips_link,  IVSHMEM2_MMIO, IVSHMEM2_SHMEM, "mips-linux");
-    bootlog_init(&bootlog, IVSHMEM4_MMIO, IVSHMEM4_SHMEM, "boot-log");
 
     stats_shmem->magic      = HSOC_STATS_MAGIC;
     stats_shmem->generation = 0;
@@ -250,6 +249,8 @@ void vApplicationStackOverflowHook(TaskHandle_t task, char *task_name)
 int main(void)
 {
     BaseType_t rc;
+
+    bootlog_init(&bootlog, IVSHMEM4_MMIO, IVSHMEM4_SHMEM, "boot-log");
 
     log_uart("[freertos] booting demo firmware\n");
     rc = xTaskCreate(showcase_task, "showcase", 2048, 0,
