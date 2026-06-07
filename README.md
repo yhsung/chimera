@@ -53,7 +53,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 | Component | Machine | CPUs / RAM | OS | IP | Hostname | Role |
 |---|---|---|---|---|---|---|
 | ARM-Linux | 2 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a53` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
-| RISCV-Linux | 4 / 512 MB | QEMU `virt` rv64, OpenSBI, `-cpu rv64,h=true,v=true` | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
+| RISCV-Linux | 2 / 512 MB | QEMU `virt` rv64, OpenSBI, `-cpu rv64,h=true,v=true` | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
 | MIPS-Linux | 1 / 512 MB | QEMU `malta` mipsel, `-cpu 24Kf` | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
 | RISCV FreeRTOS | 1 / 128 MiB | QEMU `chimera-riscv-freertos-demo` (1 RV64 hart, `TYPE_RISCV_CPU_BASE`) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
 | ivshmem-server (ARM) | — / — | Host process | — | — | — | Brokers shared memory for ARM↔FreeRTOS |
@@ -798,9 +798,10 @@ This ensures message body writes are globally visible before the flag is set, an
 
 The ARM-Linux guest is launched with `-cpu cortex-a53 -smp 2` (see `scripts/heterogeneous-soc/guest-run-arm-phase5.sh:18`).
 
-The Lima VM has no access to KVM or HVF (it is itself a guest of macOS's VZ), so the ARM guest runs under **QEMU TCG** — pure software CPU emulation. With 8 host cores in the Lima VM and 2 ARM vCPUs + 1 FreeRTOS + 4 RISCV + 1 MIPS = 8 emulated vCPUs, TCG threads compete for the same host cores as the Lima VM's own kernel/userspace, and interactive SSH into the ARM guest can feel laggy.
+The Lima VM has no access to KVM or HVF (it is itself a guest of macOS's VZ), so the ARM guest runs under **QEMU TCG** — pure software CPU emulation. With 8 host cores in the Lima VM and 2 ARM vCPUs + 1 FreeRTOS + 2 RISCV + 1 MIPS = 6 emulated vCPUs, TCG threads compete for the same host cores as the Lima VM's own kernel/userspace, and interactive SSH into the ARM guest can feel laggy.
 
-Two adjustments restore responsiveness:
+Three adjustments restore responsiveness:
 
 - **CPU model: cortex-a53 instead of cortex-a57.** `cortex-a57` is an out-of-order ARMv8 core; QEMU TCG has to emulate its out-of-order machinery, branch prediction, and advanced features on every instruction even though bash, sshd, and the syslog/bootlog daemons never use them. `cortex-a53` is the in-order sibling in the same ARMv8 baseline — significantly simpler to emulate, typically 1.5–2× faster on TCG for generic code, and ABI-compatible with the Debian Bookworm arm64 kernel and userspace.
-- **vCPU count: 2 instead of 4.** Halves the number of TCG threads competing for host cores and frees cores for the other guests. Bash and sshd are not parallel workloads, so the reduction is invisible to interactive use while the three ivshmem channels and the syslog/bootlog daemons continue to work unchanged.
+- **ARM vCPU count: 2 instead of 4.** Halves the number of TCG threads competing for host cores and frees cores for the other guests. Bash and sshd are not parallel workloads, so the reduction is invisible to interactive use while the three ivshmem channels and the syslog/bootlog daemons continue to work unchanged.
+- **RISCV vCPU count: 2 instead of 4 (see `scripts/heterogeneous-soc/guest-run-riscv-phase5.sh:19`).** Same rationale as ARM: `syslog-riscv-linux` and the bootlog writer are single-threaded, so the extra vCPUs only added TCG thread contention. RISCV has the same `virt` machine and OpenSBI boot path, so the reduction is transparent to the kernel.

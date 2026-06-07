@@ -16,7 +16,7 @@ bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 exec "${qemu_bin}" \
     -machine virt,aclint=on \
     -cpu rv64,h=true,v=true \
-    -m 512M -smp 4 \
+    -m 512M -smp 2 \
     -bios "${RISCV_OPENSBI_BIOS}" \
     -kernel "${RISCV_KERNEL_IMAGE}" \
     -initrd "${RISCV_INITRD_IMAGE}" \
