@@ -343,14 +343,23 @@ Host debian-mipsel
 ```bash
 # ~/.zshrc helper — resolves Lima's dynamic SSH port automatically
 chimera-ssh() {
-  local port=$(limactl list qemu-dev --format '{{.SSH}}' 2>/dev/null | grep -oE '[0-9]+$')
-  [ -z "$port" ] && { echo "Lima VM not running"; return 1; }
-  ssh -i ~/.lima/_config/user -o StrictHostKeyChecking=no \
-      -J "yhsung@127.0.0.1:$port" "$@"
+  local ssh_config="$HOME/.lima/qemu-dev/ssh.config"
+  [ ! -f "$ssh_config" ] && { echo "Lima VM not running (no ssh.config)"; return 1; }
+  ssh -F "$ssh_config" \
+      -o ProxyCommand="ssh -F '$ssh_config' -W %h:%p lima-qemu-dev" \
+      -i "$HOME/.lima/_config/user" \
+      -o PasswordAuthentication=no \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      "$@"
 }
 ```
 
 Usage: `chimera-ssh root@debian-arm64.local`
+
+**Key injection:** The showcase script automatically injects your macOS SSH
+public key into all guest disk images each time it runs (step 6.8), so
+`chimera-ssh` works out of the box.
 
 > **Note:** The Lima SSH port (52704 above) can change across `limactl stop`/`start` cycles. Check the current value with `limactl list`.
 

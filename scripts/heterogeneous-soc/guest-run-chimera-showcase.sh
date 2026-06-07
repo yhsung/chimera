@@ -75,6 +75,7 @@ LAUNCH_SCRIPTS=(
     "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
     "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
+    "${SCRIPT_DIR}/guest-install-ssh-keys-to-guests.sh"
     "${SCRIPT_DIR}/guest-configure-getty-clear.sh"
 )
 for script in "${LAUNCH_SCRIPTS[@]}"; do
@@ -248,7 +249,15 @@ _step "Installing boot-log daemons into guest images"
 _exec bash "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
 _ok "Boot-log daemons installed"
 
-# ── Step 6.8: Configure pre-login screen clear in guest disk images ──────────
+# ── Step 6.8: Inject macOS SSH public key into guest disk images ─────────────
+# Ensures chimera-ssh (ProxyJump via Lima) works without a password.
+# Idempotent — skips guests whose authorized_keys already contain the key.
+
+_step "Installing SSH public key into guest images"
+_exec bash "${SCRIPT_DIR}/guest-install-ssh-keys-to-guests.sh"
+_ok "SSH public keys installed"
+
+# ── Step 6.9: Configure pre-login screen clear in guest disk images ──────────
 # Prepends ESC[2J ESC[H to /etc/issue (which agetty prints just before the
 # login: prompt) so boot messages don't clutter the screen or confuse the
 # prompt detector. Deliberately does NOT use a serial-getty ExecStartPre
