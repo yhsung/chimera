@@ -12,6 +12,7 @@ struct bootlog_monitor {
     int64_t    boot_tick;
     uint8_t    armed;
     uint8_t    initialized;
+    uint32_t   slot_offset;
 };
 
 void bootlog_init(struct bootlog_monitor *m,
@@ -20,5 +21,9 @@ void bootlog_init(struct bootlog_monitor *m,
 
 /* Call once per main-loop iteration (~1 ms). Returns 1 if doorbell was rung. */
 int bootlog_tick(struct bootlog_monitor *m);
+
+/* Append a message to the FreeRTOS boot-log slot.  Safe to call before
+ * bootlog_init() — the message is dropped silently. */
+void bootlog_write(struct bootlog_monitor *m, const char *msg);
 
 #endif

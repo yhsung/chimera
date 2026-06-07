@@ -49,6 +49,8 @@ static void uart_putc(char ch)
 
 void log_uart(const char *msg)
 {
+    bootlog_write(&bootlog, msg);
+
     while (*msg != '\0') {
         if (*msg == '\n') {
             uart_putc('\r');

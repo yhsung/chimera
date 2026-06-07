@@ -28,6 +28,8 @@ void bootlog_init(struct bootlog_monitor *m,
      * doesn't wait for a FreeRTOS writer that doesn't exist. */
     m->header->guests[HSOC_GUEST_FREERTOS].status = HSOC_BOOT_COMPLETE;
     __sync_synchronize();
+
+    m->slot_offset = 0;
 }
 
 int bootlog_tick(struct bootlog_monitor *m)
@@ -77,4 +79,63 @@ int bootlog_tick(struct bootlog_monitor *m)
 
     m->armed = 0;
     return 1;
+}
+
+/* ── FreeRTOS boot-log writer ──────────────────────────────────────────────── */
+
+static void shmem_write32(volatile void *addr, uint32_t val)
+{
+    volatile uint8_t *d = (volatile uint8_t *)addr;
+    d[0] = (uint8_t)(val >> 0);
+    d[1] = (uint8_t)(val >> 8);
+    d[2] = (uint8_t)(val >> 16);
+    d[3] = (uint8_t)(val >> 24);
+}
+
+static void shmem_write_buf(volatile void *dst, const void *src, size_t n)
+{
+    volatile uint8_t *d = (volatile uint8_t *)dst;
+    const uint8_t *s = (const uint8_t *)src;
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
+    }
+}
+
+void bootlog_write(struct bootlog_monitor *m, const char *msg)
+{
+    if (!m->initialized) {
+        return;
+    }
+
+    volatile uint8_t *slot = (volatile uint8_t *)m->header
+                           + BOOTLOG_SLOT_FREERTOS;
+    size_t len = 0;
+
+    while (msg[len] != '\0') {
+        len++;
+    }
+    if (len == 0) {
+        return;
+    }
+
+    if (m->slot_offset >= BOOTLOG_SLOT_SIZE) {
+        static uint8_t truncated;
+        if (!truncated) {
+            truncated = 1;
+            log_uart("[bootlog] FreeRTOS slot truncated\n");
+        }
+        return;
+    }
+
+    size_t writable = BOOTLOG_SLOT_SIZE - m->slot_offset;
+    if (len > writable) {
+        len = writable;
+    }
+
+    shmem_write_buf(slot + m->slot_offset, msg, len);
+    m->slot_offset += (uint32_t)len;
+    __sync_synchronize();
+    shmem_write32(&m->header->guests[HSOC_GUEST_FREERTOS].offset,
+                  m->slot_offset);
+    __sync_synchronize();
 }
