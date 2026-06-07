@@ -79,12 +79,72 @@ static unsigned int read_uptime_sec(void)
     return (unsigned int)v;
 }
 
-static void build_sysinfo_text(char *buf, size_t n)
+static uint32_t read_cpu_pct_x100(void)
+{
+    static bool have_prev;
+    static unsigned long long prev_idle, prev_total;
+
+    char line[256];
+    if (!read_first_line("/proc/stat", line, sizeof(line)))
+        return 0;
+
+    unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
+    iowait = irq = softirq = steal = 0;
+    int n = sscanf(line, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
+                   &user, &nice, &system, &idle,
+                   &iowait, &irq, &softirq, &steal);
+    if (n < 4)
+        return 0;
+
+    unsigned long long total = user + nice + system + idle + iowait + irq + softirq + steal;
+    unsigned long long busy_idle = idle + iowait;
+
+    uint32_t pct_x100 = 0;
+    if (have_prev && total > prev_total) {
+        unsigned long long dtotal = total - prev_total;
+        unsigned long long didle = busy_idle - prev_idle;
+        pct_x100 = (uint32_t)(10000ULL * (dtotal - didle) / dtotal);
+    }
+    have_prev = true;
+    prev_idle = busy_idle;
+    prev_total = total;
+    return pct_x100;
+}
+
+static uint32_t read_mem_used_pct_x100(void)
+{
+    FILE *f = fopen("/proc/meminfo", "r");
+    if (!f)
+        return 0;
+
+    char line[128];
+    unsigned long total_kb = 0, avail_kb = 0;
+    bool have_total = false, have_avail = false;
+    while (fgets(line, sizeof(line), f)) {
+        if (!have_total && sscanf(line, "MemTotal: %lu kB", &total_kb) == 1)
+            have_total = true;
+        else if (!have_avail && sscanf(line, "MemAvailable: %lu kB", &avail_kb) == 1)
+            have_avail = true;
+        if (have_total && have_avail)
+            break;
+    }
+    fclose(f);
+
+    if (!have_total || total_kb == 0 || avail_kb > total_kb)
+        return 0;
+    return (uint32_t)(10000ULL * (total_kb - avail_kb) / total_kb);
+}
+
+static void build_sysinfo_text(char *buf, size_t n,
+                                uint32_t cpu_pct_x100, uint32_t mem_pct_x100)
 {
     unsigned int ld_int, ld_frac;
     read_loadavg_fixed(&ld_int, &ld_frac);
-    snprintf(buf, n, "ld=%u.%02u mf=%uM up=%us",
-             ld_int, ld_frac, read_memfree_mb(), read_uptime_sec());
+    snprintf(buf, n, "ld=%u.%02u cpu=%u.%02u%% mem=%u.%02u%% mf=%uM up=%us",
+             ld_int, ld_frac,
+             cpu_pct_x100 / 100, cpu_pct_x100 % 100,
+             mem_pct_x100 / 100, mem_pct_x100 % 100,
+             read_memfree_mb(), read_uptime_sec());
 }
 
 /*
@@ -174,17 +234,21 @@ static int main_loop(struct hsoc_layout *shm, unsigned int interval)
         struct timespec ts;
         struct hsoc_hello_msg msg;
         struct hsoc_hello_msg ack;
+        uint32_t cpu_pct_x100 = read_cpu_pct_x100();
+        uint32_t mem_pct_x100 = read_mem_used_pct_x100();
 
         clock_gettime(CLOCK_REALTIME, &ts);
         memset(&msg, 0, sizeof(msg));
-        msg.magic     = HSOC_HELLO_MAGIC;
-        msg.version   = HSOC_PROTO_VERSION;
-        msg.msg_type  = HSOC_MSG_HELLO;
-        msg.seq       = seq;
-        msg.sender_id = HSOC_SENDER_ID;
-        msg.ts_sec    = ts.tv_sec;
-        msg.ts_nsec   = ts.tv_nsec;
-        build_sysinfo_text(msg.text, sizeof(msg.text));
+        msg.magic             = HSOC_HELLO_MAGIC;
+        msg.version           = HSOC_PROTO_VERSION;
+        msg.msg_type          = HSOC_MSG_HELLO;
+        msg.seq               = seq;
+        msg.sender_id         = HSOC_SENDER_ID;
+        msg.ts_sec            = ts.tv_sec;
+        msg.ts_nsec           = ts.tv_nsec;
+        msg.cpu_pct_x100      = cpu_pct_x100;
+        msg.mem_used_pct_x100 = mem_pct_x100;
+        build_sysinfo_text(msg.text, sizeof(msg.text), cpu_pct_x100, mem_pct_x100);
 
         shm_write(&shm->linux_to_freertos.msg, &msg, sizeof(msg));
         __sync_synchronize();
@@ -225,6 +289,15 @@ static int main_loop(struct hsoc_layout *shm, unsigned int interval)
 
 int main(int argc, char *argv[])
 {
+    if (getenv("SYSLOG_SELFTEST")) {
+        char text[HSOC_TEXT_LEN];
+        build_sysinfo_text(text, sizeof(text),
+                           read_cpu_pct_x100(), read_mem_used_pct_x100());
+        printf("[%s] SYSINFO #0 %s\n", HSOC_SENDER_LABEL, text);
+        fflush(stdout);
+        return 0;
+    }
+
     const char *bar2_path = argc > 1 ? argv[1] : find_ivshmem_resource();
     if (!bar2_path) {
         fprintf(stderr, "[%s] cannot locate ivshmem BAR2; pass path explicitly\n",
