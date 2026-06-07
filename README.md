@@ -78,7 +78,15 @@ The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS t
 | Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | 4 | FreeRTOS write only (stats snapshot) |
 | Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | 3 Linux guests + FreeRTOS → ARM collector (kmsg boot logs) |
 
-**Vector usage:** Each doorbell ring encodes `(peer_id << 16) | vector_number` into the MMIO DOORBELL register. On the HELLO/ACK channels, vector 0 signals Linux→FreeRTOS and vector 1 signals FreeRTOS→Linux. On the boot-log channel, FreeRTOS rings vector 0 to wake the ARM-side collector. The stats channel is polled by ARM via a generation counter — no doorbell is used in practice.
+**Signaling:** The HELLO/ACK and stats channels use pure shared-memory polling — Linux and FreeRTOS poll `flag`/`generation` fields in shared memory; no doorbell is involved. The 4 vectors on these channels are vestigial.
+
+Only the boot-log channel uses the doorbell mechanism:
+
+| Channel | Who rings | Encoding | Who listens | Actual wakeup |
+|---|---|---|---|---|
+| Boot-log | FreeRTOS | `(collector_peer_id << 16) \| 0` | (doorbell ignored) | ARM `boot-collector` polls `generation` counter every 2 s |
+
+**Boot-log doorbell flow:** `bootlog-arm-linux` reads BAR0 IVPOSITION (peer ID = 1), writes it to `header->collector_peer_id`. When all guests reach `BOOT_COMPLETE`, FreeRTOS increments `header->generation` and rings `(1 << 16) \| 0` on vector 0. The doorbell itself is not consumed — `boot-collector` detects the change by polling `generation`.
 
 ---
 
