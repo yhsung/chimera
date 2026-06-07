@@ -14,7 +14,7 @@ bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
     -machine malta \
-    -cpu 74Kf -smp 4 \
+    -cpu 24Kf \
     -m 512M \
     -kernel "${MIPS_KERNEL_IMAGE}" \
     -initrd "${MIPS_INITRD_IMAGE}" \
