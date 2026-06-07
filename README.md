@@ -50,16 +50,16 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 ### Components
 
-| Component | Machine | OS | IP | Hostname | Role |
-|---|---|---|---|---|---|
-| ARM-Linux | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
-| RISCV-Linux | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
-| MIPS-Linux | QEMU `malta` mipsel | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
-| RISCV FreeRTOS | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
-| ivshmem-server (ARM) | Host process | — | — | — | Brokers shared memory for ARM↔FreeRTOS |
-| ivshmem-server (RISCV) | Host process | — | — | — | Brokers shared memory for RISCV↔FreeRTOS |
-| ivshmem-server (MIPS) | Host process | — | — | — | Brokers shared memory for MIPS↔FreeRTOS |
-| ivshmem-server (stats) | Host process | — | — | — | Brokers shared memory for FreeRTOS→ARM stats channel |
+| Component | Machine | CPUs / RAM | OS | IP | Hostname | Role |
+|---|---|---|---|---|---|---|
+| ARM-Linux | 2 / 512 MB | QEMU `virt` aarch64, Cortex-A57 | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
+| RISCV-Linux | 4 / 2 GB | QEMU `virt` rv64, OpenSBI | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
+| MIPS-Linux | 1 / 256 MB | QEMU `malta` mipsel | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
+| RISCV FreeRTOS | 1 hart / — | QEMU `chimera-riscv-freertos-demo` | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
+| ivshmem-server (ARM) | — / — | Host process | — | — | — | Brokers shared memory for ARM↔FreeRTOS |
+| ivshmem-server (RISCV) | — / — | Host process | — | — | — | Brokers shared memory for RISCV↔FreeRTOS |
+| ivshmem-server (MIPS) | — / — | Host process | — | — | — | Brokers shared memory for MIPS↔FreeRTOS |
+| ivshmem-server (stats) | — / — | Host process | — | — | — | Brokers shared memory for FreeRTOS→ARM stats channel |
 
 ### ivshmem Device Types
 
