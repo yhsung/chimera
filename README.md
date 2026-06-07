@@ -798,7 +798,7 @@ This ensures message body writes are globally visible before the flag is set, an
 
 The ARM-Linux guest is launched with `-cpu cortex-a53 -smp 2` (see `scripts/heterogeneous-soc/guest-run-arm-phase5.sh:18`).
 
-The Lima VM has no access to KVM or HVF (it is itself a guest of macOS's VZ), so the ARM guest runs under **QEMU TCG** — pure software CPU emulation. With the Lima VM's 8 host cores already saturated by 4 ARM vCPUs + 1 FreeRTOS + 4 RISCV + 1 MIPS = 10 emulated vCPUs, every TCG thread is constantly preempted and interactive SSH into the ARM guest feels laggy.
+The Lima VM has no access to KVM or HVF (it is itself a guest of macOS's VZ), so the ARM guest runs under **QEMU TCG** — pure software CPU emulation. With 8 host cores in the Lima VM and 2 ARM vCPUs + 1 FreeRTOS + 4 RISCV + 1 MIPS = 8 emulated vCPUs, TCG threads compete for the same host cores as the Lima VM's own kernel/userspace, and interactive SSH into the ARM guest can feel laggy.
 
 Two adjustments restore responsiveness:
 
