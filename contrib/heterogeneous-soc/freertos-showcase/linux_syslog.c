@@ -164,6 +164,8 @@ static const char *find_ivshmem_resource(void)
 static int main_loop(struct hsoc_layout *shm, unsigned int interval)
 {
     uint32_t seq = 0;
+    uint32_t hello_count = 0;
+    uint32_t ack_count = 0;
     shm->linux_to_freertos.flag = 0;
     shm->freertos_to_linux.flag = 0;
     __sync_synchronize();
@@ -187,14 +189,13 @@ static int main_loop(struct hsoc_layout *shm, unsigned int interval)
         shm_write(&shm->linux_to_freertos.msg, &msg, sizeof(msg));
         __sync_synchronize();
         shm->linux_to_freertos.flag = 1;
-
-        printf("[%s] SYSINFO #%" PRIu32 " %s\n", HSOC_SENDER_LABEL, seq, msg.text);
-        fflush(stdout);
+        hello_count++;
 
         wait_for_flag(&shm->freertos_to_linux.flag, 1);
         shm_read(&ack, &shm->freertos_to_linux.msg, sizeof(ack));
         __sync_synchronize();
         shm->freertos_to_linux.flag = 0;
+        ack_count++;
 
         if (ack.magic != HSOC_HELLO_MAGIC) {
             fprintf(stderr, "[%s] bad ACK magic: 0x%08" PRIx32 "\n",
@@ -207,10 +208,15 @@ static int main_loop(struct hsoc_layout *shm, unsigned int interval)
             return 1;
         }
 
-        printf("[%s] ACK   #%" PRIu32 " freertos_tick=%lld.%09lld\n",
-               HSOC_SENDER_LABEL, ack.seq,
-               (long long)ack.ts_sec, (long long)ack.ts_nsec);
-        fflush(stdout);
+        /* Print summary every 5 sends */
+        if (hello_count % 5 == 0) {
+            printf("[%s] SYSINFO #%" PRIu32 " %s\n", HSOC_SENDER_LABEL, seq, msg.text);
+            printf("[%s] ACK   #%" PRIu32 " freertos_tick=%lld.%09lld  [hello=%" PRIu32 " ack=%" PRIu32 "]\n",
+                   HSOC_SENDER_LABEL, ack.seq,
+                   (long long)ack.ts_sec, (long long)ack.ts_nsec,
+                   hello_count, ack_count);
+            fflush(stdout);
+        }
 
         seq++;
         sleep(interval);
