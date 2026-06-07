@@ -201,15 +201,22 @@ FreeRTOS writes a stats snapshot into IVSHMEM3 every 5 seconds (5000 1-ms ticks)
 | `arm_count` | `uint32_t` | Total HELLO messages received from ARM-Linux |
 | `riscv_count` | `uint32_t` | Total HELLO messages received from RISCV-Linux |
 | `mips_count` | `uint32_t` | Total HELLO messages received from MIPS-Linux |
+| `pad` | `uint32_t` | Padding for alignment |
 | `tick_sec` | `int64_t` | FreeRTOS tick time of this snapshot — seconds |
 | `tick_nsec` | `int64_t` | FreeRTOS tick time — nanoseconds |
+| `arm_cpu_pct_x100` | `uint32_t` | Latest ARM-Linux CPU busy %, x100 |
+| `arm_mem_pct_x100` | `uint32_t` | Latest ARM-Linux used-mem %, x100 |
+| `riscv_cpu_pct_x100` | `uint32_t` | Latest RISCV-Linux CPU busy %, x100 |
+| `riscv_mem_pct_x100` | `uint32_t` | Latest RISCV-Linux used-mem %, x100 |
+| `mips_cpu_pct_x100` | `uint32_t` | Latest MIPS-Linux CPU busy %, x100 |
+| `mips_mem_pct_x100` | `uint32_t` | Latest MIPS-Linux used-mem %, x100 |
 
 ARM-Linux detects a new snapshot when `generation` changes. It scans all PCI ivshmem devices (`vendor 0x1af4`) and identifies the stats BAR2 by the `STAT` magic value.
 
 Example log output:
 ```
-[2026-06-06T12:34:56Z] gen=1 arm=0 riscv=0 mips=0 tick=5.000000000
-[2026-06-06T12:34:58Z] gen=2 arm=3 riscv=2 mips=1 tick=10.000000000
+[2026-06-07T12:34:56Z] gen=1 arm=0 cpu=0.00% mem=0.00% riscv=0 cpu=0.00% mem=0.00% mips=0 cpu=0.00% mem=0.00% tick=5.000000000
+[2026-06-07T12:34:58Z] gen=2 arm=3 cpu=12.34% mem=45.67% riscv=2 cpu=8.90% mem=23.45% mips=1 cpu=3.21% mem=67.89% tick=10.000000000
 ```
 
 ### Stats periodic sync sequence
@@ -302,7 +309,7 @@ sequenceDiagram
             Note over ST: verify snap.magic == HSOC_STATS_MAGIC
             ST->>ST: last_gen = gen
             ST->>LOG: log_snapshot():
-            Note over LOG: "[2026-06-06T12:34:56Z] gen=1 arm=3 riscv=2 mips=1 tick=10.000000000"
+            Note over LOG: "[2026-06-07T12:34:58Z] gen=2 arm=3 cpu=12.34% mem=45.67% riscv=2 cpu=8.90% mem=23.45% mips=1 cpu=3.21% mem=67.89% tick=10.000000000"
             Note over ST: fflush(log)
         else gen == last_gen
             Note over ST: sleep(2) — no new snapshot
