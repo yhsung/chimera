@@ -23,6 +23,11 @@ void bootlog_init(struct bootlog_monitor *m,
     __sync_synchronize();
     m->header->collector_peer_id = BOOTLOG_COLLECTOR_PEER_UNSET;
     __sync_synchronize();
+
+    /* FreeRTOS itself is booted immediately — mark its slot so bootlog_tick()
+     * doesn't wait for a FreeRTOS writer that doesn't exist. */
+    m->header->guests[HSOC_GUEST_FREERTOS].status = HSOC_BOOT_COMPLETE;
+    __sync_synchronize();
 }
 
 int bootlog_tick(struct bootlog_monitor *m)
@@ -57,6 +62,10 @@ int bootlog_tick(struct bootlog_monitor *m)
         return 0;
     }
 
+    /* Increment generation so boot-collector knows to harvest logs */
+    m->header->generation++;
+    __sync_synchronize();
+
     /* Ring doorbell: encode (peer_id << 16) | vector 0
      * mmio_base is volatile uint32_t *; DOORBELL register is at byte offset 0xc (index 3) */
     uint32_t doorbell_val = (peer_id << 16) | 0U;
@@ -64,7 +73,7 @@ int bootlog_tick(struct bootlog_monitor *m)
     m->link.mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = doorbell_val;
     __sync_synchronize();
 
-    log_uart("[bootlog] doorbell rung\n");
+    log_uart("[bootlog] doorbell rung, generation incremented\n");
 
     m->armed = 0;
     return 1;

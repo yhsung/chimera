@@ -98,6 +98,35 @@ When the master agent is working inside a git worktree (isolated branch), **all 
 
 - Target tmux 3.4+: use `-l N%` for pane sizing (the `-p N` flag was removed), handle pane renumbering explicitly after splits, and account for read-only mounted paths.
 
+## Direct Lima Access (for debugging)
+
+**Always use `limactl shell qemu-dev` to run commands directly** — do not ask the user to copy/paste diagnostics. The Lima VM is the control plane for everything: building, launching QEMU guests, and accessing guest serial consoles.
+
+### Running commands in Lima
+```bash
+limactl shell qemu-dev -- <command>
+```
+
+### Accessing guest tmux panes
+```bash
+# Capture a tmux pane (pane numbering: 0.0–0.5 = top 5 ivshmem servers + FreeRTOS, 0.6 = ARM, 0.7 = RISCV, 0.8 = MIPS)
+limactl shell qemu-dev -- tmux capture-pane -p -t freertos-showcase:0.6 | tail -50
+
+# Send a command to a running guest pane
+limactl shell qemu-dev -- tmux send-keys -t freertos-showcase:0.6 "ls /var/log/boot-logs/" Enter
+```
+
+### Accessing guest serial consoles (via chimera-ssh)
+```bash
+# SSH into ARM guest (port 2222), RISCV (2223), MIPS (2224)
+limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost '<command>'
+```
+
+### Getting boot logs from ARM guest
+```bash
+limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost 'ls -la /var/log/boot-logs/'
+```
+
 ## Key Environment Variables
 
 All scripts inherit defaults from `scripts/heterogeneous-soc/common.sh`. Commonly overridden:
