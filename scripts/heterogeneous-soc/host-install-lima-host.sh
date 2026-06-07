@@ -30,5 +30,45 @@ else
     echo "Source tree deployed to ~/chimera-src"
 fi
 
+# ── Install chimera-ssh / chimera-keyinject on the macOS host ──────────────────
+# Appends shell functions to ~/.zshrc so the user can SSH into guests from
+# macOS without remembering Lima's dynamic port.
+INSTALL_MARKER="# chimera-ssh helpers (added by host-install-lima-host.sh)"
+if grep -qF "${INSTALL_MARKER}" "${HOME}/.zshrc" 2>/dev/null; then
+    echo "chimera-ssh / chimera-keyinject already installed in ~/.zshrc"
+else
+    echo "Installing chimera-ssh / chimera-keyinject into ~/.zshrc ..."
+
+    # Resolve the repo scripts dir relative to this script
+    REPO_SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+
+    cat >> "${HOME}/.zshrc" <<FUNCTIONS
+
+${INSTALL_MARKER}
+chimera-ssh() {
+  local ssh_config="\${HOME}/.lima/${LIMA_NAME}/ssh.config"
+  [[ -f "\${ssh_config}" ]] || { echo "Lima VM not running (no ssh.config)"; return 1; }
+  ssh -F "\${ssh_config}" \\
+      -o ProxyCommand="ssh -F '\${ssh_config}' -W %h:%p lima-${LIMA_NAME}" \\
+      -o PasswordAuthentication=no \\
+      -o StrictHostKeyChecking=no \\
+      -o UserKnownHostsFile=/dev/null \\
+      "\$@"
+}
+chimera-keyinject() {
+  local vm_script_dir="\${VM_SCRIPT_DIR:-\${HOME}/chimera-src/scripts/heterogeneous-soc}"
+  echo "Injecting SSH public key into Chimera guests..."
+  echo "  (QEMU must not be running)"
+  echo ""
+  limactl shell ${LIMA_NAME} -- bash "\${vm_script_dir}/guest-install-ssh-keys-to-guests.sh"
+}
+FUNCTIONS
+    echo "chimera-ssh / chimera-keyinject installed. Restart your shell or source ~/.zshrc"
+fi
+
+echo ""
 echo "Lima VM ready. Enter it with:"
 echo "  limactl shell ${LIMA_NAME}"
+echo ""
+echo "After starting the showcase, connect to guests from macOS:"
+echo "  chimera-ssh root@debian-arm64.local"
