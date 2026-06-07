@@ -30,6 +30,12 @@ struct hsoc_stats_snapshot {
     uint32_t          pad;
     int64_t           tick_sec;    /* FreeRTOS tick time of this snapshot */
     int64_t           tick_nsec;
+    uint32_t          arm_cpu_pct_x100;   /* latest ARM-Linux CPU busy %, x100 */
+    uint32_t          arm_mem_pct_x100;   /* latest ARM-Linux used-mem %, x100 */
+    uint32_t          riscv_cpu_pct_x100; /* latest RISCV-Linux CPU busy %, x100 */
+    uint32_t          riscv_mem_pct_x100; /* latest RISCV-Linux used-mem %, x100 */
+    uint32_t          mips_cpu_pct_x100;  /* latest MIPS-Linux CPU busy %, x100 */
+    uint32_t          mips_mem_pct_x100;  /* latest MIPS-Linux used-mem %, x100 */
 };
 
 #endif

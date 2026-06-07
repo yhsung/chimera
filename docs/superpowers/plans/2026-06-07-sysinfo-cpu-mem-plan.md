@@ -40,7 +40,7 @@ FreeRTOS firmware (RISC-V).
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/hello_proto.h:7,22-31`
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/stats_proto.h:24-33`
 
-- [ ] **Step 1.1: Bump HSOC_PROTO_VERSION and add fields to hsoc_hello_msg**
+- [x] **Step 1.1: Bump HSOC_PROTO_VERSION and add fields to hsoc_hello_msg**
 
 In `hello_proto.h`, change line 7 from:
 ```c
@@ -85,7 +85,7 @@ This insertion point keeps every field naturally aligned: the struct is 32 bytes
 still 8-aligned), and `text` (a `char` array needing no alignment) follows — no padding
 is introduced or removed anywhere in the layout.
 
-- [ ] **Step 1.2: Add per-guest CPU/mem fields to hsoc_stats_snapshot**
+- [x] **Step 1.2: Add per-guest CPU/mem fields to hsoc_stats_snapshot**
 
 In `stats_proto.h`, replace the struct (lines 24-33):
 ```c
@@ -124,7 +124,7 @@ These new fields are appended at the end (8-byte-aligned offset after `tick_nsec
 existing fields keep their offsets — `magic`, `generation`, and the three `*_count`
 fields that current readers already depend on are untouched.
 
-- [ ] **Step 1.3: Verify both headers declare the new fields**
+- [x] **Step 1.3: Verify both headers declare the new fields**
 
 Run:
 ```bash
@@ -136,7 +136,7 @@ contrib/heterogeneous-soc/freertos-showcase/hello_proto.h:2
 contrib/heterogeneous-soc/freertos-showcase/stats_proto.h:6
 ```
 
-- [ ] **Step 1.4: Commit**
+- [x] **Step 1.4: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/hello_proto.h contrib/heterogeneous-soc/freertos-showcase/stats_proto.h
@@ -161,7 +161,7 @@ the test's regex requires). The test can currently only time out and FAIL. The f
 sidestepping the ivshmem/ACK exchange entirely, which is also exactly what's needed to
 verify the new `cpu=`/`mem=` fields format without a live FreeRTOS responder.
 
-- [ ] **Step 2.1: Rewrite test-syslog-format.sh to use self-test mode and the new format**
+- [x] **Step 2.1: Rewrite test-syslog-format.sh to use self-test mode and the new format**
 
 Replace the entire file content with:
 ```bash
@@ -191,13 +191,13 @@ else
 fi
 ```
 
-- [ ] **Step 2.2: Run the test — verify it still SKIPs (binary not yet rebuilt)**
+- [x] **Step 2.2: Run the test — verify it still SKIPs (binary not yet rebuilt)**
 
 Run: `bash contrib/heterogeneous-soc/freertos-showcase/test-syslog-format.sh; echo "exit: $?"`
 Expected: `SKIP: .../syslog-arm-linux not built` and `exit: 77` (cross-compilers and the
 prebuilt binary live on the Lima VM, not this host — see `CLAUDE.md`)
 
-- [ ] **Step 2.3: Add CPU and memory sampling functions**
+- [x] **Step 2.3: Add CPU and memory sampling functions**
 
 In `linux_syslog.c`, insert the following two functions immediately after
 `read_uptime_sec` (after its closing brace, before `build_sysinfo_text`):
@@ -265,7 +265,7 @@ first call has no baseline and returns `0`; subsequent calls (one per `main_loop
 iteration, every `interval` seconds) compute the percentage from the delta since the
 previous call.
 
-- [ ] **Step 2.4: Update build_sysinfo_text to take and print the new metrics**
+- [x] **Step 2.4: Update build_sysinfo_text to take and print the new metrics**
 
 Replace:
 ```c
@@ -299,7 +299,7 @@ baseline before the real next iteration runs, corrupting the rate calculation. E
 metric must be sampled exactly once per iteration and the value reused everywhere it's
 needed (wire field and text rendering alike).
 
-- [ ] **Step 2.5: Sample once per iteration, populate the new wire fields, and pass values into build_sysinfo_text**
+- [x] **Step 2.5: Sample once per iteration, populate the new wire fields, and pass values into build_sysinfo_text**
 
 In `main_loop`, replace:
 ```c
@@ -342,7 +342,7 @@ with:
         build_sysinfo_text(msg.text, sizeof(msg.text), cpu_pct_x100, mem_pct_x100);
 ```
 
-- [ ] **Step 2.6: Add SYSLOG_SELFTEST mode to main()**
+- [x] **Step 2.6: Add SYSLOG_SELFTEST mode to main()**
 
 Replace:
 ```c
@@ -370,7 +370,7 @@ This is an entirely separate, early-exit code path — it never touches BAR2/ivs
 it cannot affect the production HELLO/ACK loop, and it gives the format test a
 deterministic, instantaneous way to check `build_sysinfo_text`'s output.
 
-- [ ] **Step 2.7: Run the format test again — still expect SKIP on this host**
+- [x] **Step 2.7: Run the format test again — still expect SKIP on this host**
 
 Run: `bash contrib/heterogeneous-soc/freertos-showcase/test-syslog-format.sh; echo "exit: $?"`
 Expected: `SKIP: .../syslog-arm-linux not built` and `exit: 77`
@@ -378,11 +378,67 @@ Expected: `SKIP: .../syslog-arm-linux not built` and `exit: 77`
 This confirms the rewritten script still runs cleanly (no syntax errors) — full `PASS`
 verification against the cross-compiled binary happens in Task 5 on the Lima VM.
 
-- [ ] **Step 2.8: Commit**
+- [x] **Step 2.8: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/linux_syslog.c contrib/heterogeneous-soc/freertos-showcase/test-syslog-format.sh
 git commit -m "feat: collect CPU/memory usage in linux_syslog and fix format self-test"
+```
+
+---
+
+## Task 2a: Fix CPU idle-delta underflow found in code review
+
+**Files:**
+- Modify: `contrib/heterogeneous-soc/freertos-showcase/linux_syslog.c` (`read_cpu_pct_x100`, added in Task 2)
+
+Code review of Task 2's `read_cpu_pct_x100` (landed in `fe177a2372`) found a bug before
+Task 3 began: the `total > prev_total` guard ensures `dtotal > 0` but does not guarantee
+`didle <= dtotal`. If the aggregate idle/iowait counters in `/proc/stat` decrease between
+samples — a known edge case around CPU hotplug events on some kernels — `busy_idle -
+prev_idle` underflows to a huge `unsigned long long`, and the subsequent `dtotal - didle`
+underflows again, producing a garbage `pct_x100` that can wildly exceed 100% (reproduced
+as `pct_x100 = 11111`). Landed as `ae44c9d7ae`, between the Task 2 and Task 3 commits.
+
+- [x] **Step 2a.1: Clamp the idle delta against underflow**
+
+Replace:
+```c
+    uint32_t pct_x100 = 0;
+    if (have_prev && total > prev_total) {
+        unsigned long long dtotal = total - prev_total;
+        unsigned long long didle = busy_idle - prev_idle;
+        pct_x100 = (uint32_t)(10000ULL * (dtotal - didle) / dtotal);
+    }
+```
+with:
+```c
+    /* First call has no baseline yet, so have_prev is false and pct_x100 stays 0. */
+    uint32_t pct_x100 = 0;
+    if (have_prev && total > prev_total) {
+        unsigned long long dtotal = total - prev_total;
+        /* Clamp against underflow: aggregate idle/iowait counters can decrease
+         * between samples on some kernels (e.g. around CPU hotplug events),
+         * so guard both the subtraction and the dtotal - didle below. */
+        unsigned long long didle = (busy_idle >= prev_idle) ? (busy_idle - prev_idle) : 0;
+        if (didle > dtotal)
+            didle = dtotal;
+        pct_x100 = (uint32_t)(10000ULL * (dtotal - didle) / dtotal);
+    }
+```
+
+`didle` is clamped twice: first against underflow in the subtraction itself (defaulting to
+`0` when `busy_idle < prev_idle`), then against exceeding `dtotal` (busy time can never be
+negative, so the idle delta can never legitimately exceed the total delta). Both guards
+are needed — the first prevents wraparound in the subtraction itself, the second prevents
+a still-too-large `didle` (e.g. if `busy_idle` legitimately grew a lot while `prev_idle`
+lagged) from underflowing `dtotal - didle`.
+
+- [x] **Step 2a.2: Commit**
+
+```bash
+git add contrib/heterogeneous-soc/freertos-showcase/linux_syslog.c
+git commit -m "fix: clamp CPU idle delta to prevent underflow in read_cpu_pct_x100"
 ```
 
 ---
@@ -392,7 +448,7 @@ git commit -m "feat: collect CPU/memory usage in linux_syslog and fix format sel
 **Files:**
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/freertos_main.c:39-45,161-175,177-195,270-279`
 
-- [ ] **Step 3.1: Add per-sender CPU/mem static state**
+- [x] **Step 3.1: Add per-sender CPU/mem static state**
 
 Replace (lines 39-45):
 ```c
@@ -421,7 +477,7 @@ static TickType_t mips_last_hello_ticks;
 These hold each guest's most recently received CPU%/mem% between snapshot writes — same
 lifetime and update cadence as the existing `arm_count`/`riscv_count`/`mips_count`.
 
-- [ ] **Step 3.2: Extend maybe_service_link to capture cpu/mem from each HELLO**
+- [x] **Step 3.2: Extend maybe_service_link to capture cpu/mem from each HELLO**
 
 Replace:
 ```c
@@ -472,7 +528,7 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
 }
 ```
 
-- [ ] **Step 3.3: Update the three call sites in showcase_task's loop**
+- [x] **Step 3.3: Update the three call sites in showcase_task's loop**
 
 Replace:
 ```c
@@ -501,7 +557,7 @@ with:
                            &mips_count, &mips_cpu_pct, &mips_mem_pct, &mips_last_hello_ticks);
 ```
 
-- [ ] **Step 3.4: Copy the new per-sender values into the stats snapshot**
+- [x] **Step 3.4: Copy the new per-sender values into the stats snapshot**
 
 Replace:
 ```c
@@ -550,7 +606,7 @@ All new fields are written before the `__sync_synchronize()` + `generation` incr
 identical write-protocol discipline to the existing fields, per the struct's documented
 write protocol.
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/freertos_main.c
@@ -564,7 +620,7 @@ git commit -m "feat: relay per-guest CPU/memory usage through FreeRTOS stats sna
 **Files:**
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/linux_stats.c:123-146`
 
-- [ ] **Step 4.1: Extend log_snapshot to print the new per-guest fields**
+- [x] **Step 4.1: Extend log_snapshot to print the new per-guest fields**
 
 Replace:
 ```c
@@ -636,7 +692,7 @@ This produces lines like:
 parts for `%u.%02u` rendering — the same technique `read_loadavg_fixed` already uses on
 the Linux side. No floating point in the log writer.
 
-- [ ] **Step 4.2: Commit**
+- [x] **Step 4.2: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/linux_stats.c
@@ -649,11 +705,16 @@ git commit -m "feat: print per-guest CPU/memory usage in cross-domain log"
 
 **Files:** none — build and integration verification only.
 
-- [ ] **Step 5.1: Deploy source to the Lima VM**
+**Status as of this update:** Tasks 1, 2, 2a, 3, and 4 are committed on `HEAD`
+(`35829b2dec` … `765fe5bd38`, plus the README sync in `290a828d56`). This task has no
+commit of its own (per Step 5.6's note) and no Lima VM is currently running, so its
+live-verification steps below remain unchecked pending a fresh run.
+
+- [x] **Step 5.1: Deploy source to the Lima VM**
 
 Run: `bash scripts/heterogeneous-soc/host-install-lima-host.sh`
 
-- [ ] **Step 5.2: Rebuild the FreeRTOS showcase binaries**
+- [x] **Step 5.2: Rebuild the FreeRTOS showcase binaries**
 
 Run:
 ```bash
@@ -663,7 +724,7 @@ Expected: `syslog-arm-linux`, `syslog-riscv-linux`, `syslog-mips-linux`, `linux-
 and `freertos-riscv-demo.elf` all rebuilt with no errors or warnings about the changed
 files.
 
-- [ ] **Step 5.3: Run the format self-test against the rebuilt binary**
+- [x] **Step 5.3: Run the format self-test against the rebuilt binary**
 
 Run:
 ```bash
@@ -675,14 +736,14 @@ PASS: sysinfo format correct
   output: [arm-linux] SYSINFO #0 ld=X.XX cpu=X.XX% mem=X.XX% mf=XXXM up=XXXs
 ```
 
-- [ ] **Step 5.4: Launch the full showcase**
+- [x] **Step 5.4: Launch the full showcase**
 
 Run:
 ```bash
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
-- [ ] **Step 5.5: Confirm all three guests' new fields appear and update in the cross-domain log**
+- [x] **Step 5.5: Confirm all three guests' new fields appear and update in the cross-domain log**
 
 Wait roughly 60 seconds after the showcase reaches steady state (so several stats
 snapshots have been logged), then run:
@@ -690,6 +751,19 @@ snapshots have been logged), then run:
 limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost \
   'tail -5 /var/log/chimera-log/chimera-cross-domain.log'
 ```
+
+> **Note (found during execution of this task):** the `localhost:2222` hostfwd address
+> above is stale — the Avahi network migration (`2026-06-06-avahi-network`) replaced QEMU
+> usermode hostfwd with TAP-bridge networking, so that address now just gets
+> `Connection refused`. The working equivalent is to SSH directly to the ARM guest's
+> bridge IP from inside the Lima VM, using the host-injected key (see README → "Guest
+> Networking & Avahi Discovery"):
+> ```bash
+> limactl shell qemu-dev -- ssh -i /Users/yhsung/.ssh/id_ed25519 \
+>   -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.100.10 \
+>   'tail -5 /var/log/chimera-log/chimera-cross-domain.log'
+> ```
+
 Expected: lines matching
 ```
 [<timestamp>] gen=<N> arm=<N> cpu=<N.NN>% mem=<N.NN>% riscv=<N> cpu=<N.NN>% mem=<N.NN>% mips=<N> cpu=<N.NN>% mem=<N.NN>% tick=<N>.<N>
@@ -698,7 +772,7 @@ with `cpu=`/`mem=` values present for `riscv` and `mips` (not just `arm`) and ch
 across consecutive lines — confirming the relay path through FreeRTOS carries live data
 from all three guests, not stale zeros.
 
-- [ ] **Step 5.6: Tear down**
+- [x] **Step 5.6: Tear down**
 
 Run:
 ```bash
@@ -706,4 +780,4 @@ limactl shell qemu-dev -- bash -lc 'pkill qemu-system; rm -f /tmp/*.sock'
 ```
 
 No commit for this task — it is verification of the binaries already committed in
-Tasks 1–4.
+Tasks 1–4 (and the Task 2a follow-up fix).

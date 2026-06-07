@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Verifies syslog-arm-linux outputs the expected sysinfo format.
+# Verifies syslog-arm-linux's SYSINFO line format via its self-test mode
+# (SYSLOG_SELFTEST=1 prints one line and exits — no ivshmem/FreeRTOS needed).
 # Run on Linux with cross-compiled syslog-arm-linux present.
 # Exit 77 = SKIP (binary not built yet).
 set -euo pipefail
@@ -11,14 +12,9 @@ if [[ ! -f "${BINARY}" ]]; then
     exit 77
 fi
 
-TMP_SHM=$(mktemp)
-dd if=/dev/zero of="${TMP_SHM}" bs=1M count=64 status=none
-chmod 600 "${TMP_SHM}"
+OUTPUT=$(SYSLOG_SELFTEST=1 timeout 8 "${BINARY}" 2>/dev/null | grep -m1 "SYSINFO" || true)
 
-OUTPUT=$(timeout 8 "${BINARY}" "${TMP_SHM}" 2>/dev/null | grep -m1 "SYSINFO" || true)
-rm -f "${TMP_SHM}"
-
-if echo "${OUTPUT}" | grep -qE '\[arm-linux\] SYSINFO #0 ld=[0-9]+\.[0-9]+ mf=[0-9]+M up=[0-9]+s'; then
+if echo "${OUTPUT}" | grep -qE '\[arm-linux\] SYSINFO #0 ld=[0-9]+\.[0-9]+ cpu=[0-9]+\.[0-9]+% mem=[0-9]+\.[0-9]+% mf=[0-9]+M up=[0-9]+s'; then
     echo "PASS: sysinfo format correct"
     echo "  output: ${OUTPUT}"
 else
