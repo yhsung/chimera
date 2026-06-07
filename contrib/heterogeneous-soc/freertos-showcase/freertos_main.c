@@ -39,6 +39,9 @@ static volatile struct hsoc_stats_snapshot *stats_shmem =
 static uint32_t arm_count;
 static uint32_t riscv_count;
 static uint32_t mips_count;
+static uint32_t arm_cpu_pct, arm_mem_pct;
+static uint32_t riscv_cpu_pct, riscv_mem_pct;
+static uint32_t mips_cpu_pct, mips_mem_pct;
 static uint32_t stats_tick;
 static TickType_t arm_last_hello_ticks;
 static TickType_t riscv_last_hello_ticks;
@@ -168,6 +171,12 @@ static void write_stats_snapshot(void)
     tick_to_timestamp(&ts_sec, &ts_nsec);
     stats_shmem->tick_sec  = ts_sec;
     stats_shmem->tick_nsec = ts_nsec;
+    stats_shmem->arm_cpu_pct_x100   = arm_cpu_pct;
+    stats_shmem->arm_mem_pct_x100   = arm_mem_pct;
+    stats_shmem->riscv_cpu_pct_x100 = riscv_cpu_pct;
+    stats_shmem->riscv_mem_pct_x100 = riscv_mem_pct;
+    stats_shmem->mips_cpu_pct_x100  = mips_cpu_pct;
+    stats_shmem->mips_mem_pct_x100  = mips_mem_pct;
     __sync_synchronize();
     stats_shmem->generation = stats_shmem->generation + 1;
     __sync_synchronize();
@@ -177,6 +186,8 @@ static void write_stats_snapshot(void)
 static void maybe_service_link(struct freertos_ivshmem_link *link,
                                const char *log_message,
                                uint32_t *count,
+                               uint32_t *cpu_pct,
+                               uint32_t *mem_pct,
                                TickType_t *last_hello_ticks)
 {
     struct hsoc_hello_msg hello;
@@ -191,6 +202,8 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     log_uart(HSOC_LOG_VERBOSE, log_message);
     freertos_ivshmem_send_ack(link, hello.seq, ts_sec, ts_nsec);
     (*count)++;
+    *cpu_pct = hello.cpu_pct_x100;
+    *mem_pct = hello.mem_used_pct_x100;
     *last_hello_ticks = xTaskGetTickCount();
 }
 
@@ -270,13 +283,13 @@ static void showcase_task(void *opaque)
     for (;;) {
         maybe_service_link(&arm_link,
                            "[freertos] received hello from arm-linux\n",
-                           &arm_count, &arm_last_hello_ticks);
+                           &arm_count, &arm_cpu_pct, &arm_mem_pct, &arm_last_hello_ticks);
         maybe_service_link(&riscv_link,
                            "[freertos] received hello from riscv-linux\n",
-                           &riscv_count, &riscv_last_hello_ticks);
+                           &riscv_count, &riscv_cpu_pct, &riscv_mem_pct, &riscv_last_hello_ticks);
         maybe_service_link(&mips_link,
                            "[freertos] received hello from mips-linux\n",
-                           &mips_count, &mips_last_hello_ticks);
+                           &mips_count, &mips_cpu_pct, &mips_mem_pct, &mips_last_hello_ticks);
 
         if (++stats_tick >= 5000) {
             stats_tick = 0;
