@@ -131,15 +131,21 @@ static void log_snapshot(FILE *log, const struct hsoc_stats_snapshot *snap)
 
     fprintf(log,
             "[%s] gen=%" PRIu32
-            " arm=%" PRIu32
-            " riscv=%" PRIu32
-            " mips=%" PRIu32
+            " arm=%" PRIu32 " cpu=%" PRIu32 ".%02" PRIu32 "%% mem=%" PRIu32 ".%02" PRIu32 "%%"
+            " riscv=%" PRIu32 " cpu=%" PRIu32 ".%02" PRIu32 "%% mem=%" PRIu32 ".%02" PRIu32 "%%"
+            " mips=%" PRIu32 " cpu=%" PRIu32 ".%02" PRIu32 "%% mem=%" PRIu32 ".%02" PRIu32 "%%"
             " tick=%" PRId64 ".%09" PRId64 "\n",
             timebuf,
             snap->generation,
             snap->arm_count,
+            snap->arm_cpu_pct_x100 / 100, snap->arm_cpu_pct_x100 % 100,
+            snap->arm_mem_pct_x100 / 100, snap->arm_mem_pct_x100 % 100,
             snap->riscv_count,
+            snap->riscv_cpu_pct_x100 / 100, snap->riscv_cpu_pct_x100 % 100,
+            snap->riscv_mem_pct_x100 / 100, snap->riscv_mem_pct_x100 % 100,
             snap->mips_count,
+            snap->mips_cpu_pct_x100 / 100, snap->mips_cpu_pct_x100 % 100,
+            snap->mips_mem_pct_x100 / 100, snap->mips_mem_pct_x100 % 100,
             snap->tick_sec,
             snap->tick_nsec);
     fflush(log);
