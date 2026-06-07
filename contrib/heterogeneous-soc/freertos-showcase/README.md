@@ -247,7 +247,7 @@ on RISC-V, `dmb ish` on AArch64) wraps every flag read/write.
 1. FreeRTOS `bootlog_init` writes `BOOTLOG_MAGIC` and `collector_peer_id = UNSET`
 2. Each Linux `bootlog-writer` finds the boot-log BAR2, waits for magic, marks its guest `status = BOOT_COMPLETE`, drains `/dev/kmsg` every 2 s
 3. FreeRTOS `bootlog_tick` waits for all 4 guests to reach `BOOT_COMPLETE`, then rings doorbell and increments `generation`
-4. ARM `boot-collector` polls `generation` every 2 s, harvests 4 guest slots to `/var/log/boot-logs/`
+4. ARM `boot-collector` polls `generation` every 2 s, harvests 4 guest slots to `/var/log/chimera-log/boot-log/`
 
 ## Testing
 
