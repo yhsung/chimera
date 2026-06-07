@@ -103,7 +103,7 @@ static void maybe_service_link(struct freertos_ivshmem_link *link,
     (*count)++;
 }
 
-static void log_hex32_uart(uint32_t v)
+void log_hex32_uart(uint32_t v)
 {
     static const char hex[] = "0123456789abcdef";
     char buf[11];

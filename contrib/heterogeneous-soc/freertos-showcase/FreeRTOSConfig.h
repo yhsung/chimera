@@ -42,5 +42,6 @@
 #define INCLUDE_xTaskGetIdleTaskHandle 1
 #define INCLUDE_xTaskGetCurrentTaskHandle 1
 #define INCLUDE_uxTaskPriorityGet 1
+#define INCLUDE_uxTaskGetStackHighWaterMark 1
 
 #endif
