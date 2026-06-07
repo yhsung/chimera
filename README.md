@@ -55,11 +55,12 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 | ARM-Linux | 4 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a57` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
 | RISCV-Linux | 4 / 512 MB | QEMU `virt` rv64, OpenSBI, `-cpu rv64,h=true,v=true` | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
 | MIPS-Linux | 4 / 512 MB | QEMU `malta` mipsel, `-cpu 1004Kf` | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
-| RISCV FreeRTOS | 1 hart / — | QEMU `chimera-riscv-freertos-demo` (1 RV64 hart) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
+| RISCV FreeRTOS | 1 hart / — | QEMU `chimera-riscv-freertos-demo` (1 RV64 hart, `TYPE_RISCV_CPU_BASE`) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
 | ivshmem-server (ARM) | — / — | Host process | — | — | — | Brokers shared memory for ARM↔FreeRTOS |
 | ivshmem-server (RISCV) | — / — | Host process | — | — | — | Brokers shared memory for RISCV↔FreeRTOS |
 | ivshmem-server (MIPS) | — / — | Host process | — | — | — | Brokers shared memory for MIPS↔FreeRTOS |
 | ivshmem-server (stats) | — / — | Host process | — | — | — | Brokers shared memory for FreeRTOS→ARM stats channel |
+| ivshmem-server (boot-log) | — / — | Host process | — | — | — | Brokers shared memory for guest boot logs → ARM |
 | Lima VM (`qemu-dev`) | macOS VZ, aarch64 | 8 / 8 GiB | Ubuntu 24.04 (noble) | localhost | `lima-qemu-dev` | Hosts all QEMU guests, ivshmem servers, and cross-compilation toolchains |
 
 ### ivshmem Device Types
@@ -67,7 +68,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 - **Linux guests** use `ivshmem-doorbell` (PCI device, BAR2 = 64 MiB shared memory window)
 - **FreeRTOS** uses `ivshmem-flat` (custom sysbus device, memory-mapped at fixed addresses)
 
-The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS to all four ivshmem servers simultaneously:
+The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS to all five ivshmem servers simultaneously:
 
 | Link | MMIO base | SHMEM base | Direction |
 |---|---|---|---|
@@ -75,6 +76,7 @@ The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS t
 | RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` | bidirectional (HELLO/ACK) |
 | MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | bidirectional (HELLO/ACK) |
 | Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | FreeRTOS write only (stats snapshot) |
+| Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 3 Linux guests + FreeRTOS → ARM collector (kmsg boot logs) |
 
 ---
 
