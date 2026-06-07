@@ -86,7 +86,51 @@ Only the boot-log channel uses the doorbell mechanism:
 |---|---|---|---|---|
 | Boot-log | FreeRTOS | `(collector_peer_id << 16) \| 0` | (doorbell ignored) | ARM `boot-collector` polls `generation` counter every 2 s |
 
-**Boot-log doorbell flow:** `bootlog-arm-linux` reads BAR0 IVPOSITION (peer ID = 1), writes it to `header->collector_peer_id`. When all guests reach `BOOT_COMPLETE`, FreeRTOS increments `header->generation` and rings `(1 << 16) \| 0` on vector 0. The doorbell itself is not consumed — `boot-collector` detects the change by polling `generation`.
+**Boot-log doorbell flow:**
+
+```mermaid
+sequenceDiagram
+    participant FW as FreeRTOS (ivshmem-flat)
+    participant SHM as Boot-log Shared Memory (BAR2)
+    participant ARM_W as ARM bootlog-writer
+    participant R_W as RISCV bootlog-writer
+    participant M_W as MIPS bootlog-writer
+    participant COL as ARM boot-collector
+
+    Note over FW: bootlog_init()
+    FW->>SHM: magic = BOOTLOG_MAGIC
+    FW->>SHM: collector_peer_id = UNSET
+    FW->>SHM: guests[FREERTOS].status = BOOT_COMPLETE
+
+    Note over ARM_W: bootlog-arm-linux starts
+    ARM_W->>SHM: wait for magic == BOOTLOG_MAGIC
+    ARM_W->>SHM: collector_peer_id = IVPOSITION (1)
+    ARM_W->>SHM: drain /dev/kmsg → BOOTLOG_SLOT_ARM
+    ARM_W->>SHM: guests[ARM].status = BOOT_COMPLETE
+
+    Note over R_W: bootlog-riscv-linux starts
+    R_W->>SHM: drain /dev/kmsg → BOOTLOG_SLOT_RISCV
+    R_W->>SHM: guests[RISCV].status = BOOT_COMPLETE
+
+    Note over M_W: bootlog-mips-linux starts
+    M_W->>SHM: drain /dev/kmsg → BOOTLOG_SLOT_MIPS
+    M_W->>SHM: guests[MIPS].status = BOOT_COMPLETE
+
+    loop bootlog_tick() every 1 ms
+        FW->>SHM: read collector_peer_id, guest[*].status
+    end
+
+    Note over FW: all 4 guests BOOT_COMPLETE
+    FW->>SHM: generation++
+    FW->>COL: doorbell (1 << 16) | 0
+
+    loop poll every 2 s
+        COL->>SHM: read generation
+    end
+
+    Note over COL: generation changed: 0 → 1
+    COL->>SHM: read guest slots → /var/log/boot-logs/guest-*.log
+```
 
 ---
 
