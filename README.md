@@ -1,6 +1,6 @@
 # Chimera — Heterogeneous SoC Demo
 
-A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux, logged to `/tmp/freertos-stats.log`.
+A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux (logged to `/tmp/freertos-stats.log`), and a fifth boot-log channel collects kernel boot logs from all guests into `/var/log/boot-logs/` on ARM-Linux.
 
 ---
 
@@ -10,7 +10,7 @@ All custom code lives in a small surface area on top of upstream QEMU:
 
 | File | Purpose |
 |---|---|
-| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, four `ivshmem-flat` devices (3 HELLO/ACK + 1 stats) |
+| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, five `ivshmem-flat` devices (3 HELLO/ACK + 1 stats + 1 boot-log) |
 | `include/hw/riscv/chimera_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
 | `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
 | `include/hw/misc/ivshmem-flat.h` | Device state and interface |
