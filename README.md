@@ -52,7 +52,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 | Component | Machine | CPUs / RAM | OS | IP | Hostname | Role |
 |---|---|---|---|---|---|---|
-| ARM-Linux | 4 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a57` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
+| ARM-Linux | 2 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a53` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
 | RISCV-Linux | 4 / 512 MB | QEMU `virt` rv64, OpenSBI, `-cpu rv64,h=true,v=true` | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
 | MIPS-Linux | 1 / 512 MB | QEMU `malta` mipsel, `-cpu 24Kf` | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
 | RISCV FreeRTOS | 1 / 128 MiB | QEMU `chimera-riscv-freertos-demo` (1 RV64 hart, `TYPE_RISCV_CPU_BASE`) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
@@ -793,3 +793,14 @@ All copies to/from ivshmem use explicit volatile byte loops instead of `memcpy`/
 - AArch64: emits `dmb ish`
 
 This ensures message body writes are globally visible before the flag is set, and that the flag read completes before the message body is read.
+
+### ARM-Linux CPU model and vCPU count
+
+The ARM-Linux guest is launched with `-cpu cortex-a53 -smp 2` (see `scripts/heterogeneous-soc/guest-run-arm-phase5.sh:18`).
+
+The Lima VM has no access to KVM or HVF (it is itself a guest of macOS's VZ), so the ARM guest runs under **QEMU TCG** — pure software CPU emulation. With the Lima VM's 8 host cores already saturated by 4 ARM vCPUs + 1 FreeRTOS + 4 RISCV + 1 MIPS = 10 emulated vCPUs, every TCG thread is constantly preempted and interactive SSH into the ARM guest feels laggy.
+
+Two adjustments restore responsiveness:
+
+- **CPU model: cortex-a53 instead of cortex-a57.** `cortex-a57` is an out-of-order ARMv8 core; QEMU TCG has to emulate its out-of-order machinery, branch prediction, and advanced features on every instruction even though bash, sshd, and the syslog/bootlog daemons never use them. `cortex-a53` is the in-order sibling in the same ARMv8 baseline — significantly simpler to emulate, typically 1.5–2× faster on TCG for generic code, and ABI-compatible with the Debian Bookworm arm64 kernel and userspace.
+- **vCPU count: 2 instead of 4.** Halves the number of TCG threads competing for host cores and frees cores for the other guests. Bash and sshd are not parallel workloads, so the reduction is invisible to interactive use while the three ivshmem channels and the syslog/bootlog daemons continue to work unchanged.
