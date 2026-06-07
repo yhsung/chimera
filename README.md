@@ -555,14 +555,30 @@ contrib/heterogeneous-soc/
   ping.sh / pong.sh           — wrapper scripts that run the ping/pong binaries
   Makefile                    — cross-compiles ping + pong (static, ARM + RISCV)
   freertos-showcase/
-    hello_proto.h             — HELLO/ACK wire protocol (sender IDs, message structs)
-    stats_proto.h             — stats channel protocol (hsoc_stats_snapshot struct)
-    linux_syslog.c            — sysinfo logging daemon (ARM, RISCV, and MIPS, compiled separately); reads /proc/loadavg, /proc/meminfo, /proc/uptime and sends over ivshmem
-    linux_stats.c             — ARM-Linux stats poller: reads snapshot every 2 s, logs to /var/log/chimera-log/chimera-cross-domain.log
-    freertos_main.c           — FreeRTOS task: polls all three channels, sends ACK, writes stats every 5 s
-    freertos_ivshmem_flat.c   — ivshmem poll/send helpers (volatile byte access)
-    freertos_ivshmem_flat.h
-    Makefile
+    ── Wire Protocol Headers ──
+    hello_proto.h             — HELLO/ACK handshake (sender IDs, message structs, hsoc_layout)
+    stats_proto.h             — Stats snapshot protocol (hsoc_stats_snapshot with generation counter)
+    bootlog_proto.h           — Boot-log protocol (hsoc_bootlog_header, 4 × 1 MiB slots)
+    ── FreeRTOS Firmware (bare-metal RISCV, freertos-riscv-demo.elf) ──
+    freertos_main.c           — main() + showcase_task: polls 3 HELLO/ACK channels, sends ACKs, writes stats snapshot every 5 s, runs boot-log monitor
+    freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, poll_hello, send_ack (volatile byte loops)
+    freertos_ivshmem_flat.h   — struct freertos_ivshmem_link, MMIO register offsets, declarations
+    boot_log.c                — Boot-log monitor: waits for collector, rings doorbell when all 4 guests booted
+    boot_log.h                — struct bootlog_monitor and function declarations
+    freertos_libc.c           — Freestanding libc (memcpy, memmove, memset, memcmp, strcpy, strlen)
+    string.h / stdlib.h       — Libc headers for freestanding environment
+    startup.S                 — RISC-V _start: set stack pointer, install mtvec, clear BSS, call main
+    linker.ld                 — Linker script (RAM at 0x80000000, 8 MiB, KEEP trap handler)
+    FreeRTOSConfig.h          — Kernel config (10 MHz CPU, 1 kHz tick, 64 KiB heap)
+    ── Linux Guest Binaries (cross-compiled per arch) ──
+    linux_syslog.c            — syslog-{arm,riscv,mips}-linux: reads /proc/loadavg, /proc/meminfo, /proc/uptime, sends HELLO, waits for ACK, repeats on interval
+    linux_stats.c             — linux-arm-stats (ARM only): polls generation every 2 s, logs FreeRTOS snapshot to /var/log/chimera-log/chimera-cross-domain.log
+    bootlog_writer.c          — bootlog-{arm,riscv,mips}-linux: reads /dev/kmsg, writes kernel log lines into the guest's 1 MiB boot-log slot
+    boot_collector.c          — boot-collector (ARM only): polls boot-log generation every 2 s, harvests completed slots to /var/log/chimera-log/boot-log/guest-*.log
+    ── Build & Test ──
+    Makefile                  — Cross-compiles all syslog + bootlog + boot-collector + FreeRTOS targets
+    test-syslog-format.sh     — Standalone test validating syslog-arm-linux output format
+    README.md                 — Per-directory documentation with full mermaid flow diagrams
 
 scripts/heterogeneous-soc/
   ── Main showcase launchers ──────────────────────────────────────────────────
