@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHIMERA_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 LIMA_NAME="${LIMA_NAME:-qemu-dev}"
-LIMA_CPUS="${LIMA_CPUS:-4}"
+LIMA_CPUS="${LIMA_CPUS:-8}"
 LIMA_MEMORY="${LIMA_MEMORY:-8}"
 LIMA_DISK="${LIMA_DISK:-100}"
 

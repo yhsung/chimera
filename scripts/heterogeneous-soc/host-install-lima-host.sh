@@ -9,7 +9,7 @@
 
 # Defaults (common.sh sets these too, but for sourced mode we need them early)
 LIMA_NAME="${LIMA_NAME:-qemu-dev}"
-LIMA_CPUS="${LIMA_CPUS:-4}"
+LIMA_CPUS="${LIMA_CPUS:-8}"
 LIMA_MEMORY="${LIMA_MEMORY:-8}"
 LIMA_DISK="${LIMA_DISK:-100}"
 
