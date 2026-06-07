@@ -15,7 +15,7 @@ bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
     -machine virt,gic-version=3 \
-    -cpu cortex-a57 -m 512M -smp 2 \
+    -cpu cortex-a57 -m 512M -smp 4 \
     -bios "${ARM_UEFI_BIOS}" \
     -kernel "${ARM_KERNEL_IMAGE}" \
     -initrd "${ARM_INITRD_IMAGE}" \
