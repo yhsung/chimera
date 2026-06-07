@@ -76,7 +76,7 @@ The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS t
 | RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` | 4 | bidirectional (HELLO/ACK) |
 | MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | 4 | bidirectional (HELLO/ACK) |
 | Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | 4 | FreeRTOS write only (stats snapshot) |
-| Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | 3 Linux guests + FreeRTOS → ARM collector (kmsg boot logs) |
+| Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | All 4 guests → ARM collector (3 via /dev/kmsg, FreeRTOS via `log_uart`) |
 
 **Signaling:** The HELLO/ACK and stats channels use pure shared-memory polling — Linux and FreeRTOS poll `flag`/`generation` fields in shared memory; no doorbell is involved. The 4 vectors on these channels are vestigial.
 
@@ -101,6 +101,10 @@ sequenceDiagram
     FW->>SHM: magic = BOOTLOG_MAGIC
     FW->>SHM: collector_peer_id = UNSET
     FW->>SHM: guests[FREERTOS].status = BOOT_COMPLETE
+
+    loop log_uart() via bootlog_write()
+        FW->>SHM: append console messages → BOOTLOG_SLOT_FREERTOS
+    end
 
     Note over ARM_W: bootlog-arm-linux starts
     ARM_W->>SHM: wait for magic == BOOTLOG_MAGIC
@@ -129,7 +133,7 @@ sequenceDiagram
     end
 
     Note over COL: generation changed: 0 → 1
-    COL->>SHM: read guest slots → /var/log/boot-logs/guest-*.log
+    COL->>SHM: read 4 guest slots → /var/log/boot-logs/guest-*.log
 ```
 
 ---
