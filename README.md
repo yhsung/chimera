@@ -617,6 +617,33 @@ Cross-compilation happens inside the Lima VM, which provides:
 | `mipsel-linux-gnu-gcc` | MIPS-Linux syslog daemon |
 | `riscv64-unknown-elf-gcc` | FreeRTOS bare-metal ELF |
 
+#### Lima VM build dependencies
+
+`scripts/heterogeneous-soc/guest-install-lima-guest.sh` installs everything the Lima VM needs via `apt-get` (it first registers the `arm64`/`riscv64`/`mipsel` foreign architectures so cross-arch kernel `.deb`s can be downloaded, then `apt-get update && apt-get install -y`):
+
+```
+build-essential acpica-tools bison clang debootstrap flex git
+qemu-efi-aarch64 qemu-system-arm qemu-system-misc qemu-system-mips qemu-user-static
+gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mipsel-linux-gnu
+gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+libarchive-tools libglib2.0-dev libpixman-1-dev libssl-dev lld ninja-build
+opensbi pciutils pkg-config python3-pip python3-serial python3-venv
+rsync ssh zlib1g-dev
+```
+
+This runs automatically as Stage 1 of `guest-run-debian-harness.sh` and inside `guest-run-phase5-tmux.sh` (skip with `SKIP_PREREQS=1` once installed). `guest-run-chimera-showcase.sh` instead does its own idempotent `dpkg -s` check and `apt-get install`s only the packages still missing, so re-running the showcase launcher is fast.
+
+#### Guest rootfs packages
+
+The ARM/RISCV/MIPS Debian guest disk images are built by `guest-prepare-debian-rootfs.sh` via `debootstrap --include=$DEBIAN_INCLUDE_PKGS` (falling back from native `debootstrap` → `qemu-debootstrap` → `debootstrap --foreign` + `chroot --second-stage` depending on what the Lima VM supports). The default include list:
+
+```
+systemd systemd-resolved udev dbus initramfs-tools kmod linux-base
+avahi-daemon libnss-mdns iproute2 openssh-server
+```
+
+provides systemd init, networking, Avahi/mDNS discovery (see [Guest Networking & Avahi Discovery](#guest-networking--avahi-discovery)), and SSH access. The Chimera-specific binaries (sysinfo daemons, `linux-arm-stats`) are not apt-installed — they're cross-compiled from `contrib/heterogeneous-soc/freertos-showcase/` and copied into the disk images by `guest-install-syslog-to-guests.sh`.
+
 > **MIPS OS note:** Debian dropped big-endian 32-bit MIPS (mips) after Debian 8 (jessie). The demo uses the `4kc-malta` kernel from the Debian 12 `debian-ports` archive. The MIPS rootfs is built via `debootstrap` using the `debian-ports` suite.
 
 ---
