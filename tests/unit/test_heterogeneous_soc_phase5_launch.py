@@ -14,13 +14,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_SCRIPT = (
-    REPO_ROOT / "scripts" / "heterogeneous-soc" / "run-riscv-freertos-phase5.sh"
+    REPO_ROOT / "scripts" / "heterogeneous-soc" / "guest-run-r52-freertos-phase5.sh"
 )
 SERVER_SCRIPT = (
     REPO_ROOT
     / "scripts"
     / "heterogeneous-soc"
-    / "start-ivshmem-server-arm-freertos.sh"
+    / "guest-start-ivshmem-server-arm-freertos.sh"
 )
 
 
@@ -33,10 +33,10 @@ class Phase5LaunchTest(unittest.TestCase):
         self.path_dir = self.tmp / "path"
         self.path_dir.mkdir()
         self.log_file = self.tmp / "commands.log"
-        self.freertos_elf = self.tmp / "freertos-riscv-demo.elf"
+        self.freertos_elf = self.tmp / "freertos-r52-demo.elf"
         self.freertos_elf.write_bytes(b"ELF")
         self._write_stub(
-            self.build_dir / "qemu-system-riscv64",
+            self.build_dir / "qemu-system-arm",
             f"""#!/bin/sh
 printf 'qemu|%s\\n' "$*" >> {self.log_file}
 exit 0
@@ -81,7 +81,7 @@ exit 0
 
         self.assertEqual(result.returncode, 0, result.stderr)
         log = self.log_file.read_text(encoding="utf-8")
-        self.assertIn("chimera-riscv-freertos-demo", log)
+        self.assertIn("chimera-r52-freertos-demo", log)
         self.assertIn("ivshmem-arm-freertos=armft", log)
         self.assertIn("ivshmem-riscv-freertos=riscvft", log)
         self.assertIn("path=/tmp/ivshmem-arm-freertos/sock", log)
