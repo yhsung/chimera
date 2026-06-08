@@ -132,15 +132,15 @@ static void chimera_r52_machine_init(MachineState *machine)
     if (s->ivshmem_stats_freertos) {
         stats_chr = qemu_chr_find(s->ivshmem_stats_freertos);
         if (!stats_chr) {
-            error_report("warning: chardev '%s' not found, IVSHMEM3 stats "
-                         "channel skipped", s->ivshmem_stats_freertos);
+            warn_report("chardev '%s' not found, IVSHMEM3 stats channel "
+                        "skipped", s->ivshmem_stats_freertos);
         }
     }
     if (s->ivshmem_bootlog_freertos) {
         bootlog_chr = qemu_chr_find(s->ivshmem_bootlog_freertos);
         if (!bootlog_chr) {
-            error_report("warning: chardev '%s' not found, IVSHMEM4 boot-log "
-                         "skipped", s->ivshmem_bootlog_freertos);
+            warn_report("chardev '%s' not found, IVSHMEM4 boot-log skipped",
+                        s->ivshmem_bootlog_freertos);
         }
     }
     if (!have_links) {
@@ -171,6 +171,7 @@ static void chimera_r52_machine_init(MachineState *machine)
     s->gic = gicdev;
     qdev_prop_set_uint32(gicdev, "num-cpu", CHIMERA_R52_FREERTOS_GIC_NUM_CPU);
     qdev_prop_set_uint32(gicdev, "num-irq", CHIMERA_R52_FREERTOS_GIC_NUM_IRQ);
+    qdev_prop_set_uint32(gicdev, "revision", 2);
     qdev_prop_set_uint32(gicdev, "num-priority-bits",
                          CHIMERA_R52_FREERTOS_GIC_NUM_PRIO_BITS);
     gicsbd = SYS_BUS_DEVICE(gicdev);
