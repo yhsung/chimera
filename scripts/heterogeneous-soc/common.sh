@@ -91,7 +91,7 @@ SYSLOG_ARM_BINARY="${SYSLOG_ARM_BINARY:-${FREERTOS_SHOWCASE_DIR}/syslog-arm-linu
 SYSLOG_RISCV_BINARY="${SYSLOG_RISCV_BINARY:-${FREERTOS_SHOWCASE_DIR}/syslog-riscv-linux}"
 SYSLOG_MIPS_BINARY="${SYSLOG_MIPS_BINARY:-${FREERTOS_SHOWCASE_DIR}/syslog-mips-linux}"
 LINUX_ARM_STATS_BINARY="${LINUX_ARM_STATS_BINARY:-${FREERTOS_SHOWCASE_DIR}/linux-arm-stats}"
-FREERTOS_DEMO_ELF="${FREERTOS_DEMO_ELF:-${FREERTOS_SHOWCASE_DIR}/freertos-riscv-demo.elf}"
+FREERTOS_DEMO_ELF="${FREERTOS_DEMO_ELF:-${FREERTOS_SHOWCASE_DIR}/freertos-r52-demo.elf}"
 
 # ── Boot-log ivshmem channel ──────────────────────────────────────────────────
 IVSHMEM_BOOTLOG_DIR="${IVSHMEM_BOOTLOG_DIR:-/tmp/ivshmem-bootlog}"
