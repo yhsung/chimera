@@ -26,6 +26,8 @@
 #include "target/arm/cpu.h"
 #include "target/arm/cpu-qom.h"
 
+#define CHIMERA_R52_CNTFRQ_HZ 1000000000ULL
+
 static const MemMapEntry chimera_r52_memmap[] = {
     [CHIMERA_R52_FREERTOS_RAM] =            { 0x80000000, 0x08000000 },
     [CHIMERA_R52_FREERTOS_GICD] =           { 0x08000000, 0x00001000 },
@@ -129,6 +131,10 @@ static void chimera_r52_machine_init(MachineState *machine)
         &mips_chr);
     if (s->ivshmem_stats_freertos) {
         stats_chr = qemu_chr_find(s->ivshmem_stats_freertos);
+        if (!stats_chr) {
+            error_report("warning: chardev '%s' not found, IVSHMEM3 stats "
+                         "channel skipped", s->ivshmem_stats_freertos);
+        }
     }
     if (s->ivshmem_bootlog_freertos) {
         bootlog_chr = qemu_chr_find(s->ivshmem_bootlog_freertos);
@@ -147,6 +153,11 @@ static void chimera_r52_machine_init(MachineState *machine)
                                 machine->ram);
 
     s->cpu = object_new(machine->cpu_type);
+    if (object_property_find(s->cpu, "has_el2")) {
+        object_property_set_bool(s->cpu, "has_el2", false, &error_fatal);
+    }
+    object_property_set_int(s->cpu, "cntfrq", CHIMERA_R52_CNTFRQ_HZ,
+                            &error_fatal);
     if (object_property_find(s->cpu, "reset-cbar")) {
         object_property_set_int(s->cpu, "reset-cbar",
                                 chimera_r52_memmap[
