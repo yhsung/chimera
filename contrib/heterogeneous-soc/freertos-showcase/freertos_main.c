@@ -15,9 +15,9 @@
 #endif
 
 #define UART0_BASE 0x10000000UL
-#define UART0_THR 0x0
-#define UART0_LSR 0x5
-#define UART0_LSR_THRE 0x20
+#define PL011_DR   0x00    /* data register */
+#define PL011_FR   0x18    /* flag register */
+#define PL011_FR_TXFF 0x20 /* transmit FIFO full */
 
 #define IVSHMEM0_MMIO 0x30000000UL
 #define IVSHMEM0_SHMEM 0x31000000UL
@@ -50,13 +50,13 @@ static struct bootlog_monitor bootlog;
 
 static void uart_putc(char ch)
 {
-    volatile uint8_t *thr = (volatile uint8_t *)(UART0_BASE + UART0_THR);
-    volatile uint8_t *lsr = (volatile uint8_t *)(UART0_BASE + UART0_LSR);
+    volatile uint32_t *dr = (volatile uint32_t *)(UART0_BASE + PL011_DR);
+    volatile uint32_t *fr = (volatile uint32_t *)(UART0_BASE + PL011_FR);
 
-    while ((*lsr & UART0_LSR_THRE) == 0) {
+    while ((*fr & PL011_FR_TXFF) != 0) {
     }
 
-    *thr = (uint8_t)ch;
+    *dr = (uint32_t)(uint8_t)ch;
 }
 
 static char *utoa_dec(char *buf, uint32_t val)
@@ -224,6 +224,71 @@ void log_hex32_uart(uint32_t level, uint32_t v)
     log_uart(level, buf);
 }
 
+/* ── Cortex-R52 generic-timer tick + GICv2 IRQ dispatch ──────────────────── */
+#define R52_TICK_INTID            30U      /* NS-EL1 physical timer PPI */
+#define GICD_BASE                 0x08000000UL
+#define GICD_CTLR                 0x000U
+#define GICD_ISENABLER            0x100U    /* +(intid/32)*4 */
+#define GICD_IPRIORITYR           0x400U    /* +intid */
+
+/* port.c calls FreeRTOS_Tick_Handler() on each tick. */
+extern void FreeRTOS_Tick_Handler(void);
+
+static uint32_t r52_tick_reload;
+
+static inline uint32_t r52_read_cntfrq(void)
+{
+    uint32_t v;
+    __asm__ volatile("mrc p15, 0, %0, c14, c0, 0" : "=r"(v));
+    return v;
+}
+
+static inline void r52_write_cntp_tval(uint32_t v)
+{
+    __asm__ volatile("mcr p15, 0, %0, c14, c2, 0" :: "r"(v));
+}
+
+static inline void r52_write_cntp_ctl(uint32_t v)
+{
+    __asm__ volatile("mcr p15, 0, %0, c14, c2, 1" :: "r"(v));
+}
+
+void vConfigureTickInterrupt(void)
+{
+    volatile uint8_t  *iprio = (volatile uint8_t  *)(GICD_BASE + GICD_IPRIORITYR);
+    volatile uint32_t *isen  = (volatile uint32_t *)(GICD_BASE + GICD_ISENABLER);
+    volatile uint32_t *ctlr  = (volatile uint32_t *)(GICD_BASE + GICD_CTLR);
+    uint32_t freq = r52_read_cntfrq();
+
+    r52_tick_reload = freq / configTICK_RATE_HZ;
+
+    /* Give the tick a mid priority and enable it in the distributor. */
+    iprio[R52_TICK_INTID] = 0xA0;
+    isen[R52_TICK_INTID / 32] = (1U << (R52_TICK_INTID % 32));
+    *ctlr |= 1U;  /* enable group 0 forwarding */
+
+    /* Arm the down-counting physical timer and enable it. */
+    r52_write_cntp_tval(r52_tick_reload);
+    r52_write_cntp_ctl(1U); /* ENABLE, unmasked */
+}
+
+void vClearTickInterrupt(void)
+{
+    /* Re-arm the down-counter for the next tick. */
+    r52_write_cntp_tval(r52_tick_reload);
+}
+
+/* Called by the ARM_CR5 port's FreeRTOS_IRQ_Handler with the ICCIAR value. */
+void vApplicationIRQHandler(uint32_t ulICCIAR)
+{
+    uint32_t intid = ulICCIAR & 0x3FFU;
+
+    if (intid == R52_TICK_INTID) {
+        FreeRTOS_Tick_Handler();
+    }
+    /* ivshmem channels are flag-polled; their IRQs (if any fire) are ignored. */
+}
+
 static void showcase_task(void *opaque)
 {
     (void)opaque;
@@ -249,8 +314,8 @@ static void showcase_task(void *opaque)
 
         log_uart(HSOC_LOG_VERBOSE, "[diag] uart_base=");
         log_hex32_uart(HSOC_LOG_VERBOSE, UART0_BASE);
-        log_uart(HSOC_LOG_VERBOSE, " plic_sources=");
-        log_hex32_uart(HSOC_LOG_VERBOSE, 21);
+        log_uart(HSOC_LOG_VERBOSE, " gic_spis=");
+        log_hex32_uart(HSOC_LOG_VERBOSE, 6);
         log_uart(HSOC_LOG_VERBOSE, "\n");
 
         log_uart(HSOC_LOG_VERBOSE, "[diag] IVPOSITION:");
