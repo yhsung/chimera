@@ -30,7 +30,7 @@ mkdir -p "${LOG_DIR}"
 # ── Cleanup ─────────────────────────────────────────────────────────────────
 cleanup() {
     tmux kill-session -t "${SESSION}" 2>/dev/null || true
-    pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+    pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
     pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
     pkill -f "qemu-system-riscv64.*run-riscv-phase5"     2>/dev/null || true
     pkill -f "ivshmem-server.*arm-freertos\|ivshmem-server.*riscv-freertos\|ivshmem-server.*mips-freertos\|ivshmem-server.*stats" 2>/dev/null || true
@@ -41,7 +41,7 @@ trap cleanup EXIT INT TERM
 
 # ── Pre-run cleanup ──────────────────────────────────────────────────────────
 echo "[harness] Killing orphan processes and removing stale sockets..."
-pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
 pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
 pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5
@@ -112,7 +112,7 @@ done
 # ── FreeRTOS QEMU ────────────────────────────────────────────────────────────
 echo "[harness] Starting FreeRTOS QEMU; UART → ${FREERTOS_LOG}"
 tmux send-keys -t "${SESSION}:0.4" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-r52-freertos-phase5.sh'" Enter
 
 # Give FreeRTOS QEMU time to start and print its first line before anything else.
 sleep 2
