@@ -9,15 +9,6 @@ config IBEX
 
 # RISC-V machines in alphabetical order
 
-config CHIMERA_FREERTOS_DEMO
-    bool
-    default y
-    depends on RISCV64
-    imply IVSHMEM_FLAT_DEVICE
-    select RISCV_ACLINT
-    select SERIAL_MM
-    select SIFIVE_PLIC
-
 config MICROCHIP_PFSOC
     bool
     default y
