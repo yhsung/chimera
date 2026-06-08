@@ -147,14 +147,27 @@ Incremental bring-up, mirroring how you'd validate new bare-metal silicon:
   arch) vs. the RISCV-Linux channel naming, so future agents don't conflate
   the two.
 
-## Risks / open questions (to resolve via a short spike before full implementation)
+## Spike results (resolved during planning, 2026-06-08)
 
-- **GIC version / FreeRTOS port pairing**: `ARM_CR5` expects a
-  memory-mapped GICv2-style CPU interface; `mps3-an536` instantiates a
-  GICv3. Which GIC version the new machine should expose — and which of
-  `ARM_CR5` / `ARM_CRx_MPU` / `ARM_CRx_No_GIC` pairs with it — needs a quick
-  spike (e.g. booting a minimal "blink UART" image) before the full firmware
-  port is attempted.
-- **Compiler flags**: exact `-mcpu`/`-mfpu`/mode flags for `cortex-r52`
-  under `arm-none-eabi-gcc` depend on the chosen port's expectations
-  (e.g. VFP availability, ARM vs Thumb).
+- **GIC version / FreeRTOS port pairing — RESOLVED: GICv2 (`TYPE_ARM_GIC`)
+  + FreeRTOS `ARM_CR5` port.** None of the FreeRTOS Cortex-R GCC ports
+  (`ARM_CR5`, `ARM_CRx_MPU`, `ARM_CRx_No_GIC`) have built-in GICv3
+  system-register support — `mps3-an536`'s GICv3 pairing is an AN536-board
+  specificity, not a Cortex-R52 requirement (QEMU's `cortex_r52_initfn`
+  doesn't set any GICv3-specific feature flags). `ARM_CR5`'s
+  `portmacro.h` reads/writes a memory-mapped GICv2-style CPU interface
+  (`ICCPMR`/`ICCIAR`/`ICCEOIR`/`ICCRPR` at fixed offsets from
+  `configINTERRUPT_CONTROLLER_BASE_ADDRESS` +
+  `configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET`) — exactly what QEMU's
+  `TYPE_ARM_GIC` (GICv2) exposes via its Distributor (mmio region 0) and
+  CPU Interface (mmio region 1) sub-regions. Wiring is the same generic
+  `sysbus_mmio_map`/`sysbus_connect_irq`/`qdev_get_gpio_in(cpudev,
+  ARM_CPU_IRQ)` pattern the existing machine already uses for the PLIC —
+  see `hw/cpu/a9mpcore.c` for a clean reference instantiation.
+- **Compiler flags — RESOLVED**: `arm-none-eabi-gcc` 13.2.1 (package
+  `gcc-arm-none-eabi`, candidate `15:13.2.rel1-2` in the Lima VM's apt repo)
+  accepts `-mcpu=cortex-r52` directly, confirmed by a test compile in the
+  Lima VM. Flags: `-mcpu=cortex-r52 -mfpu=neon-fp-armv8 -mfloat-abi=hard
+  -marm` (explicit ARM state — required for the exception vector table and
+  to match the `ARM_CR5` port's expectations; `neon-fp-armv8`/`hard` match
+  the FPU QEMU's `cortex_r52_initfn` models, `mvfr0`/`mvfr1`/`mvfr2`).
