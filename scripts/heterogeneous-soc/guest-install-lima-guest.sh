@@ -33,8 +33,8 @@ sudo apt-get install -y \
     gcc-aarch64-linux-gnu \
     gcc-riscv64-linux-gnu \
     gcc-mipsel-linux-gnu \
-    gcc-riscv64-unknown-elf \
-    binutils-riscv64-unknown-elf \
+    gcc-arm-none-eabi \
+    binutils-arm-none-eabi \
     libarchive-tools \
     libglib2.0-dev \
     libpixman-1-dev \

@@ -85,7 +85,7 @@ done
 # Kill any stale QEMU/ivshmem-server processes from a prior run that might
 # hold file locks or leave stale sockets behind.
 _info "Cleaning up stale processes from prior runs..."
-_exec pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+_exec pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
 _exec pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
 _exec pkill -f "qemu-system-riscv64.*riscv-phase5"         2>/dev/null || true
 _exec pkill -f "qemu-system-mipsel.*run-chimera"           2>/dev/null || true
@@ -114,8 +114,8 @@ if [[ -z "${SKIP_PREREQS:-}" ]]; then
     _pkg_check pkg-config
     _pkg_check gcc-aarch64-linux-gnu
     _pkg_check gcc-riscv64-linux-gnu
-    _pkg_check gcc-riscv64-unknown-elf
-    _pkg_check binutils-riscv64-unknown-elf
+    _pkg_check gcc-arm-none-eabi
+    _pkg_check binutils-arm-none-eabi
     _pkg_check gcc-mipsel-linux-gnu
     _pkg_check debootstrap
     _pkg_check libarchive-tools
@@ -181,7 +181,7 @@ if [[ -n "${SKIP_BUILD:-}" ]]; then
 else
     _step "Building FreeRTOS showcase"
     _exec bash "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
-    _ok "freertos-riscv-demo.elf built ($(du -sh "${FREERTOS_DEMO_ELF}" | cut -f1))"
+    _ok "freertos-r52-demo.elf built ($(du -sh "${FREERTOS_DEMO_ELF}" | cut -f1))"
 
     for bin in "${SYSLOG_ARM_BINARY}" "${SYSLOG_RISCV_BINARY}" "${SYSLOG_MIPS_BINARY}" "${LINUX_ARM_STATS_BINARY}"; do
         if [[ -f "${bin}" ]]; then
