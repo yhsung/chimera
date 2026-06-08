@@ -8,11 +8,10 @@ MEMORY
 SECTIONS
 {
     .text : {
+        KEEP(*(.vectors))
         *(.text.init)
-        KEEP(*(.text.freertos_risc_v_trap_handler*))
-        KEEP(*(.text.freertos_risc_v_exception_handler*))
-        KEEP(*(.text.freertos_risc_v_interrupt_handler*))
-        KEEP(*(.text.freertos_risc_v_mtimer_interrupt_handler*))
+        KEEP(*(.text.FreeRTOS_IRQ_Handler*))
+        KEEP(*(.text.FreeRTOS_SWI_Handler*))
         *(.text*)
         *(.rodata*)
     } > RAM
@@ -22,9 +21,11 @@ SECTIONS
     } > RAM
 
     .bss : {
+        . = ALIGN(8);
         __bss_start = .;
         *(.bss*)
         *(COMMON)
+        . = ALIGN(8);
         __bss_end = .;
     } > RAM
 
