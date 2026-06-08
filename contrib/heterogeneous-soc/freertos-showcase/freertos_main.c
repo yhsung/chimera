@@ -230,6 +230,8 @@ void log_hex32_uart(uint32_t level, uint32_t v)
 #define GICD_CTLR                 0x000U
 #define GICD_ISENABLER            0x100U    /* +(intid/32)*4 */
 #define GICD_IPRIORITYR           0x400U    /* +intid */
+#define GICC_BASE                 0x08010000UL
+#define GICC_CTLR                 0x000U
 
 /* port.c calls FreeRTOS_Tick_Handler() on each tick. */
 extern void FreeRTOS_Tick_Handler(void);
@@ -266,6 +268,12 @@ void vConfigureTickInterrupt(void)
     iprio[R52_TICK_INTID] = 0xA0;
     isen[R52_TICK_INTID / 32] = (1U << (R52_TICK_INTID % 32));
     *ctlr |= 1U;  /* enable group 0 forwarding */
+
+    /* Enable the GIC CPU interface (group 0, non-secure). */
+    {
+        volatile uint32_t *gicc_ctlr = (volatile uint32_t *)(GICC_BASE + GICC_CTLR);
+        *gicc_ctlr |= 1U; /* EnableGrp0 */
+    }
 
     /* Arm the down-counting physical timer and enable it. */
     r52_write_cntp_tval(r52_tick_reload);
