@@ -8,21 +8,21 @@ import subprocess
 import unittest
 
 
-class ChimeraFreeRTOSMachineTest(unittest.TestCase):
+class ChimeraR52FreeRTOSMachineTest(unittest.TestCase):
     def test_machine_is_registered(self):
-        qemu = os.environ["QEMU_RISCV64_BIN"]
+        qemu = os.environ["QEMU_ARM_BIN"]
         result = subprocess.run(
             [qemu, "-machine", "help"],
             check=True,
             capture_output=True,
             text=True,
         )
-        self.assertIn("chimera-riscv-freertos-demo", result.stdout)
+        self.assertIn("chimera-r52-freertos-demo", result.stdout)
 
     def test_machine_requires_both_ivshmem_links(self):
-        qemu = os.environ["QEMU_RISCV64_BIN"]
+        qemu = os.environ["QEMU_ARM_BIN"]
         result = subprocess.run(
-            [qemu, "-M", "chimera-riscv-freertos-demo", "-nographic",
+            [qemu, "-M", "chimera-r52-freertos-demo", "-nographic",
              "-display", "none"],
             check=False,
             capture_output=True,
