@@ -2,7 +2,7 @@
 
 This directory builds all guest-side payloads for the Chimera heterogeneous SoC
 demo, where three Linux guests (ARM, RISC-V, MIPS) send periodic sysinfo
-messages to a bare-metal RISC-V FreeRTOS firmware over ivshmem shared memory.
+messages to a bare-metal Cortex-R52 FreeRTOS firmware over ivshmem shared memory.
 
 ## Directory Layout
 
@@ -14,7 +14,7 @@ messages to a bare-metal RISC-V FreeRTOS firmware over ivshmem shared memory.
 | `stats_proto.h` | Stats snapshot — `hsoc_stats_snapshot` with generation-counter read protocol (magic → fields → generation increment) |
 | `bootlog_proto.h` | Boot-log — `hsoc_bootlog_header`, 4 × 1 MiB guest slots, `BOOTLOG_MAGIC` / `BOOTLOG_SLOT_*` layout constants |
 
-### FreeRTOS Firmware (bare-metal RISC-V, `freertos-riscv-demo.elf`)
+### FreeRTOS Firmware (bare-metal Cortex-R52, `freertos-r52-demo.elf`)
 
 | File | Purpose |
 |---|---|
@@ -26,9 +26,9 @@ messages to a bare-metal RISC-V FreeRTOS firmware over ivshmem shared memory.
 | `freertos_libc.c` | Freestanding libc implementations: `memcpy`, `memmove`, `memset`, `memcmp`, `strcpy`, `strlen` |
 | `string.h` | libc string header (freestanding) |
 | `stdlib.h` | Minimal libc stdlib header (`EXIT_SUCCESS`/`EXIT_FAILURE`) |
-| `startup.S` | RISC-V `_start`: set stack pointer, install `mtvec` trap handler, clear BSS, call `main` |
-| `linker.ld` | Linker script — RAM at `0x80000000`, 8 MiB, sections with trap handler `KEEP` |
-| `FreeRTOSConfig.h` | Kernel config: 10 MHz CPU clock, 1 kHz tick, 64 KiB heap, `configMTIME_BASE_ADDRESS` / `configMTIMECMP_BASE_ADDRESS` for CLINT |
+| `startup.S` | ARM `_start`: exception vector table, per-mode stacks, enable FPU, clear BSS, call `main` |
+| `linker.ld` | Linker script — RAM at `0x80000000`, 8 MiB, `.vectors` section + ARM_CR5 handler `KEEP` |
+| `FreeRTOSConfig.h` | Kernel config: 10 MHz CPU clock, 1 kHz tick, 64 KiB heap, `configINTERRUPT_CONTROLLER_BASE_ADDRESS` / `configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET` for GICv2, generic-timer tick |
 
 ### Linux Guest Binaries (cross-compiled for each arch)
 
@@ -54,7 +54,7 @@ messages to a bare-metal RISC-V FreeRTOS firmware over ivshmem shared memory.
 - **ARM/Linux cross-compiler:** `aarch64-linux-gnu-gcc`
 - **RISC-V/Linux cross-compiler:** `riscv64-linux-gnu-gcc`
 - **MIPS/Linux cross-compiler:** `mipsel-linux-gnu-gcc`
-- **RISC-V bare-metal cross-compiler:** `riscv64-unknown-elf-gcc`
+- **ARM bare-metal cross-compiler:** `arm-none-eabi-gcc`
 - **FreeRTOS kernel source:** Set `FREERTOS_KERNEL_DIR` (default: `$HOME/heterogeneous-soc-freertos/FreeRTOS-Kernel`)
 
 ### Build All
@@ -83,7 +83,7 @@ make bootlog-arm-linux bootlog-riscv-linux bootlog-mips-linux
 make boot-collector
 
 # FreeRTOS firmware
-make freertos-riscv-demo.elf
+make freertos-r52-demo.elf
 ```
 
 ### Clean
@@ -224,8 +224,8 @@ freertos_to_linux:
 
 All shared-memory access uses explicit volatile byte loops (`shmem_read` /
 `shmem_write`), not `memcpy`, because NEON instructions on ARM SIGBUS on
-non-cacheable PCI BAR2 memory. `__sync_synchronize()` (emit `fence iorw,iorw`
-on RISC-V, `dmb ish` on AArch64) wraps every flag read/write.
+non-cacheable PCI BAR2 memory. `__sync_synchronize()` (emits `dmb ish` on
+AArch32 Cortex-R52) wraps every flag read/write.
 
 ### SYSLOG Protocol (HELLO/ACK)
 
