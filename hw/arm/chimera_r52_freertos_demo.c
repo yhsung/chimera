@@ -164,11 +164,13 @@ static void chimera_r52_machine_init(MachineState *machine)
                                     CHIMERA_R52_FREERTOS_GICD].base,
                                 &error_abort);
     }
-    /* Enable the PMSA background region so bare-metal code can
-     * execute from RAM before the MPU is programmed.  Without this
-     * the reset SCTLR has M=0,BR=0, which makes every address
-     * fault on Cortex-R52's PMSAv8-EL2 stage-2 lookup. */
-    ARM_CPU(s->cpu)->reset_sctlr |= SCTLR_BR;
+    /* Enable the PMSA MPU with background region so bare-metal code can
+     * execute from RAM before the MPU is programmed.  The reset SCTLR
+     * has M=0,BR=0 which leaves all address ranges without any access
+     * permissions on Cortex-R52's PMSAv8.  Set M=1,BR=1 to enable the
+     * MPU with the background region, which grants RWX to all addresses
+     * until the firmware programs explicit regions. */
+    ARM_CPU(s->cpu)->reset_sctlr |= SCTLR_M | SCTLR_BR;
     qdev_realize(DEVICE(s->cpu), NULL, &error_fatal);
     cpudev = DEVICE(s->cpu);
 
