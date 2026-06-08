@@ -15,7 +15,7 @@ enum hsoc_msg_type {
 enum hsoc_sender_id {
     HSOC_SENDER_ARM_LINUX = 1,
     HSOC_SENDER_RISCV_LINUX = 2,
-    HSOC_SENDER_RISCV_FREERTOS = 3,
+    HSOC_SENDER_R52_FREERTOS = 3,
     HSOC_SENDER_MIPS_LINUX = 4,
 };
 
