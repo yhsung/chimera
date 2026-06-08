@@ -11,7 +11,7 @@
 /* Minimum log severity for output. Messages below this level are suppressed.
  * Override at build time with -DFREERTOS_LOG_LEVEL=HSOC_LOG_VERBOSE etc. */
 #ifndef FREERTOS_LOG_LEVEL
-#define FREERTOS_LOG_LEVEL HSOC_LOG_INFO
+#define FREERTOS_LOG_LEVEL HSOC_LOG_VERBOSE
 #endif
 
 #define UART0_BASE 0x10000000UL
