@@ -4,7 +4,7 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/common.sh"
 REPO="${CHIMERA_ROOT}"
 SESSION="freertos-showcase"
-ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-riscv-demo.elf"
+ELF="$REPO/contrib/heterogeneous-soc/freertos-showcase/freertos-r52-demo.elf"
 
 cd "$REPO"
 
@@ -66,7 +66,7 @@ tmux split-window -h -t "$SESSION:0.6" -l 67%
 tmux split-window -h -t "$SESSION:0.7" -l 50%
 
 # Kill any stale QEMU processes that outlived a previous session.
-pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
 pkill -f "qemu-system-riscv64.*riscv-phase5"        2>/dev/null || true
 pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
 pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
@@ -98,7 +98,7 @@ for _i in $(seq 1 60); do
     sleep 0.5
 done
 
-tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh" Enter
+tmux send-keys -t "$SESSION:0.5" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-r52-freertos-phase5.sh" Enter
 tmux send-keys -t "$SESSION:0.6" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-arm-phase5.sh"            Enter
 tmux send-keys -t "$SESSION:0.7" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-riscv-phase5.sh"          Enter
 tmux send-keys -t "$SESSION:0.8" "cd '$REPO' && scripts/heterogeneous-soc/guest-run-chimera.sh"               Enter

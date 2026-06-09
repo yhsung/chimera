@@ -32,9 +32,6 @@
 #define configISR_STACK_SIZE_WORDS 256
 #define configASSERT(x) do { if (!(x)) { for (;;) { } } } while (0)
 
-#define configMTIME_BASE_ADDRESS 0x0200bff8ULL
-#define configMTIMECMP_BASE_ADDRESS 0x02004000ULL
-
 #define INCLUDE_vTaskDelay 1
 #define INCLUDE_vTaskDelete 1
 #define INCLUDE_vTaskSuspend 1
@@ -43,5 +40,25 @@
 #define INCLUDE_xTaskGetCurrentTaskHandle 1
 #define INCLUDE_uxTaskPriorityGet 1
 #define INCLUDE_uxTaskGetStackHighWaterMark 1
+
+/* ── ARM_CR5 (GICv2) port configuration ─────────────────────────────────── */
+/* GIC distributor base and the offset to its CPU interface, matching the
+ * chimera-r52-freertos-demo machine's memory map (GICD 0x08000000,
+ * GICC 0x08010000). */
+#define configINTERRUPT_CONTROLLER_BASE_ADDRESS         0x08000000UL
+#define configINTERRUPT_CONTROLLER_CPU_INTERFACE_OFFSET 0x00010000UL
+
+/* QEMU's TYPE_ARM_GIC is built with num-priority-bits = 5 -> 32 levels. */
+#define configUNIQUE_INTERRUPT_PRIORITIES               32
+#define configMAX_API_CALL_INTERRUPT_PRIORITY           18
+
+/* The tick is driven by the Cortex-R52 architected generic timer; these call
+ * helpers defined in freertos_main.c. */
+#ifndef __ASSEMBLER__
+void vConfigureTickInterrupt(void);
+void vClearTickInterrupt(void);
+#endif
+#define configSETUP_TICK_INTERRUPT()  vConfigureTickInterrupt()
+#define configCLEAR_TICK_INTERRUPT()  vClearTickInterrupt()
 
 #endif

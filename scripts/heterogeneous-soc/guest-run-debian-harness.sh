@@ -54,7 +54,7 @@ _fail()  { printf '\033[0;31m  ✗ %s\033[0m\n' "$*"; }
 
 cleanup() {
     tmux kill-session -t "${SESSION}" 2>/dev/null || true
-    pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+    pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
     pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
     pkill -f "qemu-system-riscv64.*riscv-phase5"         2>/dev/null || true
     pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
@@ -68,7 +68,7 @@ trap cleanup EXIT INT TERM
 # ── Pre-run cleanup ──────────────────────────────────────────────────────────
 
 echo "[debian-harness] Killing orphan processes and removing stale sockets..."
-pkill -f "qemu-system-riscv64.*freertos-riscv-demo" 2>/dev/null || true
+pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
 pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
 pkill -f "qemu-system-riscv64.*riscv-phase5"         2>/dev/null || true
 pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
@@ -235,7 +235,7 @@ _ok "All three ivshmem servers listening"
 
 echo "[debian-harness] Starting FreeRTOS QEMU..."
 tmux send-keys -t "${SESSION}:0.3" \
-    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh'" Enter
+    "${PANE_ENV} exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-r52-freertos-phase5.sh'" Enter
 
 # Give FreeRTOS a head start — it is the slowest component.
 sleep 2

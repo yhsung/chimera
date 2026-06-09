@@ -1,15 +1,14 @@
 CC_ARM ?= aarch64-linux-gnu-gcc
 CC_RISCV ?= riscv64-linux-gnu-gcc
 CC_MIPS ?= mipsel-linux-gnu-gcc
-CROSS_COMPILE ?= riscv64-unknown-elf-
+CROSS_COMPILE ?= arm-none-eabi-
 CFLAGS_LINUX ?= -O2 -Wall -Wextra -static
 FREERTOS_KERNEL_DIR ?= $(HOME)/heterogeneous-soc-freertos/FreeRTOS-Kernel
-FREERTOS_PORT_DIR := $(FREERTOS_KERNEL_DIR)/portable/GCC/RISC-V
-FREERTOS_PORT_CHIP_DIR := $(FREERTOS_PORT_DIR)/chip_specific_extensions/RISCV_MTIME_CLINT_no_extensions
+FREERTOS_PORT_DIR := $(FREERTOS_KERNEL_DIR)/portable/GCC/ARM_CR5
 CC_BARE ?= $(CROSS_COMPILE)gcc
 OBJCOPY ?= $(CROSS_COMPILE)objcopy
 CFLAGS_BARE ?= -O2 -Wall -Wextra -ffreestanding -fno-omit-frame-pointer \
-	-march=rv64gc -mabi=lp64d -mcmodel=medany -msmall-data-limit=0 \
+	-mcpu=cortex-r52 -mfpu=neon-fp-armv8 -mfloat-abi=hard -marm \
 	-ffunction-sections -fdata-sections
 LDFLAGS_BARE ?= -nostdlib -static -Wl,--gc-sections -T linker.ld -lgcc
 
@@ -55,7 +54,7 @@ FREERTOS_SRCS := \
 
 .PHONY: all clean
 
-all: $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-riscv-demo.elf
+all: $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf
 ifeq ($(HAVE_CC_ARM),)
 	$(warning CC_ARM=$(CC_ARM) not found — syslog-arm-linux, linux-arm-stats, bootlog-arm-linux, boot-collector skipped)
 endif
@@ -108,17 +107,16 @@ bootlog-mips-linux: bootlog_writer.c bootlog_proto.h
 boot-collector: boot_collector.c bootlog_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) -o $@ boot_collector.c
 
-freertos-riscv-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c \
+freertos-r52-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
 		hello_proto.h stats_proto.h bootlog_proto.h boot_log.h $(FREERTOS_SRCS)
 	$(CC_BARE) $(CFLAGS_BARE) \
 	  -I. \
 	  -I$(FREERTOS_KERNEL_DIR)/include \
 	  -I$(FREERTOS_PORT_DIR) \
-	  -I$(FREERTOS_PORT_CHIP_DIR) \
 	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c freertos_libc.c \
 	  $(FREERTOS_SRCS) \
 	  $(LDFLAGS_BARE) -o $@
 
 clean:
-	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-riscv-demo.elf
+	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf

@@ -14,7 +14,7 @@ cd "${BUILD_DIR}"
 
 if [[ ! -f build.ninja ]]; then
     "${VM_SOURCE_DIR}/configure" \
-        --target-list=aarch64-softmmu,riscv64-softmmu,mipsel-softmmu \
+        --target-list=aarch64-softmmu,arm-softmmu,riscv64-softmmu,mipsel-softmmu \
         --enable-debug
 fi
 
@@ -29,5 +29,6 @@ fi
 ninja contrib/ivshmem-server/ivshmem-server \
       contrib/ivshmem-client/ivshmem-client \
       qemu-system-aarch64 \
+      qemu-system-arm \
       qemu-system-riscv64 \
       qemu-system-mipsel

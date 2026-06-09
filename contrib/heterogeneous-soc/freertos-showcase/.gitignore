@@ -1,5 +1,5 @@
 # Built binaries — only source files are tracked
-freertos-riscv-demo.elf
+freertos-r52-demo.elf
 syslog-arm-linux
 syslog-riscv-linux
 syslog-mips-linux

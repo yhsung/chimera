@@ -2549,6 +2549,7 @@ static void get_phys_addr_pmsav7_default(CPUARMState *env, ARMMMUIdx mmu_idx,
             }
             break;
         case 0x00000000 ... 0x7FFFFFFF:
+        case 0x80000000 ... 0xEFFFFFFF:
             *prot |= PAGE_EXEC;
             break;
         }

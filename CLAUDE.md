@@ -44,6 +44,20 @@ See `README.md` → **Building the FreeRTOS Showcase Binaries** for cross-compil
 
 The QEMU target for MIPS little-endian is `mipsel-softmmu`, producing `qemu-system-mipsel`. Build artifacts, binaries, and `pkill` patterns must use `mipsel` (not `mips`) throughout — the Debian Bookworm distro is also `mipsel`.
 
+## Naming: r52 (FreeRTOS's CPU) vs. the RISCV-Linux channel
+
+The bare-metal FreeRTOS guest runs on a Cortex-R52 (`qemu-system-arm`,
+machine `chimera-r52-freertos-demo`, binary `freertos-r52-demo.elf`). The
+disambiguating prefix for FreeRTOS's *own* architecture is **`r52`** (not
+`arm`, which is the Cortex-A53 ARM-Linux guest). This is independent of the
+**RISCV-Linux ↔ FreeRTOS channel**, whose names describe that Linux guest's
+link and are deliberately left untouched: `IVSHMEM_RISCV_FREERTOS_*`,
+`riscv_link`/`riscv_count`, `guest-start-ivshmem-server-riscv-freertos.sh`,
+`syslog-riscv-linux`, `bootlog-riscv-linux`. Do not conflate the two: `r52`
+names the CPU FreeRTOS runs on; `riscv` (in channel names) names the Linux
+guest on the other end of one ivshmem link. The wire-protocol sender id for
+FreeRTOS stays numeric `3` (`HSOC_SENDER_R52_FREERTOS`).
+
 ## Debugging Sessions
 
 Before context runs low, write `DEBUG_STATE.md` summarizing: root causes found, fixes applied, what's still unverified, and the exact next command to run to resume.

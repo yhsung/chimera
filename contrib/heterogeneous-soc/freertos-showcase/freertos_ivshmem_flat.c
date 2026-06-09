@@ -125,10 +125,10 @@ void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
     ack.version = HSOC_PROTO_VERSION;
     ack.msg_type = HSOC_MSG_ACK;
     ack.seq = seq;
-    ack.sender_id = HSOC_SENDER_RISCV_FREERTOS;
+    ack.sender_id = HSOC_SENDER_R52_FREERTOS;
     ack.ts_sec = ts_sec;
     ack.ts_nsec = ts_nsec;
-    copy_text(ack.text, "ack from riscv-freertos");
+    copy_text(ack.text, "ack from r52-freertos");
 
     shmem_write(&link->layout->freertos_to_linux.msg, &ack, sizeof(ack));
     __sync_synchronize();

@@ -89,6 +89,14 @@ config MPS3R
     default y
     depends on TCG && ARM
 
+config CHIMERA_R52_FREERTOS_DEMO
+    bool
+    default y
+    depends on TCG && ARM
+    select ARM_GIC
+    select PL011
+    select IVSHMEM_FLAT_DEVICE
+
 config MUSCA
     bool
     default y

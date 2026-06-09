@@ -10,8 +10,8 @@ All custom code lives in a small surface area on top of upstream QEMU:
 
 | File | Purpose |
 |---|---|
-| `hw/riscv/chimera_freertos_demo.c` | Custom `chimera-riscv-freertos-demo` QEMU machine: one RV64 hart, CLINT, PLIC, UART, five `ivshmem-flat` devices (3 HELLO/ACK + 1 stats + 1 boot-log) |
-| `include/hw/riscv/chimera_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
+| `hw/arm/chimera_r52_freertos_demo.c` | Custom `chimera-r52-freertos-demo` QEMU machine: one Cortex-R52 core, GICv2, pl011 UART, five `ivshmem-flat` devices (3 HELLO/ACK + 1 stats + 1 boot-log) |
+| `include/hw/arm/chimera_r52_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
 | `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
 | `include/hw/misc/ivshmem-flat.h` | Device state and interface |
 | `contrib/heterogeneous-soc/freertos-showcase/` | FreeRTOS ELF and Linux syslog daemon binaries (wire protocol, build system) |
@@ -28,8 +28,8 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 ```
  ┌─────────────────────────┐      ivshmem-arm-freertos      ┌──────────────────────────────────┐
  │  ARM-Linux (aarch64)    │ ◄────────────────────────────► │                                  │
- │  Debian Linux           │  /tmp/ivshmem-arm-freertos/    │  RISCV FreeRTOS (bare-metal)     │
- │  QEMU virt (gic-ver.=3) │  IVSHMEM0_SHMEM=0x31000000     │  QEMU chimera-riscv-freertos-demo│
+ │  Debian Linux           │  /tmp/ivshmem-arm-freertos/    │  R52 FreeRTOS (bare-metal)       │
+ │  QEMU virt (gic-ver.=3) │  IVSHMEM0_SHMEM=0x31000000     │  QEMU chimera-r52-freertos-demo│
  │                         │◄── ivshmem-stats-freertos ────  │                                  │
  │  linux-arm-stats →      │  /tmp/ivshmem-stats-freertos/  │  Polls all three channels every  │
  │  /var/log/chimera-log/chimera-cross-domain.log│  IVSHMEM3_SHMEM=0x40000000     │  1 ms; sends ACK with FreeRTOS   │
@@ -55,7 +55,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 | ARM-Linux | 2 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a53` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
 | RISCV-Linux | 2 / 512 MB | QEMU `virt` rv64, OpenSBI, `-cpu rv64,h=true,v=true` | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
 | MIPS-Linux | 1 / 512 MB | QEMU `malta` mipsel, `-cpu 24Kf` | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
-| RISCV FreeRTOS | 1 / 128 MiB | QEMU `chimera-riscv-freertos-demo` (1 RV64 hart, `TYPE_RISCV_CPU_BASE`) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
+| R52 FreeRTOS | 1 / 128 MiB | QEMU `chimera-r52-freertos-demo` (1 Cortex-R52 core) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
 | ivshmem-server (ARM) | — / — | Host process | — | — | — | Brokers shared memory for ARM↔FreeRTOS |
 | ivshmem-server (RISCV) | — / — | Host process | — | — | — | Brokers shared memory for RISCV↔FreeRTOS |
 | ivshmem-server (MIPS) | — / — | Host process | — | — | — | Brokers shared memory for MIPS↔FreeRTOS |
@@ -70,20 +70,20 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 ### FreeRTOS DRAM Configuration
 
-The `chimera-riscv-freertos-demo` machine is configured with the following DRAM layout (`hw/riscv/chimera_freertos_demo.c`):
+The `chimera-r52-freertos-demo` machine is configured with the following DRAM layout (`hw/arm/chimera_r52_freertos_demo.c`):
 
 | Property | Value | Source |
 |---|---|---|
-| `mc->default_ram_size` | `128 * MiB` (128 MiB) | `hw/riscv/chimera_freertos_demo.c:320` |
-| `mc->default_ram_id` | `"riscv.chimera.freertos.ram"` | `hw/riscv/chimera_freertos_demo.c:319` |
-| RAM base address | `0x80000000` | `hw/riscv/chimera_freertos_demo.c:29` (`CHIMERA_FREERTOS_RAM` memmap entry) |
-| RAM region size (memmap) | `0x08000000` (128 MiB) | `hw/riscv/chimera_freertos_demo.c:29` |
+| `mc->default_ram_size` | `128 * MiB` (128 MiB) | `hw/arm/chimera_r52_freertos_demo.c:320` |
+| `mc->default_ram_id` | `"arm.chimera.r52.freertos.ram"` | `hw/arm/chimera_r52_freertos_demo.c:319` |
+| RAM base address | `0x80000000` | `hw/arm/chimera_r52_freertos_demo.c:29` (`CHIMERA_FREERTOS_RAM` memmap entry) |
+| RAM region size (memmap) | `0x08000000` (128 MiB) | `hw/arm/chimera_r52_freertos_demo.c:29` |
 
-The RAM is added to the system memory map via `memory_region_add_subregion()` using the memmap's `base` (0x80000000) and `machine->ram` (sized by `default_ram_size`). The launch script (`scripts/heterogeneous-soc/guest-run-riscv-freertos-phase5.sh`) does not pass a `-m` flag, so the 128 MiB default always applies.
+The RAM is added to the system memory map via `memory_region_add_subregion()` using the memmap's `base` (0x80000000) and `machine->ram` (sized by `default_ram_size`). The launch script (`scripts/heterogeneous-soc/guest-run-r52-freertos-phase5.sh`) does not pass a `-m` flag, so the 128 MiB default always applies.
 
 The FreeRTOS firmware itself only consumes the first 8 MiB (linker script: `contrib/heterogeneous-soc/freertos-showcase/linker.ld`); the remaining 120 MiB is unused by the ELF but reserved by the QEMU machine.
 
-The custom QEMU machine (`hw/riscv/chimera_freertos_demo.c`) connects FreeRTOS to all five ivshmem servers simultaneously:
+The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS to all five ivshmem servers simultaneously:
 
 | Link | MMIO base | SHMEM base | Vectors | Direction |
 |---|---|---|---|---|
@@ -615,7 +615,7 @@ Cross-compilation happens inside the Lima VM, which provides:
 | `aarch64-linux-gnu-gcc` | ARM-Linux syslog daemon + `linux-arm-stats` |
 | `riscv64-linux-gnu-gcc` | RISCV-Linux syslog daemon |
 | `mipsel-linux-gnu-gcc` | MIPS-Linux syslog daemon |
-| `riscv64-unknown-elf-gcc` | FreeRTOS bare-metal ELF |
+| `arm-none-eabi-gcc` | FreeRTOS bare-metal ELF |
 
 #### Lima VM build dependencies
 
@@ -625,7 +625,7 @@ Cross-compilation happens inside the Lima VM, which provides:
 build-essential acpica-tools bison clang debootstrap flex git
 qemu-efi-aarch64 qemu-system-arm qemu-system-misc qemu-system-mips qemu-user-static
 gcc-aarch64-linux-gnu gcc-riscv64-linux-gnu gcc-mipsel-linux-gnu
-gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+gcc-arm-none-eabi binutils-arm-none-eabi
 libarchive-tools libglib2.0-dev libpixman-1-dev libssl-dev lld ninja-build
 opensbi pciutils pkg-config python3-pip python3-serial python3-venv
 rsync ssh zlib1g-dev
@@ -662,7 +662,7 @@ contrib/heterogeneous-soc/
     hello_proto.h             — HELLO/ACK handshake (sender IDs, message structs, hsoc_layout)
     stats_proto.h             — Stats snapshot protocol (hsoc_stats_snapshot with generation counter)
     bootlog_proto.h           — Boot-log protocol (hsoc_bootlog_header, 4 × 1 MiB slots)
-    ── FreeRTOS Firmware (bare-metal RISCV, freertos-riscv-demo.elf) ──
+    ── FreeRTOS Firmware (bare-metal Cortex-R52, freertos-r52-demo.elf) ──
     freertos_main.c           — main() + showcase_task: polls 3 HELLO/ACK channels, sends ACKs, writes stats snapshot every 5 s, runs boot-log monitor
     freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, poll_hello, send_ack (volatile byte loops)
     freertos_ivshmem_flat.h   — struct freertos_ivshmem_link, MMIO register offsets, declarations
@@ -721,7 +721,7 @@ scripts/heterogeneous-soc/
   guest-start-ivshmem-server-stats.sh         — stats ivshmem-server (FreeRTOS→ARM stats channel)
 
   ── QEMU guest launchers ─────────────────────────────────────────────────────
-  guest-run-riscv-freertos-phase5.sh          — launches FreeRTOS QEMU
+  guest-run-r52-freertos-phase5.sh          — launches FreeRTOS QEMU
   guest-run-arm-phase5.sh                     — launches ARM-Linux QEMU (Debian)
   guest-run-riscv-phase5.sh                   — launches RISCV-Linux QEMU (Debian)
   guest-run-chimera.sh                        — launches MIPS-Linux QEMU (Malta machine)
@@ -754,7 +754,7 @@ scripts/heterogeneous-soc/
   guest-prepare-mips-boot-assets.sh           — replaced by guest-prepare-debian-boot-assets.sh
   guest-prepare-riscv-uboot.sh                — replaced by direct OpenSBI boot
 
-hw/riscv/chimera_freertos_demo.c  — custom QEMU machine (4 ivshmem channels: 3 HELLO/ACK + 1 stats)
+hw/arm/chimera_r52_freertos_demo.c  — custom QEMU machine (4 ivshmem channels: 3 HELLO/ACK + 1 stats)
 hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by FreeRTOS)
 ```
 

@@ -1,7 +1,5 @@
 riscv_ss = ss.source_set()
 riscv_ss.add(files('boot.c'))
-riscv_ss.add(when: 'CONFIG_CHIMERA_FREERTOS_DEMO',
-             if_true: files('chimera_freertos_demo.c'))
 riscv_ss.add(when: 'CONFIG_RISCV_NUMA', if_true: files('numa.c'))
 riscv_ss.add(files('riscv_hart.c'))
 riscv_ss.add(when: 'CONFIG_OPENTITAN', if_true: files('opentitan.c'))
