@@ -1,5 +1,8 @@
 #include "freertos_ivshmem_flat.h"
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 /*
  * log_uart is defined in freertos_main.c; used here for diagnostic output.
  */
@@ -70,6 +73,65 @@ static void copy_text(char *dest, const char *src)
     }
 }
 
+/*
+ * ISR-safe tick-to-timestamp conversion.
+ * Uses xTaskGetTickCountFromISR() instead of xTaskGetTickCount() because
+ * we run in interrupt context (safe to call at task level too, but we keep
+ * the ISR variant self-contained to avoid coupling with freertos_main.c).
+ */
+static void tick_to_timestamp_isr(int64_t *ts_sec, int64_t *ts_nsec)
+{
+    TickType_t ticks = xTaskGetTickCountFromISR();
+    const int64_t ns_per_tick = 1000000000LL / configTICK_RATE_HZ;
+
+    *ts_sec = ticks / configTICK_RATE_HZ;
+    *ts_nsec = (ticks % configTICK_RATE_HZ) * ns_per_tick;
+}
+
+/*
+ * Called from vApplicationIRQHandler on GIC SPI 1 (INTID 33).
+ * Reads the HELLO from IVSHMEM0 shared memory, sends ACK, rings doorbell.
+ * Follows the same volatile-byte-access rules as the poll path.
+ */
+void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
+{
+    uint32_t int_status;
+    struct hsoc_hello_msg msg;
+    int64_t ts_sec, ts_nsec;
+
+    /* Read INTSTATUS — if our bit is not set, this interrupt isn't for us */
+    int_status = link->mmio_base[FREERTOS_IVSHMEM_INTSTATUS / sizeof(uint32_t)];
+    if (!(int_status & 1)) return;
+
+    __sync_synchronize();
+    if (link->layout->linux_to_freertos.flag == 1) {
+        /* Volatile byte-loop copy of the message from shared memory */
+        shmem_read(&msg, &link->layout->linux_to_freertos.msg, sizeof(msg));
+
+        if (msg.magic == HSOC_HELLO_MAGIC &&
+            msg.version == HSOC_PROTO_VERSION &&
+            msg.msg_type == HSOC_MSG_HELLO) {
+
+            /* Build and send ACK with ISR-safe timestamp */
+            tick_to_timestamp_isr(&ts_sec, &ts_nsec);
+            freertos_ivshmem_send_ack(link, msg.seq, ts_sec, ts_nsec);
+
+            /* Ring doorbell (write peer ID to DOORBELL reg @ offset 0xc) to
+             * notify ARM-Linux that the ACK is ready. */
+            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = 1;
+
+            log_uart(HSOC_LOG_INFO, "[irq] ivshmem0: HELLO handled via IRQ\n");
+        }
+
+        /* Acknowledge the HELLO by clearing the flag */
+        link->layout->linux_to_freertos.flag = 0;
+        __sync_synchronize();
+    }
+
+    /* Clear INTSTATUS by writing 1 */
+    link->mmio_base[FREERTOS_IVSHMEM_INTSTATUS / sizeof(uint32_t)] = 1;
+}
+
 void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
                            uintptr_t mmio_base,
                            uintptr_t shmem_base,
@@ -78,6 +140,9 @@ void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
     link->mmio_base = (volatile uint32_t *)mmio_base;
     link->layout = (struct hsoc_layout *)shmem_base;
     link->name = name;
+    /* ivshmem-flat IRQ output is masked by default; enable it so the GIC
+     * receives interrupts when the peer rings the doorbell. */
+    link->mmio_base[FREERTOS_IVSHMEM_INTMASK / sizeof(uint32_t)] = 0xFFFFFFFF;
     link->layout->linux_to_freertos.flag = 0;
     link->layout->freertos_to_linux.flag = 0;
 }
