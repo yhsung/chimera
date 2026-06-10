@@ -26,10 +26,14 @@ struct can_ivshmem_layout {
 
 /* ---- Pure decode helpers (raw xlnx-zynqmp-can register value -> fields) ---- */
 
-/* Standard 11-bit ID lives in RXFIFO_ID bits 21..31 (IDH field). */
+/* The Xilinx TRM documents the standard 11-bit ID in RXFIFO_ID bits 21..31
+ * (IDH field), but QEMU's xlnx-zynqmp-can model (hw/net/can/xlnx-zynqmp-can.c,
+ * update_rx_fifo()) pushes the raw SocketCAN frame->can_id straight into
+ * RXFIFO_ID unshifted. Decode against the emulated layout actually produced
+ * by this QEMU build. */
 static inline uint32_t can_decode_id(uint32_t rxfifo_id_reg)
 {
-    return (rxfifo_id_reg >> 21) & 0x7FFu;
+    return rxfifo_id_reg & 0x7FFu;
 }
 
 /* DLC lives in RXFIFO_DLC bits 28..31; clamp to the 0-8 payload range. */
@@ -39,18 +43,23 @@ static inline uint32_t can_decode_dlc(uint32_t rxfifo_dlc_reg)
     return dlc > 8u ? 8u : dlc;
 }
 
-/* DATA1 holds DB0..DB3 (bits 24,16,8,0); DATA2 holds DB4..DB7 likewise. */
+/* The TRM documents DATA1 as DB0..DB3 in bits 24,16,8,0 (i.e. payload byte 0
+ * in the most-significant byte), but QEMU's xlnx-zynqmp-can model
+ * (update_rx_fifo()) packs frame->data[0] into bits 0..7 (DB3's position)
+ * and frame->data[3] into bits 24..31 (DB0's position) -- the reverse.
+ * DATA2/data[4..7] follow the same reversed packing. Decode little-endian to
+ * match what this QEMU build actually emits. */
 static inline void can_decode_data(uint32_t data1_reg, uint32_t data2_reg,
                                    uint8_t out[8])
 {
-    out[0] = (uint8_t)(data1_reg >> 24);
-    out[1] = (uint8_t)(data1_reg >> 16);
-    out[2] = (uint8_t)(data1_reg >> 8);
-    out[3] = (uint8_t)(data1_reg);
-    out[4] = (uint8_t)(data2_reg >> 24);
-    out[5] = (uint8_t)(data2_reg >> 16);
-    out[6] = (uint8_t)(data2_reg >> 8);
-    out[7] = (uint8_t)(data2_reg);
+    out[0] = (uint8_t)(data1_reg);
+    out[1] = (uint8_t)(data1_reg >> 8);
+    out[2] = (uint8_t)(data1_reg >> 16);
+    out[3] = (uint8_t)(data1_reg >> 24);
+    out[4] = (uint8_t)(data2_reg);
+    out[5] = (uint8_t)(data2_reg >> 8);
+    out[6] = (uint8_t)(data2_reg >> 16);
+    out[7] = (uint8_t)(data2_reg >> 24);
 }
 
 #endif

@@ -54,25 +54,6 @@ static void gic_enable_spi(uint32_t intid)
     isen[intid / 32] = (1U << (intid % 32));
 }
 
-static void uart_hex2(uint8_t b)
-{
-    static const char hex[] = "0123456789abcdef";
-    char s[3];
-    s[0] = hex[(b >> 4) & 0xf];
-    s[1] = hex[b & 0xf];
-    s[2] = '\0';
-    log_uart(HSOC_LOG_INFO, s);
-}
-
-static void uart_hex1(uint8_t nibble)
-{
-    static const char hex[] = "0123456789abcdef";
-    char s[2];
-    s[0] = hex[nibble & 0xf];
-    s[1] = '\0';
-    log_uart(HSOC_LOG_INFO, s);
-}
-
 void can_init(uintptr_t can_mmio_base, uintptr_t ivshmem_can_shmem_base)
 {
     can_regs = (volatile uint32_t *)can_mmio_base;
@@ -120,24 +101,39 @@ void can_rx_isr(void)
     f.pad[0] = f.pad[1] = f.pad[2] = 0;
     can_decode_data(d1, d2, f.data);
 
-    /* UART: "CAN RX: id=0x123 dlc=4 data=de ad be ef" */
-    log_uart(HSOC_LOG_INFO, "CAN RX: id=0x");
-    uart_hex1((uint8_t)((f.id >> 8) & 0xf)); /* high nibble of 11-bit id */
-    uart_hex2((uint8_t)(f.id & 0xff));
-    log_uart(HSOC_LOG_INFO, " dlc=");
+    /* UART: "CAN RX: id=0x123 dlc=4 data=de ad be ef\n", built into one
+     * buffer and emitted via a single log_uart() call so the line isn't
+     * interleaved with a separate [timestamp] [LEVEL] prefix per fragment. */
     {
-        char d[2];
-        d[0] = '0' + (char)f.dlc;
-        d[1] = '\0';
-        log_uart(HSOC_LOG_INFO, d);
-    }
-    log_uart(HSOC_LOG_INFO, " data=");
-    for (i = 0; i < f.dlc; i++) {
-        uart_hex2(f.data[i]);
-        log_uart(HSOC_LOG_INFO, (i + 1 < f.dlc) ? " " : "\n");
-    }
-    if (f.dlc == 0) {
-        log_uart(HSOC_LOG_INFO, "\n");
+        static const char hex[] = "0123456789abcdef";
+        char line[64];
+        uint32_t p = 0;
+        const char *s;
+
+        for (s = "CAN RX: id=0x"; *s != '\0'; s++) {
+            line[p++] = *s;
+        }
+        line[p++] = hex[(f.id >> 8) & 0xf]; /* high nibble of 11-bit id */
+        line[p++] = hex[(f.id >> 4) & 0xf];
+        line[p++] = hex[f.id & 0xf];
+        for (s = " dlc="; *s != '\0'; s++) {
+            line[p++] = *s;
+        }
+        line[p++] = (char)('0' + f.dlc);
+        for (s = " data="; *s != '\0'; s++) {
+            line[p++] = *s;
+        }
+        for (i = 0; i < f.dlc; i++) {
+            line[p++] = hex[(f.data[i] >> 4) & 0xf];
+            line[p++] = hex[f.data[i] & 0xf];
+            if (i + 1 < f.dlc) {
+                line[p++] = ' ';
+            }
+        }
+        line[p++] = '\n';
+        line[p] = '\0';
+
+        log_uart(HSOC_LOG_INFO, line);
     }
 
     /* Publish to IVSHMEM5: write the frame body, fence, then bump generation. */

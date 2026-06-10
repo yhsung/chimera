@@ -110,7 +110,11 @@ void log_uart(uint32_t level, const char *msg)
     }
 
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) {
-        ticks = xTaskGetTickCount();
+        /* xTaskGetTickCountFromISR() avoids vPortEnterCritical(), which
+         * asserts ulPortInterruptNesting == 0 and would hang here when
+         * log_uart() is called from can_rx_isr(). It is also safe to call
+         * from task context. */
+        ticks = xTaskGetTickCountFromISR();
     } else {
         ticks = 0;
     }

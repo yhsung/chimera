@@ -9,11 +9,14 @@
 int main(void)
 {
     /* Raw register values QEMU's xlnx-zynqmp-can latches for `cansend vcan0 123#DEADBEEF`:
-     * standard ID 0x123 in IDH (bits 21-31), DLC 4 in bits 28-31,
-     * data DE AD BE EF packed DB0..DB3 (bits 24..0) of DATA1. */
-    uint32_t id_reg  = 0x123u << 21;      /* 0x24600000 */
+     * update_rx_fifo() (hw/net/can/xlnx-zynqmp-can.c) pushes the raw
+     * SocketCAN frame->can_id into RXFIFO_ID unshifted (not the TRM's
+     * IDH bits 21-31), DLC 4 in bits 28-31, and packs payload byte i into
+     * DATA1/DATA2 bits [8*i+7:8*i] (little-endian), so data[0]=DE ends up
+     * in bits 0-7 and data[3]=EF in bits 24-31. */
+    uint32_t id_reg  = 0x123u;            /* raw 11-bit standard ID */
     uint32_t dlc_reg = 4u << 28;          /* 0x40000000 */
-    uint32_t d1      = 0xDEADBEEFu;       /* DB0=DE DB1=AD DB2=BE DB3=EF */
+    uint32_t d1      = 0xEFBEADDEu;       /* bytes 0..3 = DE AD BE EF (LE) */
     uint32_t d2      = 0x00000000u;
 
     assert(can_decode_id(id_reg) == 0x123u);

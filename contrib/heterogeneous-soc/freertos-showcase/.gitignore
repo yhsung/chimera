@@ -4,3 +4,9 @@ syslog-arm-linux
 syslog-riscv-linux
 syslog-mips-linux
 linux-arm-stats
+can-log-arm-linux
+bootlog-arm-linux
+bootlog-riscv-linux
+bootlog-mips-linux
+boot-collector
+test_can_decode

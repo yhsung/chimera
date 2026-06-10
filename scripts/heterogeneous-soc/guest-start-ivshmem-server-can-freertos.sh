@@ -16,6 +16,6 @@ exec "$(find_ivshmem_server)" \
     -F \
     -M ivshmem-can-ft \
     -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" \
-    -l "${IVSHMEM_SIZE}" \
+    -l "${IVSHMEM_CAN_FREERTOS_SIZE}" \
     -n "${IVSHMEM_VECTORS}" \
     -v
