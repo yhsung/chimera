@@ -92,16 +92,16 @@ static void tick_to_timestamp_isr(int64_t *ts_sec, int64_t *ts_nsec)
  * Called from vApplicationIRQHandler on GIC SPI 1 (INTID 33).
  * Reads the HELLO from IVSHMEM0 shared memory, sends ACK, rings doorbell.
  * Follows the same volatile-byte-access rules as the poll path.
+ *
+ * This QEMU ivshmem-flat model (hw/misc/ivshmem-flat.c) raises the GIC IRQ
+ * unconditionally whenever the peer signals our eventfd — INTSTATUS/INTMASK
+ * are reserved/no-op in this device revision, so the shared flag below is
+ * the only real gate, same as freertos_ivshmem_poll_hello().
  */
 void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
 {
-    uint32_t int_status;
     struct hsoc_hello_msg msg;
     int64_t ts_sec, ts_nsec;
-
-    /* Read INTSTATUS — if our bit is not set, this interrupt isn't for us */
-    int_status = link->mmio_base[FREERTOS_IVSHMEM_INTSTATUS / sizeof(uint32_t)];
-    if (!(int_status & 1)) return;
 
     __sync_synchronize();
     if (link->layout->linux_to_freertos.flag == 1) {
@@ -127,9 +127,6 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
         link->layout->linux_to_freertos.flag = 0;
         __sync_synchronize();
     }
-
-    /* Clear INTSTATUS by writing 1 */
-    link->mmio_base[FREERTOS_IVSHMEM_INTSTATUS / sizeof(uint32_t)] = 1;
 }
 
 void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
@@ -140,9 +137,6 @@ void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
     link->mmio_base = (volatile uint32_t *)mmio_base;
     link->layout = (struct hsoc_layout *)shmem_base;
     link->name = name;
-    /* ivshmem-flat IRQ output is masked by default; enable it so the GIC
-     * receives interrupts when the peer rings the doorbell. */
-    link->mmio_base[FREERTOS_IVSHMEM_INTMASK / sizeof(uint32_t)] = 0xFFFFFFFF;
     link->layout->linux_to_freertos.flag = 0;
     link->layout->freertos_to_linux.flag = 0;
 }
