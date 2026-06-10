@@ -19,7 +19,7 @@ HAVE_CC_MIPS  := $(shell command -v $(CC_MIPS) 2>/dev/null)
 
 SYSLOG_TARGETS :=
 ifneq ($(HAVE_CC_ARM),)
-SYSLOG_TARGETS += syslog-arm-linux linux-arm-stats
+SYSLOG_TARGETS += syslog-arm-linux linux-arm-stats can-log-arm-linux
 endif
 ifneq ($(HAVE_CC_RISCV),)
 SYSLOG_TARGETS += syslog-riscv-linux
@@ -52,7 +52,7 @@ FREERTOS_SRCS := \
 	$(FREERTOS_PORT_DIR)/port.c \
 	$(FREERTOS_PORT_DIR)/portASM.S
 
-.PHONY: all clean
+.PHONY: all clean check
 
 all: $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf
 ifeq ($(HAVE_CC_ARM),)
@@ -73,6 +73,9 @@ syslog-arm-linux: linux_syslog.c hello_proto.h
 
 linux-arm-stats: linux_stats.c stats_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) -o $@ linux_stats.c
+
+can-log-arm-linux: can_log.c can_proto.h
+	$(CC_ARM) $(CFLAGS_LINUX) -pthread -o $@ can_log.c
 
 syslog-riscv-linux: linux_syslog.c hello_proto.h
 	$(CC_RISCV) $(CFLAGS_LINUX) \
@@ -107,16 +110,23 @@ bootlog-mips-linux: bootlog_writer.c bootlog_proto.h
 boot-collector: boot_collector.c bootlog_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) -o $@ boot_collector.c
 
-freertos-r52-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c \
+freertos-r52-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c can_driver.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
-		hello_proto.h stats_proto.h bootlog_proto.h boot_log.h $(FREERTOS_SRCS)
+		hello_proto.h stats_proto.h bootlog_proto.h boot_log.h \
+		can_driver.h can_proto.h $(FREERTOS_SRCS)
 	$(CC_BARE) $(CFLAGS_BARE) \
 	  -I. \
 	  -I$(FREERTOS_KERNEL_DIR)/include \
 	  -I$(FREERTOS_PORT_DIR) \
-	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c freertos_libc.c \
+	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c can_driver.c freertos_libc.c \
 	  $(FREERTOS_SRCS) \
 	  $(LDFLAGS_BARE) -o $@
 
 clean:
-	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf
+	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf test_can_decode
+
+check: test_can_decode
+	./test_can_decode
+
+test_can_decode: test_can_decode.c can_proto.h
+	cc -O2 -Wall -o $@ test_can_decode.c
