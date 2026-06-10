@@ -7,6 +7,7 @@
 #include "stats_proto.h"
 #include "bootlog_proto.h"
 #include "boot_log.h"
+#include "can_driver.h"
 
 /* Minimum log severity for output. Messages below this level are suppressed.
  * Override at build time with -DFREERTOS_LOG_LEVEL=HSOC_LOG_VERBOSE etc. */
@@ -29,6 +30,9 @@
 #define IVSHMEM3_SHMEM 0x40000000UL
 #define IVSHMEM4_MMIO  0x44000000UL
 #define IVSHMEM4_SHMEM 0x45000000UL
+#define IVSHMEM5_MMIO  0x49000000UL
+#define IVSHMEM5_SHMEM 0x4A000000UL
+#define CAN_MMIO       0x50000000UL
 
 static struct freertos_ivshmem_link arm_link;
 static struct freertos_ivshmem_link riscv_link;
@@ -236,6 +240,8 @@ void log_hex32_uart(uint32_t level, uint32_t v)
 /* port.c calls FreeRTOS_Tick_Handler() on each tick. */
 extern void FreeRTOS_Tick_Handler(void);
 
+#define R52_CAN_INTID 38U   /* CAN controller on GIC SPI 6 */
+
 static uint32_t r52_tick_reload;
 
 static inline uint32_t r52_read_cntfrq(void)
@@ -293,6 +299,8 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
 
     if (intid == R52_TICK_INTID) {
         FreeRTOS_Tick_Handler();
+    } else if (intid == R52_CAN_INTID) {
+        can_rx_isr();
     }
     /* ivshmem channels are flag-polled; their IRQs (if any fire) are ignored. */
 }
@@ -309,6 +317,8 @@ static void showcase_task(void *opaque)
     stats_shmem->magic      = HSOC_STATS_MAGIC;
     stats_shmem->generation = 0;
     __sync_synchronize();
+
+    can_init(CAN_MMIO, IVSHMEM5_SHMEM);
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
 
