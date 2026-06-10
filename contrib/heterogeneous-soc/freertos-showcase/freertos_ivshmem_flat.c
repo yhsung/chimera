@@ -121,6 +121,14 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
             link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = 1;
 
             log_uart(HSOC_LOG_INFO, "[irq] ivshmem0: HELLO handled via IRQ\n");
+        } else {
+            log_uart(HSOC_LOG_ERROR, "[irq] validation failed: magic=");
+            log_hex32(HSOC_LOG_ERROR, msg.magic);
+            log_uart(HSOC_LOG_ERROR, " ver=");
+            log_hex32(HSOC_LOG_ERROR, msg.version);
+            log_uart(HSOC_LOG_ERROR, " type=");
+            log_hex32(HSOC_LOG_ERROR, msg.msg_type);
+            log_uart(HSOC_LOG_ERROR, "\n");
         }
 
         /* Acknowledge the HELLO by clearing the flag */
@@ -192,4 +200,5 @@ void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
     shmem_write(&link->layout->freertos_to_linux.msg, &ack, sizeof(ack));
     __sync_synchronize();
     link->layout->freertos_to_linux.flag = 1;
+    __sync_synchronize();
 }
