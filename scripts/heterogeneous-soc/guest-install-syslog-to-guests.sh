@@ -73,5 +73,6 @@ pkill -f "qemu-system-mipsel.*run-chimera"            2>/dev/null || true
 sleep 0.5   # allow processes to exit and release file locks
 
 inject_binary "${ARM_DEBIAN_DISK}"   "${SYSLOG_ARM_BINARY}"   "syslog-arm-linux"
+inject_binary "${ARM_DEBIAN_DISK}"   "${CAN_LOG_ARM_BINARY}"  "can-log-arm-linux"
 inject_binary "${RISCV_DEBIAN_DISK}" "${SYSLOG_RISCV_BINARY}" "syslog-riscv-linux"
 inject_binary "${MIPS_DEBIAN_DISK}"  "${SYSLOG_MIPS_BINARY}"  "syslog-mips-linux"

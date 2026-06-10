@@ -81,18 +81,21 @@ tmux send-keys -t "$SESSION:0.1" "cd '$REPO' && scripts/heterogeneous-soc/guest-
 tmux send-keys -t "$SESSION:0.2" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-mips-freertos.sh"  Enter
 tmux send-keys -t "$SESSION:0.3" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-stats.sh"          Enter
 tmux send-keys -t "$SESSION:0.4" "cd '$REPO' && scripts/heterogeneous-soc/guest-start-ivshmem-server-bootlog.sh"       Enter
+( cd "$REPO" && scripts/heterogeneous-soc/guest-start-ivshmem-server-can-freertos.sh >/dev/null 2>&1 & )
 
 ARM_SOCK="${IVSHMEM_ARM_FREERTOS_DIR:-/tmp/ivshmem-arm-freertos}/sock"
 RISCV_SOCK="${IVSHMEM_RISCV_FREERTOS_DIR:-/tmp/ivshmem-riscv-freertos}/sock"
 MIPS_SOCK="${IVSHMEM_MIPS_FREERTOS_DIR:-/tmp/ivshmem-mips-freertos}/sock"
 STATS_SOCK="${IVSHMEM_STATS_FREERTOS_DIR:-/tmp/ivshmem-stats-freertos}/sock"
 BOOT_SOCK="${IVSHMEM_BOOTLOG_DIR:-/tmp/ivshmem-bootlog}/sock"
+CAN_SOCK="${IVSHMEM_CAN_FREERTOS_DIR:-/tmp/ivshmem-can-freertos}/sock"
 for _i in $(seq 1 60); do
     if [[ -S "$ARM_SOCK"   ]] && ss -xl | grep -Fq "$ARM_SOCK"   && \
        [[ -S "$RISCV_SOCK" ]] && ss -xl | grep -Fq "$RISCV_SOCK" && \
        [[ -S "$MIPS_SOCK"  ]] && ss -xl | grep -Fq "$MIPS_SOCK"  && \
        [[ -S "$STATS_SOCK" ]] && ss -xl | grep -Fq "$STATS_SOCK" && \
-       [[ -S "$BOOT_SOCK"  ]] && ss -xl | grep -Fq "$BOOT_SOCK"; then
+       [[ -S "$BOOT_SOCK"  ]] && ss -xl | grep -Fq "$BOOT_SOCK"  && \
+       [[ -S "$CAN_SOCK"   ]] && ss -xl | grep -Fq "$CAN_SOCK"; then
         break
     fi
     sleep 0.5
@@ -206,6 +209,8 @@ auto_login_and_run "$SESSION:0.6" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
     "syslog-arm-linux &" \
     "bootlog-arm-linux &" \
+    "ip link set can0 type can bitrate 500000 2>/dev/null; ip link set can0 up 2>/dev/null" \
+    "can-log-arm-linux &" \
     "boot-collector" &
 auto_login_and_run "$SESSION:0.7" \
     "syslog-riscv-linux &" \

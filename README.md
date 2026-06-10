@@ -83,7 +83,7 @@ The RAM is added to the system memory map via `memory_region_add_subregion()` us
 
 The FreeRTOS firmware itself only consumes the first 8 MiB (linker script: `contrib/heterogeneous-soc/freertos-showcase/linker.ld`); the remaining 120 MiB is unused by the ELF but reserved by the QEMU machine.
 
-The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS to all five ivshmem servers simultaneously:
+The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS to all six ivshmem servers simultaneously:
 
 | Link | MMIO base | SHMEM base | Vectors | Direction |
 |---|---|---|---|---|
@@ -92,8 +92,11 @@ The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS
 | MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | 4 | bidirectional (HELLO/ACK) |
 | Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | 4 | FreeRTOS write only (stats snapshot) |
 | Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | All 4 guests → ARM collector (3 via /dev/kmsg, FreeRTOS via `log_uart`) |
+| IVSHMEM5 CAN FreeRTOS→ARM | `0x49000000` | `0x4A000000` (64 KiB) | 4 | FreeRTOS write only (decoded CAN frame) |
 
 **Signaling:** The HELLO/ACK and stats channels use pure shared-memory polling — Linux and FreeRTOS poll `flag`/`generation` fields in shared memory; no doorbell is involved. The 4 vectors on these channels are vestigial.
+
+CAN controller: `xlnx-zynqmp-can` @ `0x50000000`, GIC SPI 6 (INTID 38). ARM-Linux uses `kvaser_pci` → `can0`. Both QEMU processes share Lima's `vcan0` via `can-host-socketcan`. ARM-Linux daemon `can-log-arm-linux` tails both sources to `/var/log/chimera-log/can-bus.log`.
 
 Only the boot-log channel uses the doorbell mechanism:
 

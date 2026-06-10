@@ -96,6 +96,7 @@ config CHIMERA_R52_FREERTOS_DEMO
     select ARM_GIC
     select PL011
     select IVSHMEM_FLAT_DEVICE
+    select XLNX_ZYNQMP
 
 config MUSCA
     bool

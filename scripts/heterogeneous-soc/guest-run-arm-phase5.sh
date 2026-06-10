@@ -13,6 +13,17 @@ require_file "${ARM_DEBIAN_DISK}" "ARM Debian rootfs disk"
 
 bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
+can_args=()
+if [[ -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" ]]; then
+    can_args=(
+        -object can-bus,id=canbus0
+        -object "can-host-socketcan,id=ch0,if=${CAN_VCAN_IF},canbus=canbus0"
+        -device kvaser_pci,canbus=canbus0
+        -chardev "socket,id=ivshmem_can,path=${IVSHMEM_CAN_FREERTOS_SOCKET}"
+        -device "ivshmem-doorbell,chardev=ivshmem_can,vectors=${IVSHMEM_VECTORS}"
+    )
+fi
+
 exec "${qemu_bin}" \
     -machine virt,gic-version=3 \
     -cpu cortex-a53 -m 512M -smp 2 \
@@ -26,6 +37,7 @@ exec "${qemu_bin}" \
     -device ivshmem-doorbell,chardev=ivshmem_stats,vectors="${IVSHMEM_VECTORS}" \
     -chardev socket,id=ivshmem_boot,path="${IVSHMEM_BOOTLOG_SOCKET}" \
     -device ivshmem-doorbell,chardev=ivshmem_boot,vectors=1 \
+    "${can_args[@]}" \
     -drive file="${ARM_DEBIAN_DISK}",format=qcow2,if=virtio \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -netdev tap,id=net0,ifname=tap-arm,script=no,downscript=no \

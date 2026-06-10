@@ -62,7 +62,7 @@ These resolve conflicts between the spec (`docs/superpowers/specs/2026-06-10-can
 
 The decode helpers are pure functions of the raw `xlnx-zynqmp-can` register values, so they are unit-testable on the host. Both the FreeRTOS firmware and the ARM-Linux daemon include this header. Field positions verified against `hw/net/can/xlnx-zynqmp-can.c` (RXFIFO_ID IDH = bits 21–31; RXFIFO_DLC DLC = bits 28–31; DATA1 DB0..DB3 = bits 24..0; DATA2 DB4..DB7 = bits 24..0).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `contrib/heterogeneous-soc/freertos-showcase/test_can_decode.c`:
 
@@ -106,12 +106,12 @@ int main(void)
 }
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd contrib/heterogeneous-soc/freertos-showcase && cc -O2 -Wall -o /tmp/test_can_decode test_can_decode.c && /tmp/test_can_decode`
 Expected: FAIL — `fatal error: can_proto.h: No such file or directory`.
 
-- [ ] **Step 3: Write `can_proto.h`**
+- [x] **Step 3: Write `can_proto.h`**
 
 Create `contrib/heterogeneous-soc/freertos-showcase/can_proto.h`:
 
@@ -174,12 +174,12 @@ static inline void can_decode_data(uint32_t data1_reg, uint32_t data2_reg,
 #endif
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd contrib/heterogeneous-soc/freertos-showcase && cc -O2 -Wall -o /tmp/test_can_decode test_can_decode.c && /tmp/test_can_decode`
 Expected: PASS — prints `test_can_decode: OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/can_proto.h \
@@ -194,7 +194,7 @@ git commit -m "feat(can): add CAN frame proto + decode helpers with host test"
 **Files:**
 - Modify: `include/hw/arm/chimera_r52_freertos_demo.h`
 
-- [ ] **Step 1: Bump `GIC_NUM_IRQ` and add property macros + state fields**
+- [x] **Step 1: Bump `GIC_NUM_IRQ` and add property macros + state fields**
 
 In `include/hw/arm/chimera_r52_freertos_demo.h`, change the GIC sizing constant (line 27) from:
 
@@ -222,7 +222,7 @@ Add two new fields to `struct ChimeraR52FreeRTOSMachineState` (after `char *ivsh
     char *ivshmem_can_freertos;
 ```
 
-- [ ] **Step 2: Extend the memmap enum**
+- [x] **Step 2: Extend the memmap enum**
 
 Append to the memmap `enum` (after `CHIMERA_R52_FREERTOS_IVSHMEM4_SHMEM,`, line 65):
 
@@ -232,7 +232,7 @@ Append to the memmap `enum` (after `CHIMERA_R52_FREERTOS_IVSHMEM4_SHMEM,`, line 
     CHIMERA_R52_FREERTOS_CAN_MMIO,
 ```
 
-- [ ] **Step 3: Extend the SPI enum**
+- [x] **Step 3: Extend the SPI enum**
 
 Append to the SPI `enum` (after `CHIMERA_R52_FREERTOS_IVSHMEM4_SPI = 5,`, line 75):
 
@@ -241,11 +241,11 @@ Append to the SPI `enum` (after `CHIMERA_R52_FREERTOS_IVSHMEM4_SPI = 5,`, line 7
     CHIMERA_R52_FREERTOS_IVSHMEM5_SPI = 7,
 ```
 
-- [ ] **Step 4: Verify it still parses (sanity compile of the header)**
+- [x] **Step 4: Verify it still parses (sanity compile of the header)**
 
 Run: `cc -fsyntax-only -I include -I . include/hw/arm/chimera_r52_freertos_demo.h 2>&1 | head` (QEMU-internal includes will error, but the new lines must not introduce syntax errors local to this file). Expected: no error pointing at the lines you added. Definitive verification happens at the QEMU build in Task 4.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add include/hw/arm/chimera_r52_freertos_demo.h
@@ -259,7 +259,7 @@ git commit -m "feat(can): declare CAN + IVSHMEM5 memmap/SPI/props on chimera-r52
 **Files:**
 - Modify: `hw/arm/chimera_r52_freertos_demo.c`
 
-- [ ] **Step 1: Add memmap entries**
+- [x] **Step 1: Add memmap entries**
 
 In `hw/arm/chimera_r52_freertos_demo.c`, inside `chimera_r52_memmap[]` (after the IVSHMEM4 entries, line 55), add:
 
@@ -271,7 +271,7 @@ In `hw/arm/chimera_r52_freertos_demo.c`, inside `chimera_r52_memmap[]` (after th
     [CHIMERA_R52_FREERTOS_CAN_MMIO] =       { 0x50000000, 0x00001000 },
 ```
 
-- [ ] **Step 2: Add the new chardev string properties**
+- [x] **Step 2: Add the new chardev string properties**
 
 After `CHIMERA_R52_CHARDEV_PROP(ivshmem_bootlog_freertos)` (line 80) add:
 
@@ -299,7 +299,7 @@ static void chimera_r52_set_canbus_id(Object *obj, const char *value,
 }
 ```
 
-- [ ] **Step 3: Add a CAN-controller instantiation helper**
+- [x] **Step 3: Add a CAN-controller instantiation helper**
 
 Add this `#include` near the existing device includes (after `#include "hw/misc/ivshmem-flat.h"`, line 23):
 
@@ -344,7 +344,7 @@ static void chimera_r52_connect_can(DeviceState *gic, const char *canbus_id,
 }
 ```
 
-- [ ] **Step 4: Resolve the new chardev + wire devices in `chimera_r52_machine_init`**
+- [x] **Step 4: Resolve the new chardev + wire devices in `chimera_r52_machine_init`**
 
 In `chimera_r52_machine_init()`, add a local declaration next to `Chardev *stats_chr = NULL, *bootlog_chr = NULL;` (line 119):
 
@@ -384,7 +384,7 @@ Add the IVSHMEM5 + CAN wiring right after the `if (bootlog_chr) { ... }` block (
     }
 ```
 
-- [ ] **Step 5: Register the new machine properties in `chimera_r52_machine_class_init`**
+- [x] **Step 5: Register the new machine properties in `chimera_r52_machine_class_init`**
 
 Append after the bootlog property registration (after line 300):
 
@@ -404,7 +404,7 @@ Append after the bootlog property registration (after line 300):
         "Object id of the can-bus this machine's CAN controller attaches to");
 ```
 
-- [ ] **Step 6: Commit (build verification deferred to Task 4)**
+- [x] **Step 6: Commit (build verification deferred to Task 4)**
 
 ```bash
 git add hw/arm/chimera_r52_freertos_demo.c
@@ -420,7 +420,7 @@ git commit -m "feat(can): wire xlnx-zynqmp-can + IVSHMEM5 into chimera-r52 machi
 
 The `xlnx-zynqmp-can.c` device file compiles only when `CONFIG_XLNX_ZYNQMP=y` (`hw/net/can/meson.build:7`). `CONFIG_XLNX_ZYNQMP` also `select`s `CAN_BUS`, which is what builds the `can-bus`/`can-host-socketcan` core (`net/can/meson.build`). Selecting it from the board is the minimal way to pull both in for `qemu-system-arm`.
 
-- [ ] **Step 1: Add the `select` to the board's Kconfig**
+- [x] **Step 1: Add the `select` to the board's Kconfig**
 
 In `hw/arm/Kconfig`, change the `CHIMERA_R52_FREERTOS_DEMO` block from:
 
@@ -447,7 +447,7 @@ config CHIMERA_R52_FREERTOS_DEMO
     select XLNX_ZYNQMP
 ```
 
-- [ ] **Step 2: Build QEMU (configure if needed) and verify the device exists**
+- [x] **Step 2: Build QEMU (configure if needed) and verify the device exists**
 
 Run, on the Lima VM (canonical source is deployed there per `common.sh`):
 
@@ -464,7 +464,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: the `ninja` build completes with no errors, and both `grep`s print a matching device line (`name "xlnx.zynqmp-can"` and `name "kvaser_pci"`). If `arm-softmmu` is not in the configured target list, re-run `configure` with `--target-list=...,arm-softmmu,aarch64-softmmu,...` first (see commit `dc4d02b969`).
 
-- [ ] **Step 3: Verify the machine accepts the new properties**
+- [x] **Step 3: Verify the machine accepts the new properties**
 
 Run:
 
@@ -477,7 +477,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: prints the `canbus` and `ivshmem-can-freertos` machine options.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add hw/arm/Kconfig
@@ -492,7 +492,7 @@ git commit -m "build(can): select XLNX_ZYNQMP so chimera-r52 gets CAN device + b
 - Create: `contrib/heterogeneous-soc/freertos-showcase/can_driver.h`
 - Create: `contrib/heterogeneous-soc/freertos-showcase/can_driver.c`
 
-- [ ] **Step 1: Write the driver header**
+- [x] **Step 1: Write the driver header**
 
 Create `contrib/heterogeneous-soc/freertos-showcase/can_driver.h`:
 
@@ -527,7 +527,7 @@ void can_rx_isr(void);
 #endif
 ```
 
-- [ ] **Step 2: Write the driver implementation**
+- [x] **Step 2: Write the driver implementation**
 
 Create `contrib/heterogeneous-soc/freertos-showcase/can_driver.c`:
 
@@ -675,7 +675,7 @@ void can_rx_isr(void)
 
 > Note: `log_uart` from an IRQ context performs only MMIO + ring-buffer writes (same context the timer tick already runs in). Byte interleaving with the task's own UART output is cosmetically possible but harmless for the demo.
 
-- [ ] **Step 3: Verify it compiles against the bare-metal toolchain (header/syntax check)**
+- [x] **Step 3: Verify it compiles against the bare-metal toolchain (header/syntax check)**
 
 Run:
 
@@ -692,7 +692,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: prints `COMPILE_OK` with no warnings/errors. (Full ELF link happens in Task 7.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/can_driver.h \
@@ -707,7 +707,7 @@ git commit -m "feat(can): FreeRTOS CAN driver — init, RX ISR, IVSHMEM5 publish
 **Files:**
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/freertos_main.c`
 
-- [ ] **Step 1: Include the driver and add base-address defines**
+- [x] **Step 1: Include the driver and add base-address defines**
 
 After `#include "boot_log.h"` (line 9) add:
 
@@ -723,7 +723,7 @@ After the `IVSHMEM4_SHMEM` define (line 31) add:
 #define CAN_MMIO       0x50000000UL
 ```
 
-- [ ] **Step 2: Dispatch the CAN interrupt**
+- [x] **Step 2: Dispatch the CAN interrupt**
 
 In `vApplicationIRQHandler` (lines 290-298), add a CAN branch and an INTID define. Change:
 
@@ -771,7 +771,7 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
 }
 ```
 
-- [ ] **Step 3: Initialise the CAN controller during startup**
+- [x] **Step 3: Initialise the CAN controller during startup**
 
 In `showcase_task()`, just after the three `freertos_ivshmem_init(...)` calls and the stats magic init (after line 311, before the `log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");`), add:
 
@@ -779,7 +779,7 @@ In `showcase_task()`, just after the three `freertos_ivshmem_init(...)` calls an
     can_init(CAN_MMIO, IVSHMEM5_SHMEM);
 ```
 
-- [ ] **Step 4: Build the full ELF and confirm no regressions**
+- [x] **Step 4: Build the full ELF and confirm no regressions**
 
 (Depends on Task 7's Makefile change for `can_driver.c` to be linked. If executing strictly in order, do Task 7 Step 1 first, then return here — or simply run the Task 7 build verification, which covers this.) Run:
 
@@ -792,7 +792,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: `ELF_OK` (firmware links cleanly).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/freertos_main.c
@@ -806,7 +806,7 @@ git commit -m "feat(can): dispatch CAN SPI 6 ISR and init CAN in FreeRTOS startu
 **Files:**
 - Modify: `contrib/heterogeneous-soc/freertos-showcase/Makefile`
 
-- [ ] **Step 1: Add `can_driver.c` + `can_proto.h` to the ELF target**
+- [x] **Step 1: Add `can_driver.c` + `can_proto.h` to the ELF target**
 
 Change the `freertos-r52-demo.elf` rule (lines 110-119) so the prerequisite list and the compile command include `can_driver.c`/headers. Replace:
 
@@ -839,7 +839,7 @@ freertos-r52-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c can_dr
 	  $(LDFLAGS_BARE) -o $@
 ```
 
-- [ ] **Step 2: Add the ARM-Linux daemon target (gated on `CC_ARM`)**
+- [x] **Step 2: Add the ARM-Linux daemon target (gated on `CC_ARM`)**
 
 Extend `SYSLOG_TARGETS` for ARM so the daemon builds with the other ARM Linux binaries. Change (lines 21-23):
 
@@ -864,7 +864,7 @@ can-log-arm-linux: can_log.c can_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) -pthread -o $@ can_log.c
 ```
 
-- [ ] **Step 3: Add a `check` target for the host decode test**
+- [x] **Step 3: Add a `check` target for the host decode test**
 
 Append a phony test target so the decode unit test runs from `make`:
 
@@ -884,7 +884,7 @@ clean:
 	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf test_can_decode
 ```
 
-- [ ] **Step 4: Build everything and run the host test**
+- [x] **Step 4: Build everything and run the host test**
 
 ```bash
 limactl shell qemu-dev -- bash -lc '
@@ -895,7 +895,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: `freertos-r52-demo.elf` and `can-log-arm-linux` both built; `make check` prints `test_can_decode: OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/Makefile
@@ -911,7 +911,7 @@ git commit -m "build(can): link can_driver into ELF; add can-log daemon + check 
 
 Two threads, one process. Thread 1 reads raw frames from `can0` via SocketCAN. Thread 2 discovers IVSHMEM5 BAR2 by `CAN_IVSHMEM_MAGIC` (reusing the `linux_stats.c` scan pattern) and polls `generation`. Both append to `/var/log/chimera-log/can-bus.log` under a shared mutex.
 
-- [ ] **Step 1: Write the daemon**
+- [x] **Step 1: Write the daemon**
 
 Create `contrib/heterogeneous-soc/freertos-showcase/can_log.c`:
 
@@ -1177,7 +1177,7 @@ int main(int argc, char *argv[])
 }
 ```
 
-- [ ] **Step 2: Build the daemon (verifies headers/threading link)**
+- [x] **Step 2: Build the daemon (verifies headers/threading link)**
 
 ```bash
 limactl shell qemu-dev -- bash -lc '
@@ -1188,7 +1188,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: builds with no warnings; `file` reports a statically-linked ARM aarch64 executable.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add contrib/heterogeneous-soc/freertos-showcase/can_log.c
@@ -1205,7 +1205,7 @@ git commit -m "feat(can): ARM-Linux can-bus.log daemon (socketcan + ivshmem thre
 - Modify: `scripts/heterogeneous-soc/guest-run-r52-freertos-phase5.sh`
 - Modify: `scripts/heterogeneous-soc/guest-run-arm-phase5.sh`
 
-- [ ] **Step 1: Add env vars to `common.sh`**
+- [x] **Step 1: Add env vars to `common.sh`**
 
 In `scripts/heterogeneous-soc/common.sh`, after the stats channel block (after line 86, the `IVSHMEM_STATS_FREERTOS_SOCKET` line) add:
 
@@ -1221,7 +1221,7 @@ After the `LINUX_ARM_STATS_BINARY` line (line 93) add:
 CAN_LOG_ARM_BINARY="${CAN_LOG_ARM_BINARY:-${FREERTOS_SHOWCASE_DIR}/can-log-arm-linux}"
 ```
 
-- [ ] **Step 2: Create the CAN ivshmem-server script**
+- [x] **Step 2: Create the CAN ivshmem-server script**
 
 Create `scripts/heterogeneous-soc/guest-start-ivshmem-server-can-freertos.sh` (copy of the stats server, retargeted):
 
@@ -1251,7 +1251,7 @@ exec "$(find_ivshmem_server)" \
 
 Then: `chmod +x scripts/heterogeneous-soc/guest-start-ivshmem-server-can-freertos.sh`
 
-- [ ] **Step 3: Add CAN + IVSHMEM5 to the FreeRTOS launch**
+- [x] **Step 3: Add CAN + IVSHMEM5 to the FreeRTOS launch**
 
 In `scripts/heterogeneous-soc/guest-run-r52-freertos-phase5.sh`, replace the `exec` block (lines 10-19) with:
 
@@ -1285,7 +1285,7 @@ exec "${qemu_bin}" \
 
 > The CAN backend is added only when the CAN ivshmem socket exists, so the machine still boots when CAN is disabled (the `canbus`/`ivshmem-can-freertos` props are opt-in).
 
-- [ ] **Step 4: Add CAN + `kvaser_pci` + IVSHMEM5 to the ARM-Linux launch**
+- [x] **Step 4: Add CAN + `kvaser_pci` + IVSHMEM5 to the ARM-Linux launch**
 
 In `scripts/heterogeneous-soc/guest-run-arm-phase5.sh`, insert before the `exec` (after line 14, `bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"`):
 
@@ -1308,7 +1308,7 @@ Then add `"${can_args[@]}"` to the `exec "${qemu_bin}" ...` argument list — in
     "${can_args[@]}" \
 ```
 
-- [ ] **Step 5: Syntax-check all four scripts**
+- [x] **Step 5: Syntax-check all four scripts**
 
 ```bash
 bash -n scripts/heterogeneous-soc/common.sh \
@@ -1319,7 +1319,7 @@ bash -n scripts/heterogeneous-soc/common.sh \
 
 Expected: prints `SYNTAX_OK`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts/heterogeneous-soc/common.sh \
@@ -1338,7 +1338,7 @@ git commit -m "feat(can): add CAN bus + IVSHMEM5 to FreeRTOS/ARM launch scripts"
 - Modify: `scripts/heterogeneous-soc/guest-run-phase5-tmux.sh`
 - Modify: `scripts/heterogeneous-soc/guest-run-chimera-showcase.sh`
 
-- [ ] **Step 1: Install the daemon into the ARM qcow2**
+- [x] **Step 1: Install the daemon into the ARM qcow2**
 
 In `scripts/heterogeneous-soc/guest-install-syslog-to-guests.sh`, after the existing ARM inject (line 75) add:
 
@@ -1346,7 +1346,7 @@ In `scripts/heterogeneous-soc/guest-install-syslog-to-guests.sh`, after the exis
 inject_binary "${ARM_DEBIAN_DISK}"   "${CAN_LOG_ARM_BINARY}"  "can-log-arm-linux"
 ```
 
-- [ ] **Step 2: Ensure `vcan0` exists + start the CAN ivshmem-server in the showcase**
+- [x] **Step 2: Ensure `vcan0` exists + start the CAN ivshmem-server in the showcase**
 
 In `scripts/heterogeneous-soc/guest-run-chimera-showcase.sh`, add the server to the startup list (after the bootlog server line, line 74):
 
@@ -1377,7 +1377,7 @@ Also add a `pkill` for the CAN server name to the stale-process cleanup (after l
 _exec pkill -f "ivshmem-can-ft"                            2>/dev/null || true
 ```
 
-- [ ] **Step 3: Bring up `can0` and launch the daemon in the ARM pane**
+- [x] **Step 3: Bring up `can0` and launch the daemon in the ARM pane**
 
 In `scripts/heterogeneous-soc/guest-run-phase5-tmux.sh`, start the CAN ivshmem-server so the standalone tmux path (run without `guest-run-chimera-showcase.sh`) also has the channel. It has no dedicated pane, so launch it in the background. Add this single line immediately after the bootlog server send-keys (line 83):
 
@@ -1409,7 +1409,7 @@ auto_login_and_run "$SESSION:0.6" \
 
 > `kvaser_pci` presents a SocketCAN `can0` netdev in the ARM guest. `ip link set can0 ... up` is required before `candump`/the daemon can read it. The `2>/dev/null` keeps the pane clean if CAN was launched disabled.
 
-- [ ] **Step 4: Syntax-check the three scripts**
+- [x] **Step 4: Syntax-check the three scripts**
 
 ```bash
 bash -n scripts/heterogeneous-soc/guest-install-syslog-to-guests.sh \
@@ -1419,7 +1419,7 @@ bash -n scripts/heterogeneous-soc/guest-install-syslog-to-guests.sh \
 
 Expected: prints `SYNTAX_OK`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/heterogeneous-soc/guest-install-syslog-to-guests.sh \
@@ -1436,7 +1436,7 @@ git commit -m "feat(can): orchestrate vcan0, CAN server, can0 + daemon in showca
 - Create: `scripts/heterogeneous-soc/guest-run-can-harness.sh`
 - Modify: `README.md`, `CLAUDE.md`
 
-- [ ] **Step 1: Write the harness**
+- [x] **Step 1: Write the harness**
 
 Create `scripts/heterogeneous-soc/guest-run-can-harness.sh`. It brings up `vcan0`, starts the CAN ivshmem-server and the FreeRTOS guest (capturing serial), sends a frame from Lima, and asserts the FreeRTOS UART `CAN RX:` line. Pass/fail per the repo's autonomous-debug-loop convention.
 
@@ -1510,7 +1510,7 @@ exit 1
 
 Then: `chmod +x scripts/heterogeneous-soc/guest-run-can-harness.sh`
 
-- [ ] **Step 2: Run the harness on Lima**
+- [x] **Step 2: Run the harness on Lima**
 
 ```bash
 limactl shell qemu-dev -- bash -lc '
@@ -1521,7 +1521,7 @@ limactl shell qemu-dev -- bash -lc '
 
 Expected: prints `PASS:` followed by `CAN RX: id=0x123 dlc=4 data=de ad be ef`. If it fails, follow the autonomous-debug-loop in `CLAUDE.md` (diagnose from `/tmp/can-harness-freertos.log`, fix, re-run until 3 consecutive passes).
 
-- [ ] **Step 3: Full end-to-end check via the showcase (manual acceptance, spec §Testing)**
+- [x] **Step 3: Full end-to-end check via the showcase (manual acceptance, spec §Testing)**
 
 ```bash
 # On macOS host:
@@ -1537,7 +1537,7 @@ limactl shell qemu-dev -- ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHo
 
 Expected: `candump` shows `can0  123   [4]  DE AD BE EF`; `can-bus.log` contains both a `CAN/socketcan id=0x123 ...` and a `CAN/freertos id=0x123 dlc=4 data=de ad be ef` line; the FreeRTOS tmux pane (`freertos-showcase:0.5`) shows `CAN RX: id=0x123 dlc=4 data=de ad be ef`.
 
-- [ ] **Step 4: Update the ivshmem channel map in the docs**
+- [x] **Step 4: Update the ivshmem channel map in the docs**
 
 In `README.md`, find the **ivshmem channel map** table and add the IVSHMEM5 row + CAN controller note (search for `IVSHMEM4`):
 
@@ -1553,7 +1553,7 @@ In `CLAUDE.md`, update the **What This Repo Is** paragraph to mention the CAN pa
 A CAN bus (`xlnx-zynqmp-can` on FreeRTOS, `kvaser_pci` on ARM-Linux, both bridged to Lima's `vcan0`) lets a host `cansend` reach both guests; FreeRTOS forwards received frames over IVSHMEM5 to an ARM-Linux daemon that logs them to `/var/log/chimera-log/can-bus.log`.
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/heterogeneous-soc/guest-run-can-harness.sh README.md CLAUDE.md
@@ -1564,11 +1564,11 @@ git commit -m "test(can): add headless CAN harness; document IVSHMEM5 + CAN bus"
 
 ## Final Verification Checklist
 
-- [ ] `make -C contrib/heterogeneous-soc/freertos-showcase check` → `test_can_decode: OK`
-- [ ] `ninja -C "$BUILD_DIR" qemu-system-arm qemu-system-aarch64` builds clean
-- [ ] `qemu-system-arm -device help | grep xlnx.zynqmp-can` and `qemu-system-aarch64 -device help | grep kvaser_pci` both match
-- [ ] `qemu-system-arm -machine chimera-r52-freertos-demo,help` lists `canbus` + `ivshmem-can-freertos`
-- [ ] `make -C contrib/heterogeneous-soc/freertos-showcase` builds `freertos-r52-demo.elf` and `can-log-arm-linux`
-- [ ] `guest-run-can-harness.sh` → `PASS` (3 consecutive runs per the autonomous-debug-loop)
-- [ ] Showcase: `cansend vcan0 123#DEADBEEF` → `candump can0` shows the frame, FreeRTOS pane prints `CAN RX: id=0x123 dlc=4 data=de ad be ef`, and `can-bus.log` has both `CAN/socketcan` and `CAN/freertos` lines
-- [ ] Existing demo still works: timer tick fires (FreeRTOS uptime advances), all three syslog channels still receive HELLO/ACK (the `GIC_NUM_IRQ` bump did not disturb the tick PPI)
+- [x] `make -C contrib/heterogeneous-soc/freertos-showcase check` → `test_can_decode: OK`
+- [x] `ninja -C "$BUILD_DIR" qemu-system-arm qemu-system-aarch64` builds clean
+- [x] `qemu-system-arm -device help | grep xlnx.zynqmp-can` and `qemu-system-aarch64 -device help | grep kvaser_pci` both match
+- [x] `qemu-system-arm -machine chimera-r52-freertos-demo,help` lists `canbus` + `ivshmem-can-freertos`
+- [x] `make -C contrib/heterogeneous-soc/freertos-showcase` builds `freertos-r52-demo.elf` and `can-log-arm-linux`
+- [x] `guest-run-can-harness.sh` → `PASS` (3 consecutive runs per the autonomous-debug-loop)
+- [x] Showcase: `cansend vcan0 123#DEADBEEF` → `candump can0` shows the frame, FreeRTOS pane prints `CAN RX: id=0x123 dlc=4 data=de ad be ef`, and `can-bus.log` has both `CAN/socketcan` and `CAN/freertos` lines
+- [x] Existing demo still works: timer tick fires (FreeRTOS uptime advances), all three syslog channels still receive HELLO/ACK (the `GIC_NUM_IRQ` bump did not disturb the tick PPI)

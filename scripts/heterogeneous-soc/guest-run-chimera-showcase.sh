@@ -72,6 +72,7 @@ LAUNCH_SCRIPTS=(
     "${SCRIPT_DIR}/guest-start-ivshmem-server-mips-freertos.sh"
     "${SCRIPT_DIR}/guest-start-ivshmem-server-stats.sh"
     "${SCRIPT_DIR}/guest-start-ivshmem-server-bootlog.sh"
+    "${SCRIPT_DIR}/guest-start-ivshmem-server-can-freertos.sh"
     "${SCRIPT_DIR}/guest-build-freertos-showcase.sh"
     "${SCRIPT_DIR}/guest-install-syslog-to-guests.sh"
     "${SCRIPT_DIR}/guest-install-bootlog-to-guests.sh"
@@ -90,8 +91,21 @@ _exec pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
 _exec pkill -f "qemu-system-riscv64.*riscv-phase5"         2>/dev/null || true
 _exec pkill -f "qemu-system-mipsel.*run-chimera"           2>/dev/null || true
 _exec pkill -x "ivshmem-server"                            2>/dev/null || true
+_exec pkill -f "ivshmem-can-ft"                            2>/dev/null || true
 sleep 0.3
 _ok "stale processes cleaned"
+
+_step "CAN bus: vcan0 setup"
+if ! ip link show "${CAN_VCAN_IF}" >/dev/null 2>&1; then
+    sudo modprobe vcan 2>/dev/null || true
+    sudo ip link add dev "${CAN_VCAN_IF}" type vcan 2>/dev/null || true
+fi
+sudo ip link set "${CAN_VCAN_IF}" up 2>/dev/null || true
+if ip link show "${CAN_VCAN_IF}" 2>/dev/null | grep -q "UP"; then
+    _ok "${CAN_VCAN_IF} is up"
+else
+    _skip "${CAN_VCAN_IF} unavailable — CAN backend will be disabled"
+fi
 
 # ── Step 0.5: Network bridge ──────────────────────────────────────────────────
 
@@ -161,6 +175,14 @@ _step "Building ivshmem server / QEMU"
 # can change without its timestamp updating (e.g. a machine-code constant fix).
 _exec bash "${SCRIPT_DIR}/guest-build-ivshmem-tools.sh"
 _ok "QEMU and ivshmem-server up-to-date"
+
+# can-host-socketcan needs CAP_NET_RAW to bind the AF_CAN socket. Grant it to
+# the QEMU binaries AFTER the build above, since a rebuild replaces the binary
+# and would drop any previously-set capability (no-op if setcap unavailable).
+for _qb in "${BUILD_DIR}/qemu-system-arm" "${BUILD_DIR}/qemu-system-aarch64"; do
+    [[ -x "${_qb}" ]] && sudo setcap cap_net_raw+eip "${_qb}" 2>/dev/null || true
+done
+_ok "CAP_NET_RAW granted to QEMU binaries (if setcap available)"
 
 # ── Step 4: Fetch FreeRTOS kernel source ─────────────────────────────────────
 
