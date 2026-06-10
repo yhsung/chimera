@@ -1,6 +1,6 @@
 # Chimera — Heterogeneous SoC Demo
 
-A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux (logged to `/var/log/chimera-log/chimera-cross-domain.log`), and a fifth boot-log channel collects kernel boot logs from all guests into `/var/log/chimera-log/boot-log/` on ARM-Linux.
+A QEMU-based demo of a heterogeneous SoC: ARM-Linux, RISCV-Linux, and MIPS-Linux guests each run a sysinfo logging daemon that sends periodic system snapshots (CPU load, free memory, uptime) to a bare-metal RISCV FreeRTOS firmware over three independent ivshmem (inter-VM shared memory) channels using a HELLO/ACK wire protocol. A fourth ivshmem stats channel carries periodic per-channel message-count snapshots from FreeRTOS to ARM-Linux (logged to `/var/log/chimera-log/chimera-cross-domain.log`), and a fifth boot-log channel collects kernel boot logs from all guests into `/var/log/chimera-log/boot-log/` on ARM-Linux. A sixth channel (IVSHMEM5) carries CAN frames: a host CAN bus (`xlnx-zynqmp-can` on FreeRTOS, `kvaser_pci` on ARM-Linux, both bridged to Lima's `vcan0`) lets a host `cansend` reach both guests, and FreeRTOS forwards received frames over IVSHMEM5 to the ARM-Linux daemon `can-log-arm-linux`, which logs them to `/var/log/chimera-log/can-bus.log`.
 
 ---
 
@@ -52,7 +52,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 | Component | Machine | CPUs / RAM | OS | IP | Hostname | Role |
 |---|---|---|---|---|---|---|
-| ARM-Linux | 2 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a53` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background |
+| ARM-Linux | 2 / 512 MB | QEMU `virt` aarch64, `-cpu cortex-a53` | Debian Linux 12 (bookworm) | 172.16.100.10 | `debian-arm64.local` | Runs `syslog-arm-linux` (sysinfo → FreeRTOS), waits for ACK; runs `linux-arm-stats` in background; brings up `can0` (`kvaser_pci`) and runs `can-log-arm-linux` |
 | RISCV-Linux | 2 / 512 MB | QEMU `virt` rv64, OpenSBI, `-cpu rv64,h=true,v=true` | Debian Linux 12 (bookworm) | 172.16.100.11 | `debian-riscv64.local` | Runs `syslog-riscv-linux` (sysinfo → FreeRTOS), waits for ACK |
 | MIPS-Linux | 1 / 512 MB | QEMU `malta` mipsel, `-cpu 24Kf` | Debian Linux 12 (bookworm) | 172.16.100.12 | `debian-mipsel.local` | Runs `syslog-mips-linux` (sysinfo → FreeRTOS), waits for ACK |
 | R52 FreeRTOS | 1 / 128 MiB | QEMU `chimera-r52-freertos-demo` (1 Cortex-R52 core) | Bare-metal FreeRTOS | — | — | Receives HELLO from all three, sends ACK; pushes stats snapshot every 5 s |
@@ -61,6 +61,7 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 | ivshmem-server (MIPS) | — / — | Host process | — | — | — | Brokers shared memory for MIPS↔FreeRTOS |
 | ivshmem-server (stats) | — / — | Host process | — | — | — | Brokers shared memory for FreeRTOS→ARM stats channel |
 | ivshmem-server (boot-log) | — / — | Host process | — | — | — | Brokers shared memory for guest boot logs → ARM |
+| ivshmem-server (CAN) | — / — | Host process | — | — | — | Brokers shared memory for FreeRTOS→ARM CAN channel (IVSHMEM5) |
 | Lima VM (`qemu-dev`) | macOS VZ, aarch64 | 8 / 8 GiB | Ubuntu 24.04 (noble) | localhost | `lima-qemu-dev` | Hosts all QEMU guests, ivshmem servers, and cross-compilation toolchains |
 
 ### ivshmem Device Types
@@ -339,27 +340,23 @@ sequenceDiagram
 
 ## Tmux Pane Layout
 
-```
-┌────────────┬────────────┬────────────┬────────────┐
-│ ivshmem-   │ ivshmem-   │ ivshmem-   │ ivshmem-   │
-│ server     │ server     │ server     │ server     │
-│ ARM↔FRT    │ RISCV↔FRT  │ MIPS↔FRT   │ stats→ARM  │
-│ pane 0     │ pane 1     │ pane 2     │ pane 3     │
-├────────────┴────────────┴────────────┴────────────┤
-│                                                    │
-│  RISCV FreeRTOS                                   │
-│  (HELLO/ACK all channels; stats snapshot every 5s)│
-│  pane 4                                            │
-├────────────────┬────────────────┬─────────────────┤
-│  ARM-Linux     │  RISCV-Linux   │  MIPS-Linux     │
-│  linux-arm-stats (bg)           │                 │
-│  syslog-arm-   │ syslog-riscv-  │ syslog-mips-    │
-│  linux         │  linux         │ linux           │
-│  pane 5        │  pane 6        │  pane 7         │
-└────────────────┴────────────────┴─────────────────┘
-```
+`guest-run-phase5-tmux.sh` opens a single 9-pane tmux window:
 
-Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their daemons once the guest boots. The syslog daemons (`syslog-{arm,riscv,mips}-linux`) are pre-installed into each guest's `/usr/local/bin/` by `guest-install-syslog-to-guests.sh` and run directly from the guest filesystem. In pane 5, `linux-arm-stats` runs in the background before `syslog-arm-linux` starts; stats are appended to `/var/log/chimera-log/chimera-cross-domain.log` inside the ARM guest.
+| Pane | Contents |
+|---|---|
+| 0 | `ivshmem-server` — ARM ↔ FreeRTOS |
+| 1 | `ivshmem-server` — RISCV ↔ FreeRTOS |
+| 2 | `ivshmem-server` — MIPS ↔ FreeRTOS |
+| 3 | `ivshmem-server` — stats → ARM |
+| 4 | `ivshmem-server` — boot-log → ARM |
+| 5 | R52 FreeRTOS (HELLO/ACK on all channels; stats snapshot every 5 s; CAN RX → IVSHMEM5; boot-log monitor) |
+| 6 | ARM-Linux: `linux-arm-stats` (bg), `syslog-arm-linux`, `bootlog-arm-linux`, brings up `can0` + `can-log-arm-linux`, `boot-collector` |
+| 7 | RISCV-Linux: `syslog-riscv-linux`, `bootlog-riscv-linux` |
+| 8 | MIPS-Linux: `syslog-mips-linux`, `bootlog-mips-linux` |
+
+The CAN ivshmem-server (IVSHMEM5) is started in the background by the launcher and does not get a dedicated pane.
+
+Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their daemons once the guest boots. The syslog daemons (`syslog-{arm,riscv,mips}-linux`) are pre-installed into each guest's `/usr/local/bin/` by `guest-install-syslog-to-guests.sh` and run directly from the guest filesystem. In pane 6, `linux-arm-stats` runs in the background before `syslog-arm-linux` starts; stats are appended to `/var/log/chimera-log/chimera-cross-domain.log` inside the ARM guest.
 
 ---
 
@@ -547,24 +544,26 @@ bash scripts/heterogeneous-soc/host-install-lima-host.sh
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
-Step 2 handles everything: installing build dependencies, fetching disk images, building QEMU and all firmware binaries, and opening the 8-pane tmux showcase. Every stage is idempotent — re-running is safe and fast after the first run.
+Step 2 handles everything: installing build dependencies, fetching disk images, building QEMU and all firmware binaries, and opening the 9-pane tmux showcase. Every stage is idempotent — re-running is safe and fast after the first run.
 
 ### What the showcase launcher does
 
-`guest-run-chimera-showcase.sh` runs 8 stages:
+`guest-run-chimera-showcase.sh` runs 10 stages:
 
 | Stage | What it does | Skip condition |
 |---|---|---|
+| 0 — CAN bus: vcan0 setup | Loads the `vcan` kernel module and brings up Lima's `vcan0` (`modprobe vcan`, `ip link add/set up`) | Skipped (warns) if `vcan0` is unavailable — CAN backend disabled for this run |
 | 0.5 — Network bridge | Creates `chbr0` bridge + `tap-arm/riscv/mips` TAP devices via `guest-setup-network-bridge.sh` | Idempotent — runs every launch |
 | 1 — apt packages | Installs all build deps including `gcc-mipsel-linux-gnu`, `qemu-utils` | Already installed |
 | 2 — kernel packages | Downloads ARM / RISCV / MIPS Debian kernel .deb packages | File already exists |
 | 3 — QEMU build | Builds `qemu-system-aarch64/riscv64/mipsel` + `ivshmem-server` | All binaries already in `BUILD_DIR` |
+| 3.5 — CAP_NET_RAW grant | `setcap cap_net_raw+eip` on `qemu-system-arm`/`qemu-system-aarch64` so `can-host-socketcan` can bind the AF_CAN socket | No-op if `setcap` is unavailable |
 | 4 — FreeRTOS kernel | Clones / pulls FreeRTOS-Kernel | Already cloned (pulls latest) |
-| 5 — Showcase binaries | Builds ELF + `syslog-{arm,riscv,mips}-linux` + `linux-arm-stats` | Warns if MIPS binary absent |
+| 5 — Showcase binaries | Builds ELF + `syslog-{arm,riscv,mips}-linux` + `linux-arm-stats` + `can-log-arm-linux` | Warns if MIPS binary absent |
 | 6 — Debian rootfs | Creates minimal Debian qcow2 disks via debootstrap (includes `avahi-daemon`, `sshd`, static IP) | Skipped if disk exists and contains avahi |
-| 6.5 — Inject daemons | Installs `syslog-*-linux` into each guest's `/usr/local/bin/` via `qemu-nbd` | Runs on every build |
+| 6.5 — Inject daemons | Installs `syslog-*-linux` and `can-log-arm-linux` into each guest's `/usr/local/bin/` via `qemu-nbd` | Runs on every build |
 | 7 — boot assets | Extracts kernel + initramfs from Debian kernel .deb packages | Skipped if already extracted |
-| 8 — Launch | Opens 8-pane tmux session (4 ivshmem servers, FreeRTOS, 3 Linux guests) | — |
+| 8 — Launch | Opens 9-pane tmux session (5 ivshmem servers, FreeRTOS, 3 Linux guests); CAN ivshmem-server runs backgrounded | — |
 
 **Environment overrides:**
 
@@ -665,12 +664,15 @@ contrib/heterogeneous-soc/
     hello_proto.h             — HELLO/ACK handshake (sender IDs, message structs, hsoc_layout)
     stats_proto.h             — Stats snapshot protocol (hsoc_stats_snapshot with generation counter)
     bootlog_proto.h           — Boot-log protocol (hsoc_bootlog_header, 4 × 1 MiB slots)
+    can_proto.h               — IVSHMEM5 CAN frame protocol (can_ivshmem_layout: magic + generation + can_ivshmem_frame; register decode helpers)
     ── FreeRTOS Firmware (bare-metal Cortex-R52, freertos-r52-demo.elf) ──
-    freertos_main.c           — main() + showcase_task: polls 3 HELLO/ACK channels, sends ACKs, writes stats snapshot every 5 s, runs boot-log monitor
+    freertos_main.c           — main() + showcase_task: polls 3 HELLO/ACK channels, sends ACKs, writes stats snapshot every 5 s, runs boot-log monitor, initializes the CAN driver
     freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, poll_hello, send_ack (volatile byte loops)
     freertos_ivshmem_flat.h   — struct freertos_ivshmem_link, MMIO register offsets, declarations
     boot_log.c                — Boot-log monitor: waits for collector, rings doorbell when all 4 guests booted
     boot_log.h                — struct bootlog_monitor and function declarations
+    can_driver.c              — xlnx-zynqmp-can driver: GIC SPI 6 (INTID 38) RX ISR, decodes RXFIFO registers, publishes frame to IVSHMEM5
+    can_driver.h              — CAN controller register offsets (xlnx-zynqmp-can), can_init()/can_rx_isr() declarations
     freertos_libc.c           — Freestanding libc (memcpy, memmove, memset, memcmp, strcpy, strlen)
     string.h / stdlib.h       — Libc headers for freestanding environment
     startup.S                 — RISC-V _start: set stack pointer, install mtvec, clear BSS, call main
@@ -681,19 +683,22 @@ contrib/heterogeneous-soc/
     linux_stats.c             — linux-arm-stats (ARM only): polls generation every 2 s, logs FreeRTOS snapshot to /var/log/chimera-log/chimera-cross-domain.log
     bootlog_writer.c          — bootlog-{arm,riscv,mips}-linux: reads /dev/kmsg, writes kernel log lines into the guest's 1 MiB boot-log slot
     boot_collector.c          — boot-collector (ARM only): polls boot-log generation every 2 s, harvests completed slots to /var/log/chimera-log/boot-log/guest-*.log
+    can_log.c                 — can-log-arm-linux (ARM only): tails can0 (SocketCAN) and IVSHMEM5 (FreeRTOS-forwarded frames), logs both to /var/log/chimera-log/can-bus.log
     ── Build & Test ──
-    Makefile                  — Cross-compiles all syslog + bootlog + boot-collector + FreeRTOS targets
+    Makefile                  — Cross-compiles all syslog + bootlog + boot-collector + can-log + FreeRTOS targets
     test-syslog-format.sh     — Standalone test validating syslog-arm-linux output format
+    test_can_decode.c         — `make check`: validates can_decode_id/can_decode_dlc/can_decode_data against known xlnx-zynqmp-can register values
     README.md                 — Per-directory documentation with full mermaid flow diagrams
 
 scripts/heterogeneous-soc/
   ── Main showcase launchers ──────────────────────────────────────────────────
   guest-run-chimera-showcase.sh               — full-stack launcher (prereqs + build + tmux)
-  guest-run-phase5-tmux.sh                    — 8-pane tmux session launcher (called by showcase)
+  guest-run-phase5-tmux.sh                    — 9-pane tmux session launcher (called by showcase)
 
   ── CI / headless harnesses ──────────────────────────────────────────────────
   guest-run-debian-harness.sh                 — headless pass/fail CI harness (all 3 guests)
   guest-run-freertos-harness.sh               — headless FreeRTOS harness (ARM-only pass string)
+  guest-run-can-harness.sh                    — headless CAN RX harness (vcan0 cansend → FreeRTOS "CAN RX:" decode)
 
   ── Build scripts ────────────────────────────────────────────────────────────
   guest-build-freertos-showcase.sh            — builds FreeRTOS ELF + syslog-{arm,riscv,mips}-linux + linux-arm-stats
@@ -722,6 +727,7 @@ scripts/heterogeneous-soc/
   guest-start-ivshmem-server-riscv-freertos.sh — RISCV ivshmem-server (showcase channel)
   guest-start-ivshmem-server-mips-freertos.sh — MIPS ivshmem-server (showcase channel)
   guest-start-ivshmem-server-stats.sh         — stats ivshmem-server (FreeRTOS→ARM stats channel)
+  guest-start-ivshmem-server-can-freertos.sh  — CAN ivshmem-server (FreeRTOS→ARM CAN channel, IVSHMEM5)
 
   ── QEMU guest launchers ─────────────────────────────────────────────────────
   guest-run-r52-freertos-phase5.sh          — launches FreeRTOS QEMU
@@ -757,7 +763,7 @@ scripts/heterogeneous-soc/
   guest-prepare-mips-boot-assets.sh           — replaced by guest-prepare-debian-boot-assets.sh
   guest-prepare-riscv-uboot.sh                — replaced by direct OpenSBI boot
 
-hw/arm/chimera_r52_freertos_demo.c  — custom QEMU machine (4 ivshmem channels: 3 HELLO/ACK + 1 stats)
+hw/arm/chimera_r52_freertos_demo.c  — custom QEMU machine (6 ivshmem channels: 3 HELLO/ACK + stats + boot-log + CAN)
 hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by FreeRTOS)
 ```
 
@@ -765,12 +771,13 @@ hw/misc/ivshmem-flat.c            — custom ivshmem sysbus device (used by Free
 
 ## CI / Headless Testing
 
-Two harness scripts run the demo end-to-end without an interactive terminal and exit `0` (PASS) or `1` (FAIL):
+Three harness scripts run the demo end-to-end without an interactive terminal and exit `0` (PASS) or `1` (FAIL):
 
 | Script | Pass condition | Timeout |
 |---|---|---|
 | `guest-run-debian-harness.sh` | FreeRTOS UART contains all three "received hello from …" strings | 600 s |
 | `guest-run-freertos-harness.sh` | FreeRTOS UART contains "received hello from arm-linux" | 300 s |
+| `guest-run-can-harness.sh` | FreeRTOS UART contains `CAN RX: id=0x<CAN_TEST_ID>` after a Lima `cansend` on `vcan0` | 60 s |
 
 Run inside the Lima VM:
 
@@ -780,9 +787,14 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run
 
 # Quick single-sender variant:
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-freertos-harness.sh
+
+# CAN bus RX harness (vcan0 cansend -> FreeRTOS decode):
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-can-harness.sh
 ```
 
-Both scripts accept the same environment overrides as `guest-run-chimera-showcase.sh` (`SKIP_PREREQS`, `SKIP_BUILD`, etc.) and additionally `HARNESS_TIMEOUT` and `HARNESS_LOG_DIR` (default `/tmp/debian-harness-logs`). On failure, per-pane log files are written to `HARNESS_LOG_DIR` for post-mortem.
+Both `guest-run-debian-harness.sh` and `guest-run-freertos-harness.sh` accept the same environment overrides as `guest-run-chimera-showcase.sh` (`SKIP_PREREQS`, `SKIP_BUILD`, etc.) and additionally `HARNESS_TIMEOUT` and `HARNESS_LOG_DIR` (default `/tmp/debian-harness-logs`). On failure, per-pane log files are written to `HARNESS_LOG_DIR` for post-mortem.
+
+`guest-run-can-harness.sh` brings up `vcan0` itself (independent of the showcase) and accepts: `CAN_TEST_ID` (default `123`, hex without `0x`), `CAN_TEST_DATA` (default `DEADBEEF`), `SERIAL_LOG` (default `/tmp/can-harness-freertos.log`), and `CAN_HARNESS_TIMEOUT` (default `60`).
 
 ---
 
