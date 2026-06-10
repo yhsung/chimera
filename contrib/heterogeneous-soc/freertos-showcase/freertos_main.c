@@ -238,6 +238,7 @@ void log_hex32_uart(uint32_t level, uint32_t v)
 #define GICD_CTLR                 0x000U
 #define GICD_ISENABLER            0x100U    /* +(intid/32)*4 */
 #define GICD_IPRIORITYR           0x400U    /* +intid */
+#define GICD_ITARGETSR            0x800U    /* byte per intid (CPU target bitmask) */
 #define GICC_BASE                 0x08010000UL
 #define GICC_CTLR                 0x000U
 
@@ -245,6 +246,7 @@ void log_hex32_uart(uint32_t level, uint32_t v)
 extern void FreeRTOS_Tick_Handler(void);
 
 #define R52_CAN_INTID 38U   /* CAN controller on GIC SPI 6 */
+#define R52_IVSHMEM0_INTID 33U /* IVSHMEM0 on GIC SPI 1 → INTID 33 */
 
 static uint32_t r52_tick_reload;
 
@@ -305,8 +307,11 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
         FreeRTOS_Tick_Handler();
     } else if (intid == R52_CAN_INTID) {
         can_rx_isr();
+    } else if (intid == R52_IVSHMEM0_INTID) {
+        freertos_ivshmem_isr(&arm_link);
     }
-    /* ivshmem channels are flag-polled; their IRQs (if any fire) are ignored. */
+    /* Other ivshmem channels (RISCV/MIPS/stats) remain flag-polled; their
+     * IRQs (if any fire) are ignored. */
 }
 
 static void showcase_task(void *opaque)
@@ -323,6 +328,20 @@ static void showcase_task(void *opaque)
     __sync_synchronize();
 
     can_init(CAN_MMIO, IVSHMEM5_SHMEM);
+
+    /* Enable IVSHMEM0 GIC SPI for interrupt-driven HELLO reception.
+     * Same gic_enable_spi() pattern as can_driver.c. The GICD_CTLR group-0
+     * forwarding is already enabled by vConfigureTickInterrupt(). */
+    {
+        volatile uint8_t  *iprio   = (volatile uint8_t  *)(GICD_BASE + GICD_IPRIORITYR);
+        volatile uint8_t  *itarget = (volatile uint8_t  *)(GICD_BASE + GICD_ITARGETSR);
+        volatile uint32_t *isen   = (volatile uint32_t *)(GICD_BASE + GICD_ISENABLER);
+        uint32_t intid = R52_IVSHMEM0_INTID;
+
+        iprio[intid]   = 0xA0;
+        itarget[intid] = 0x01;
+        isen[intid / 32] |= (1U << (intid % 32));
+    }
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
 
@@ -448,7 +467,10 @@ static void showcase_task(void *opaque)
         }
 
         bootlog_tick(&bootlog);
-        vTaskDelay(pdMS_TO_TICKS(1));
+        /* Relaxed poll interval (10 ms vs 1 ms). IVSHMEM0 is now interrupt-
+         * driven; the remaining channels (RISCV, MIPS) still poll flags but
+         * tolerate the longer interval. */
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
