@@ -340,6 +340,8 @@ static void showcase_task(void *opaque)
 
         iprio[intid]   = 0xA0;
         itarget[intid] = 0x01;
+        /* |= (not =) — GICD_ISENABLER1 is shared with CAN_INTID (38),
+         * already enabled by can_init() above; preserve that bit. */
         isen[intid / 32] |= (1U << (intid % 32));
     }
 
