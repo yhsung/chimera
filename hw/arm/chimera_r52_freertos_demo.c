@@ -21,6 +21,7 @@
 #include "hw/core/sysbus.h"
 #include "hw/intc/arm_gic.h"
 #include "hw/misc/ivshmem-flat.h"
+#include "hw/net/xlnx-zynqmp-can.h"
 #include "system/address-spaces.h"
 #include "system/system.h"
 #include "target/arm/cpu.h"
@@ -53,6 +54,11 @@ static const MemMapEntry chimera_r52_memmap[] = {
     [CHIMERA_R52_FREERTOS_IVSHMEM4_SHMEM] = {
         0x45000000, 0x00800000 /* 8 MiB */
     },
+    [CHIMERA_R52_FREERTOS_IVSHMEM5_MMIO] =  { 0x49000000, 0x00001000 },
+    [CHIMERA_R52_FREERTOS_IVSHMEM5_SHMEM] = {
+        0x4A000000, 0x00010000 /* 64 KiB */
+    },
+    [CHIMERA_R52_FREERTOS_CAN_MMIO] =       { 0x50000000, 0x00001000 },
 };
 
 #define CHIMERA_R52_CHARDEV_PROP(field)                                       \
@@ -78,6 +84,23 @@ CHIMERA_R52_CHARDEV_PROP(ivshmem_riscv_freertos)
 CHIMERA_R52_CHARDEV_PROP(ivshmem_mips_freertos)
 CHIMERA_R52_CHARDEV_PROP(ivshmem_stats_freertos)
 CHIMERA_R52_CHARDEV_PROP(ivshmem_bootlog_freertos)
+CHIMERA_R52_CHARDEV_PROP(ivshmem_can_freertos)
+
+static char *chimera_r52_get_canbus_id(Object *obj, Error **errp)
+{
+    ChimeraR52FreeRTOSMachineState *s = CHIMERA_R52_FREERTOS_MACHINE(obj);
+
+    return g_strdup(s->canbus_id);
+}
+
+static void chimera_r52_set_canbus_id(Object *obj, const char *value,
+                                      Error **errp)
+{
+    ChimeraR52FreeRTOSMachineState *s = CHIMERA_R52_FREERTOS_MACHINE(obj);
+
+    g_free(s->canbus_id);
+    s->canbus_id = g_strdup(value);
+}
 
 static bool chimera_r52_require_chardev(const char *id, const char *prop_name,
                                         Chardev **chr)
@@ -107,6 +130,36 @@ static void chimera_r52_connect_ivshmem(DeviceState *gic, Chardev *chr,
     sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(gic, spi_index));
 }
 
+static void chimera_r52_connect_can(DeviceState *gic, const char *canbus_id,
+                                    hwaddr mmio_base, int spi_index)
+{
+    Object *canbus;
+    DeviceState *dev;
+    SysBusDevice *sbd;
+
+    canbus = object_resolve_path_component(object_get_objects_root(),
+                                           canbus_id);
+    if (!canbus) {
+        error_report("canbus object '%s' not found", canbus_id);
+        exit(EXIT_FAILURE);
+    }
+
+    if (!module_object_class_by_name(TYPE_XLNX_ZYNQMP_CAN)) {
+        error_report("xlnx.zynqmp-can is unavailable in this QEMU build");
+        exit(EXIT_FAILURE);
+    }
+
+    dev = qdev_new(TYPE_XLNX_ZYNQMP_CAN);
+    object_property_set_link(OBJECT(dev), "canbus", canbus, &error_fatal);
+    /* Cortex-R52 demo: nominal 24 MHz CAN reference clock. */
+    qdev_prop_set_uint32(dev, "ext_clk_freq", 24000000);
+
+    sbd = SYS_BUS_DEVICE(dev);
+    sysbus_realize_and_unref(sbd, &error_fatal);
+    sysbus_mmio_map(sbd, 0, mmio_base);
+    sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(gic, spi_index));
+}
+
 static void chimera_r52_machine_init(MachineState *machine)
 {
     ChimeraR52FreeRTOSMachineState *s = CHIMERA_R52_FREERTOS_MACHINE(machine);
@@ -117,6 +170,7 @@ static void chimera_r52_machine_init(MachineState *machine)
     int ppibase;
     Chardev *arm_chr = NULL, *riscv_chr = NULL, *mips_chr = NULL;
     Chardev *stats_chr = NULL, *bootlog_chr = NULL;
+    Chardev *can_chr = NULL;
     bool have_links = true;
     static struct arm_boot_info bootinfo;
 
@@ -141,6 +195,13 @@ static void chimera_r52_machine_init(MachineState *machine)
         if (!bootlog_chr) {
             warn_report("chardev '%s' not found, IVSHMEM4 boot-log skipped",
                         s->ivshmem_bootlog_freertos);
+        }
+    }
+    if (s->ivshmem_can_freertos) {
+        can_chr = qemu_chr_find(s->ivshmem_can_freertos);
+        if (!can_chr) {
+            warn_report("chardev '%s' not found, IVSHMEM5 CAN channel skipped",
+                        s->ivshmem_can_freertos);
         }
     }
     if (!have_links) {
@@ -239,6 +300,21 @@ static void chimera_r52_machine_init(MachineState *machine)
                 CHIMERA_R52_FREERTOS_IVSHMEM4_SHMEM].size,
             CHIMERA_R52_FREERTOS_IVSHMEM4_SPI);
     }
+    if (can_chr) {
+        chimera_r52_connect_ivshmem(
+            gicdev, can_chr,
+            chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM5_MMIO].base,
+            chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM5_SHMEM].base,
+            (uint32_t)chimera_r52_memmap[
+                CHIMERA_R52_FREERTOS_IVSHMEM5_SHMEM].size,
+            CHIMERA_R52_FREERTOS_IVSHMEM5_SPI);
+    }
+    if (s->canbus_id) {
+        chimera_r52_connect_can(
+            gicdev, s->canbus_id,
+            chimera_r52_memmap[CHIMERA_R52_FREERTOS_CAN_MMIO].base,
+            CHIMERA_R52_FREERTOS_CAN_SPI);
+    }
 
     bootinfo.ram_size = machine->ram_size;
     bootinfo.board_id = -1;
@@ -298,6 +374,20 @@ static void chimera_r52_machine_class_init(ObjectClass *oc, const void *data)
     object_class_property_set_description(
         oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_BOOTLOG,
         "Chardev id for the boot-log ivshmem link");
+
+    object_class_property_add_str(oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_CAN,
+                                  chimera_r52_get_ivshmem_can_freertos,
+                                  chimera_r52_set_ivshmem_can_freertos);
+    object_class_property_set_description(
+        oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_CAN,
+        "Chardev id for the CAN-frame FreeRTOS -> ARM-Linux ivshmem link");
+
+    object_class_property_add_str(oc, CHIMERA_R52_FREERTOS_PROP_CANBUS,
+                                  chimera_r52_get_canbus_id,
+                                  chimera_r52_set_canbus_id);
+    object_class_property_set_description(
+        oc, CHIMERA_R52_FREERTOS_PROP_CANBUS,
+        "Object id of the can-bus this machine's CAN controller attaches to");
 }
 
 static const TypeInfo chimera_r52_machine_type_info = {
