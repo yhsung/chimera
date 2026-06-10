@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <poll.h>
 
+#include "can_proto.h"
 #include "hello_proto.h"
 
 #define HSOC_BAR2_SIZE      (64U * 1024U * 1024U)
@@ -316,7 +317,7 @@ static const char *find_ivshmem_doorbell(void)
 
         /* Skip channels whose BAR2 begins with a known non-syslog magic */
         if (magic == HSOC_STATS_MAGIC || magic == HSOC_BOOTLOG_MAGIC ||
-            magic == 0xCAFECAFEU) {
+            magic == CAN_IVSHMEM_MAGIC) {
             continue;
         }
 
@@ -391,9 +392,9 @@ static int doorbell_init(void)
  * Ring the doorbell to interrupt FreeRTOS, signalling that a new HELLO message
  * has been written to IVSHMEM0 shared memory.
  *
- * ivshmem PCI doorbell register layout (BAR0 + 0x1000):
- *   Each entry is 8 bytes: uint32_t peer_id | uint32_t vector.
- *   ARM-Linux joins first (peer 0), FreeRTOS joins second (peer 1).
+ * ivshmem PCI DOORBELL register (BAR0 + 0x0c): a single uint32_t encoding
+ * (peer_id << 16) | vector_id. ARM-Linux joins first (peer 0), FreeRTOS
+ * joins second (peer 1).
  */
 static void doorbell_ring(void)
 {
