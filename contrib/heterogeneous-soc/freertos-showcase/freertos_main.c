@@ -310,7 +310,8 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
         can_rx_isr();
     } else if (intid == R52_IVSHMEM0_INTID) {
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem0: SPI33 dispatched\n");
-        freertos_ivshmem_isr(&arm_link);
+        freertos_ivshmem_isr(&arm_link, &arm_count, &arm_cpu_pct, &arm_mem_pct,
+                              &arm_last_hello_ticks);
     } else {
         log_uart(HSOC_LOG_WARN, "[irq] unexpected intid=");
         log_hex32_uart(HSOC_LOG_WARN, intid);
@@ -406,9 +407,8 @@ static void showcase_task(void *opaque)
     }
 
     for (;;) {
-        maybe_service_link(&arm_link,
-                           "[freertos] received hello from arm-linux\n",
-                           &arm_count, &arm_cpu_pct, &arm_mem_pct, &arm_last_hello_ticks);
+        /* arm_link is serviced by freertos_ivshmem_isr() (interrupt-driven);
+         * polling it here would race the ISR for the linux_to_freertos.flag. */
         maybe_service_link(&riscv_link,
                            "[freertos] received hello from riscv-linux\n",
                            &riscv_count, &riscv_cpu_pct, &riscv_mem_pct, &riscv_last_hello_ticks);

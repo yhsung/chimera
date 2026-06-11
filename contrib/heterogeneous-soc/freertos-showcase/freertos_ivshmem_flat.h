@@ -34,6 +34,10 @@ void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
                                uint32_t seq,
                                int64_t ts_sec,
                                int64_t ts_nsec);
-void freertos_ivshmem_isr(struct freertos_ivshmem_link *link);
+void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
+                          uint32_t *count,
+                          uint32_t *cpu_pct,
+                          uint32_t *mem_pct,
+                          uint32_t *last_hello_ticks);
 
 #endif

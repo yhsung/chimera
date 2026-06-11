@@ -98,7 +98,11 @@ static void tick_to_timestamp_isr(int64_t *ts_sec, int64_t *ts_nsec)
  * are reserved/no-op in this device revision, so the shared flag below is
  * the only real gate, same as freertos_ivshmem_poll_hello().
  */
-void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
+void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
+                          uint32_t *count,
+                          uint32_t *cpu_pct,
+                          uint32_t *mem_pct,
+                          uint32_t *last_hello_ticks)
 {
     struct hsoc_hello_msg msg;
     int64_t ts_sec, ts_nsec;
@@ -115,6 +119,16 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
             /* Build and send ACK with ISR-safe timestamp */
             tick_to_timestamp_isr(&ts_sec, &ts_nsec);
             freertos_ivshmem_send_ack(link, msg.seq, ts_sec, ts_nsec);
+
+            /* Update the caller's stats/heartbeat bookkeeping, mirroring
+             * maybe_service_link()'s poll-path behavior. The ISR now always
+             * wins the flag-clear race, so the poll path never observes a
+             * HELLO on this link and these counters would otherwise stay
+             * frozen at zero. */
+            (*count)++;
+            *cpu_pct = msg.cpu_pct_x100;
+            *mem_pct = msg.mem_used_pct_x100;
+            *last_hello_ticks = xTaskGetTickCountFromISR();
 
             /* Ring doorbell (write (peer_id << 16) | vector to DOORBELL reg
              * @ offset 0xc) to notify ARM-Linux that the ACK is ready.
