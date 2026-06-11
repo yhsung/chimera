@@ -207,6 +207,7 @@ auto_login_and_run() {
 
 auto_login_and_run "$SESSION:0.6" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
+    "sh /mnt/pingpong/freertos-showcase/uio-bind-arm-linux.sh" \
     "syslog-arm-linux &" \
     "bootlog-arm-linux &" \
     "ip link set can0 type can bitrate 500000 2>/dev/null; ip link set can0 up 2>/dev/null" \
