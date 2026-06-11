@@ -14,6 +14,7 @@ require_file "${RISCV_DEBIAN_DISK}" "RISC-V Debian rootfs disk"
 bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
+    -rtc base=localtime \
     -machine virt,aclint=on \
     -cpu rv64,h=true,v=true \
     -m 512M -smp 2 \

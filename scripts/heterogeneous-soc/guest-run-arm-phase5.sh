@@ -25,6 +25,7 @@ if [[ -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" ]] && ip link show "${CAN_VCAN_IF}" 2>
 fi
 
 exec "${qemu_bin}" \
+    -rtc base=localtime \
     -machine virt,gic-version=3 \
     -cpu cortex-a53 -m 512M -smp 2 \
     -bios "${ARM_UEFI_BIOS}" \

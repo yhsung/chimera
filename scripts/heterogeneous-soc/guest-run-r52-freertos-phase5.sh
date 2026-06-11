@@ -29,6 +29,7 @@ if [[ ${#can_backend[@]} -gt 0 ]]; then
 fi
 
 exec "${qemu_bin}" \
+    -rtc base=localtime \
     -machine "${machine_opts}" \
     -chardev socket,id=armft,path="${IVSHMEM_ARM_FREERTOS_SOCKET}" \
     -chardev socket,id=riscvft,path="${IVSHMEM_RISCV_FREERTOS_SOCKET}" \

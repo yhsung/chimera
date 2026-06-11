@@ -95,6 +95,14 @@ _exec pkill -f "ivshmem-can-ft"                            2>/dev/null || true
 sleep 0.3
 _ok "stale processes cleaned"
 
+_step "Timezone: Asia/Taipei"
+sudo timedatectl set-timezone Asia/Taipei 2>/dev/null || true
+if [[ "$(timedatectl show -p Timezone --value 2>/dev/null)" == "Asia/Taipei" ]]; then
+    _ok "timezone set to Asia/Taipei"
+else
+    _info "timezone could not be set (timedatectl unavailable); QEMU -rtc base=localtime may drift"
+fi
+
 _step "CAN bus: vcan0 setup"
 if ! ip link show "${CAN_VCAN_IF}" >/dev/null 2>&1; then
     sudo modprobe vcan 2>/dev/null || true
