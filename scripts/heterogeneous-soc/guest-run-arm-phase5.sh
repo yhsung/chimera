@@ -14,7 +14,7 @@ require_file "${ARM_DEBIAN_DISK}" "ARM Debian rootfs disk"
 bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 can_args=()
-if [[ -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" ]]; then
+if [[ -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" ]] && ip link show "${CAN_VCAN_IF}" 2>/dev/null | grep -q "UP"; then
     can_args=(
         -object can-bus,id=canbus0
         -object "can-host-socketcan,id=ch0,if=${CAN_VCAN_IF},canbus=canbus0"
