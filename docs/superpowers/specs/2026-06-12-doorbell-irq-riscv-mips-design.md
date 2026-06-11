@@ -228,15 +228,19 @@ updated to reflect this (generalize "on IVSHMEM0" → "on IVSHMEM0/1/2").
 
 ## Risks / Open Items
 
-- **`uio_pci_generic` availability on riscv64/mipsel is unverified.** No
-  kernel configs are checked into this repo (RISCV/MIPS use stock Debian
-  images), so this can only be confirmed by running test step 6 above. If the
-  module is unavailable: `doorbell_init()` still mmaps BAR0, so
-  `doorbell_ring()` still works (FreeRTOS still gets IRQ-driven wake from
-  Linux's HELLO) — but `hybrid_wait_ack()` on that guest falls back to its
-  existing `uio_fd < 0` busy-wait path (unchanged from current behavior, no
-  regression, just no latency win for that guest's ACK wait). A follow-up
-  would be to confirm/enable the module in those guest images if the win is
-  wanted on both directions.
+- **`uio_pci_generic` availability on riscv64/mipsel — checked, present as a
+  module.** Mounted both guest qcow2 images directly (no kernel configs are
+  checked into this repo; RISCV/MIPS use stock Debian images) and confirmed
+  `uio_pci_generic.ko` exists under `/lib/modules/<ver>/kernel/drivers/uio/`
+  for both: riscv64 (`6.12.73+deb13-riscv64`, as `.ko.xz`) and mipsel
+  (`6.1.0-42-4kc-malta`, as `.ko`) — same as ARM-Linux, not built-in either.
+  `modprobe uio_pci_generic` should therefore succeed on both guests. Test
+  step 6 still confirms the full path (modprobe → driver_override → bind →
+  `/dev/uio0` appears) end-to-end at runtime, since module presence doesn't
+  guarantee the bind succeeds. If it doesn't: `doorbell_init()` still mmaps
+  BAR0, so `doorbell_ring()` still works (FreeRTOS still gets IRQ-driven wake
+  from Linux's HELLO) — only `hybrid_wait_ack()` on that guest falls back to
+  its existing `uio_fd < 0` busy-wait path (unchanged from current behavior,
+  no regression, just no latency win for that guest's ACK wait).
 - **IVPOSITION assumption** for IVSHMEM1/IVSHMEM2 — see "Peer ID assumption"
   above; checked in test step 4, one-line fix if wrong.
