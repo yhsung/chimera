@@ -333,16 +333,78 @@ static const char *find_ivshmem_doorbell(void)
 }
 
 /*
+ * Bind the ivshmem-doorbell PCI device at `bdf` to uio_pci_generic so that
+ * /dev/uio0 becomes available for interrupt receive.
+ *
+ * A previous shell-script approach probed BAR2 via dd/od to identify the
+ * syslog channel; that is unreliable because Linux's PCI sysfs
+ * "resourceN" files return -EIO on read() for memory-mapped BARs (only
+ * mmap() works, and only I/O-port BARs support read()/write()). Since
+ * find_ivshmem_doorbell() above already identified the correct BDF via
+ * mmap(), we do the binding here too, using plain sysfs writes (no BAR
+ * access needed for driver_override / bind).
+ *
+ * Best-effort: failures are logged and left to the poll fallback.
+ */
+static void bind_uio_pci_generic(const char *bdf)
+{
+    char path[PATH_MAX];
+    FILE *f;
+
+    /* Load the driver module if not already present. */
+    if (system("modprobe uio_pci_generic 2>/dev/null") != 0) {
+        fprintf(stderr, "[%s] doorbell: modprobe uio_pci_generic failed "
+                "(may already be loaded or built-in)\n", HSOC_SENDER_LABEL);
+    }
+
+    if (snprintf(path, sizeof(path),
+                  "/sys/bus/pci/devices/%s/driver_override", bdf) >= (int)sizeof(path)) {
+        return;
+    }
+    f = fopen(path, "w");
+    if (!f) {
+        fprintf(stderr, "[%s] doorbell: cannot open %s (%s)\n",
+                HSOC_SENDER_LABEL, path, strerror(errno));
+        return;
+    }
+    fprintf(f, "uio_pci_generic\n");
+    fclose(f);
+
+    f = fopen("/sys/bus/pci/drivers/uio_pci_generic/bind", "w");
+    if (!f) {
+        fprintf(stderr, "[%s] doorbell: cannot open uio_pci_generic bind (%s)\n",
+                HSOC_SENDER_LABEL, strerror(errno));
+        return;
+    }
+    /* Harmless if already bound — write may fail with EBUSY/ENODEV. */
+    fprintf(f, "%s\n", bdf);
+    fclose(f);
+}
+
+/*
  * Initialize the doorbell path:
  *   1. mmap BAR0/resource0 for doorbell writes (send direction, no UIO needed)
- *   2. Open /dev/uio0 for interrupt receive (optional — if absent, fall back to poll)
+ *   2. Bind the device to uio_pci_generic and open /dev/uio0 for interrupt
+ *      receive (optional — if it fails, fall back to poll)
  * Returns 0 on success, -1 on failure (caller degrades gracefully).
+ *
+ * Doorbell/IRQ support is ARM-Linux-only: FreeRTOS's ISR only rings the
+ * ARM<->FreeRTOS channel's doorbell. RISCV/MIPS builds skip this entirely
+ * (busy-wait poll, unchanged) — without this guard, find_ivshmem_doorbell()
+ * would still locate *their own* syslog ivshmem device (also vendor 0x1af4,
+ * no STATS/BOOTLOG/CAN magic), bind UIO, and hybrid_wait_ack() would then
+ * burn 200ms per HELLO/ACK cycle waiting for a doorbell IRQ that never
+ * arrives before falling back to the flag check.
  */
 static int doorbell_init(void)
 {
     char res0_path[PATH_MAX];
     const char *bdf = getenv("IVSHMEM_BDF");
     int fd;
+
+    if (HSOC_SENDER_ID != HSOC_SENDER_ARM_LINUX) {
+        return -1;
+    }
 
     if (!bdf) {
         bdf = find_ivshmem_doorbell();
@@ -377,14 +439,24 @@ static int doorbell_init(void)
         return -1;
     }
 
-    /* Attempt to open UIO for interrupt receive — this is optional.
-     * ARM-Linux build: /dev/uio0 should exist if bound in guest-install.
-     * RISCV/MIPS builds: UIO is absent, uio_fd stays -1, poll fallback used. */
-    uio_fd = open("/dev/uio0", O_RDWR);
+    /* Bind to uio_pci_generic and open /dev/uio0 for interrupt receive —
+     * this is optional. RISCV/MIPS builds skip this (find_ivshmem_doorbell
+     * returns NULL above since those guests have no doorbell channel), so
+     * uio_fd stays -1 and the poll fallback is used. On ARM-Linux, retry a
+     * few times: the bind (driver_override + bind write, above) and udev's
+     * creation of /dev/uio0 are not synchronous with this call. */
+    if (!getenv("IVSHMEM_NO_UIO")) {
+        bind_uio_pci_generic(bdf);
+        for (int attempt = 0; attempt < 10 && uio_fd < 0; attempt++) {
+            uio_fd = open("/dev/uio0", O_RDWR);
+            if (uio_fd >= 0) break;
+            usleep(100000); /* 100ms */
+        }
+    }
 
     doorbell_available = true;
-    fprintf(stderr, "[%s] doorbell: init OK (uio_fd=%d)\n",
-            HSOC_SENDER_LABEL, uio_fd);
+    fprintf(stderr, "[%s] doorbell: init OK (uio_fd=%d, bdf=%s)\n",
+            HSOC_SENDER_LABEL, uio_fd, bdf);
     return 0;
 }
 
@@ -393,8 +465,10 @@ static int doorbell_init(void)
  * has been written to IVSHMEM0 shared memory.
  *
  * ivshmem PCI DOORBELL register (BAR0 + 0x0c): a single uint32_t encoding
- * (peer_id << 16) | vector_id. ARM-Linux joins first (peer 0), FreeRTOS
- * joins second (peer 1).
+ * (peer_id << 16) | vector_id. FreeRTOS's qemu-system-arm machine has far
+ * fewer devices to realize at startup than this guest's qemu-system-aarch64
+ * machine, so it consistently wins the race to connect to the ivshmem-server
+ * and joins first (peer 0); this guest joins second (peer 1).
  */
 static void doorbell_ring(void)
 {
@@ -402,9 +476,9 @@ static void doorbell_ring(void)
 
     /* IVSHMEM DOORBELL register (BAR0 + 0x0c):
      * Write (peer_id << 16) | vector_id as a single uint32_t.
-     * peer_id=1 = FreeRTOS (joined second after ARM-Linux=0).
+     * peer_id=0 = FreeRTOS (joined first, ahead of this guest=1).
      * vector=0 = use eventfd[0]. */
-    bar0[HSOC_DOORBELL_OFFSET / sizeof(uint32_t)] = (1U << 16);
+    bar0[HSOC_DOORBELL_OFFSET / sizeof(uint32_t)] = 0U;
     __sync_synchronize();
 }
 

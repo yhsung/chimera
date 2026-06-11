@@ -116,9 +116,13 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link)
             tick_to_timestamp_isr(&ts_sec, &ts_nsec);
             freertos_ivshmem_send_ack(link, msg.seq, ts_sec, ts_nsec);
 
-            /* Ring doorbell (write peer ID to DOORBELL reg @ offset 0xc) to
-             * notify ARM-Linux that the ACK is ready. */
-            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = 1;
+            /* Ring doorbell (write (peer_id << 16) | vector to DOORBELL reg
+             * @ offset 0xc) to notify ARM-Linux that the ACK is ready.
+             * FreeRTOS joins the ivshmem-server first on this channel and is
+             * peer 0 (confirmed via IVPOSITION); ARM-Linux is peer 1. Same
+             * (peer_id << 16) | vector convention as boot_log.c's doorbell
+             * ring, with peer_id=1 (ARM-Linux) and vector=0. */
+            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = (1U << 16) | 0U;
 
             log_uart(HSOC_LOG_INFO, "[irq] ivshmem0: HELLO handled via IRQ\n");
         } else {

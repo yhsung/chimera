@@ -239,6 +239,7 @@ void log_hex32_uart(uint32_t level, uint32_t v)
 #define GICD_ISENABLER            0x100U    /* +(intid/32)*4 */
 #define GICD_IPRIORITYR           0x400U    /* +intid */
 #define GICD_ITARGETSR            0x800U    /* byte per intid (CPU target bitmask) */
+#define GICD_ICFGR                0xC00U    /* +(intid/16)*4, 2 bits per intid */
 #define GICC_BASE                 0x08010000UL
 #define GICC_CTLR                 0x000U
 
@@ -308,7 +309,12 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
     } else if (intid == R52_CAN_INTID) {
         can_rx_isr();
     } else if (intid == R52_IVSHMEM0_INTID) {
+        log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem0: SPI33 dispatched\n");
         freertos_ivshmem_isr(&arm_link);
+    } else {
+        log_uart(HSOC_LOG_WARN, "[irq] unexpected intid=");
+        log_hex32_uart(HSOC_LOG_WARN, intid);
+        log_uart(HSOC_LOG_WARN, "\n");
     }
     /* Other ivshmem channels (RISCV/MIPS/stats) remain flag-polled; their
      * IRQs (if any fire) are ignored. */
@@ -336,6 +342,7 @@ static void showcase_task(void *opaque)
         volatile uint8_t  *iprio   = (volatile uint8_t  *)(GICD_BASE + GICD_IPRIORITYR);
         volatile uint8_t  *itarget = (volatile uint8_t  *)(GICD_BASE + GICD_ITARGETSR);
         volatile uint32_t *isen   = (volatile uint32_t *)(GICD_BASE + GICD_ISENABLER);
+        volatile uint32_t *icfgr  = (volatile uint32_t *)(GICD_BASE + GICD_ICFGR);
         uint32_t intid = R52_IVSHMEM0_INTID;
 
         iprio[intid]   = 0xA0;
@@ -343,6 +350,16 @@ static void showcase_task(void *opaque)
         /* |= (not =) — GICD_ISENABLER1 is shared with CAN_INTID (38),
          * already enabled by can_init() above; preserve that bit. */
         isen[intid / 32] |= (1U << (intid % 32));
+        /* Configure INTID 33 as edge-triggered (GICD_ICFGR2 bit 3 — the
+         * Int_config[1] bit for IRQ 33, at bit ((33%16)*2)+1). ivshmem-flat
+         * signals via qemu_irq_pulse(): a momentary raise+lower with no
+         * sustained level. QEMU's GIC only latches a pending bit on this
+         * pulse for edge-triggered IRQs (gic_set_irq_generic); left at the
+         * default level-sensitive config, the pulse's immediate de-assert
+         * clears the CPU interrupt line before the vCPU observes it and the
+         * SPI is never delivered. |= preserves CAN_INTID's (38) config bit,
+         * also in ICFGR2. */
+        icfgr[intid / 16] |= (1U << (((intid % 16) * 2) + 1));
     }
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
