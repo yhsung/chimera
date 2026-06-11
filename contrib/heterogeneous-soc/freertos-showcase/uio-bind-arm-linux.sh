@@ -23,8 +23,11 @@ for d in /sys/bus/pci/devices/*/; do
     [ "$v" != "0x1af4" ] && continue
 
     magic=$(dd if="${d}resource2" bs=4 count=1 2>/dev/null | od -An -tx4 | tr -d ' ')
+    # Empty $magic means resource2 was unreadable (not yet mapped, permission
+    # denied, etc.) - skip rather than letting it fall through to the default
+    # case and be misidentified as the syslog channel.
     case "$magic" in
-        53544154|424c5447|cafecafe)
+        ""|53544154|424c5447|cafecafe)
             continue
             ;;
         *)
@@ -39,6 +42,8 @@ if [ -n "$IVSHMEM_BDF" ]; then
     echo "uio_pci_generic" > "/sys/bus/pci/devices/${IVSHMEM_BDF}/driver_override" 2>/dev/null || true
     echo "${IVSHMEM_BDF}" > "/sys/bus/pci/drivers/uio_pci_generic/bind" 2>/dev/null || true
 
+    # /dev/uio0 is the expected node because this is presumed to be the
+    # first (and only) uio_pci_generic binding in the guest's lifecycle.
     if [ -e /dev/uio0 ]; then
         echo "uio-bind: ivshmem-doorbell UIO bound: ${IVSHMEM_BDF} (/dev/uio0 ready)"
     else
