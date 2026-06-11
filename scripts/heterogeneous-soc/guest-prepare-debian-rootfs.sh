@@ -146,17 +146,18 @@ create_debian_disk() {
 9pnet_virtio
 MODS
 
-        # Append architecture-specific block device drivers so the initrd can
-        # find the root disk.  ARM/RISCV use virtio-blk-pci; MIPS uses the
-        # Malta board's native PIIX4 IDE (ata_piix) for the root disk because
-        # virtio-pci does not enumerate correctly on the Malta machine for
-        # the disk controller.  However the network is still on virtio-net-pci,
-        # so the initrd must also pull in virtio_pci + virtio_net or the
-        # interface never comes up (the kernel can't enumerate the PCI virtio
-        # device until those modules are loaded).
+        # Append architecture-specific block + network device drivers so the
+        # initrd can find the root disk and bring up the network.  ARM/RISCV
+        # use virtio-blk-pci + virtio-net-pci; MIPS uses the Malta board's
+        # native PIIX4 IDE (ata_piix) for the root disk and an AMD PCnet-PCI
+        # (pcnet32) for the network because the Debian 4kc-malta kernel's
+        # virtio_pci module cannot complete queue setup on the Malta machine
+        # for virtio devices (the BAR enumeration works but find_vqs fails
+        # with -22 EINVAL on the modern virtio-pci transport).  This mirrors
+        # the disk fix from commit dac812a173.
         local block_driver
         case "${target_arch}" in
-            mipsel) block_driver="ata_piix virtio_pci virtio_net" ;;
+            mipsel) block_driver="ata_piix pcnet32" ;;
             *)      block_driver="virtio_pci virtio_blk virtio_mmio" ;;
         esac
         for d in ${block_driver}; do
