@@ -35,8 +35,8 @@ The ivshmem-flat QEMU sysbus device on the FreeRTOS side already implements door
 ```
 
 **Three concurrent mechanisms, highest wins:**
-1. **Interrupt (primary):** ARM-Linux writes HELLO flag, rings doorbell → FreeRTOS GIC IRQ fires → ISR reads HELLO, sends ACK, rings DOORBELL → ARM-Linux UIO `read()` returns → daemon reads ACK
-2. **Poll fallback (ARM-Linux):** `ppoll()` on `/dev/uio0` with 200 ms timeout. If doorbell IRQ arrives: immediate return. If not: timeout fires, daemon reads the ACK flag directly from shared memory
+1. **Interrupt (primary):** The Linux guest (ARM/RISCV/MIPS) writes HELLO flag, rings doorbell → FreeRTOS GIC IRQ fires → ISR reads HELLO, sends ACK, rings DOORBELL → Linux UIO `read()` returns → daemon reads ACK
+2. **Poll fallback (Linux):** `ppoll()` on `/dev/uio0` with 200 ms timeout. If doorbell IRQ arrives: immediate return. If not: timeout fires, daemon reads the ACK flag directly from shared memory
 3. **Poll fallback (FreeRTOS):** Main task poll loop runs every ~10 ms (relaxed from today's 1 ms) as a watchdog. If ISR already handled the channel, poll skips it
 
 ## Component Changes
@@ -307,9 +307,9 @@ with `IVSHMEM_VECTORS=4`.
 
 | Channel | MMIO | SHMEM | SPI | INTID | Mechanism |
 |---------|------|-------|-----|-------|-----------|
-| **IVSHMEM0** | 0x30000000 | 0x31000000 | 1 | 33 | **Interrupt + 200ms poll** |
-| IVSHMEM1 | 0x35000000 | 0x36000000 | 2 | 34 | Poll only (RISCV) |
-| IVSHMEM2 | 0x3A000000 | 0x3B000000 | 3 | 35 | Poll only (MIPS) |
+| IVSHMEM0 | 0x30000000 | 0x31000000 | 1 | 33 | Interrupt + 200ms poll |
+| IVSHMEM1 | 0x35000000 | 0x36000000 | 2 | 34 | Interrupt + 200ms poll |
+| IVSHMEM2 | 0x3A000000 | 0x3B000000 | 3 | 35 | Interrupt + 200ms poll |
 | IVSHMEM3 | 0x3F000000 | 0x40000000 | 4 | 36 | Stats FreeRTOS→ARM (poll) |
 | IVSHMEM4 | 0x44000000 | 0x45000000 | 5 | 37 | Boot log (poll) |
 | IVSHMEM5 | 0x49000000 | 0x4A000000 | 7 | 39 | CAN frames FreeRTOS→ARM (poll) |

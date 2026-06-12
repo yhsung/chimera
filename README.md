@@ -95,7 +95,7 @@ The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS
 | Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | All 4 guests → ARM collector (3 via /dev/kmsg, FreeRTOS via `log_uart`) |
 | IVSHMEM5 CAN FreeRTOS→ARM | `0x49000000` | `0x4A000000` (64 KiB) | 4 | FreeRTOS write only (decoded CAN frame) |
 
-**Signaling:** The HELLO/ACK and stats channels use pure shared-memory polling — Linux and FreeRTOS poll `flag`/`generation` fields in shared memory; no doorbell is involved. The 4 vectors on these channels are vestigial.
+**Signaling:** The HELLO/ACK channels (IVSHMEM0/1/2) are interrupt-driven: each Linux guest's `ivshmem-doorbell` rings FreeRTOS's `ivshmem-flat` DOORBELL register on HELLO, and FreeRTOS's ISR rings the guest's doorbell after sending ACK; each side falls back to a 200ms/10ms poll of `flag` fields if the IRQ doesn't fire. The stats channel (IVSHMEM3) still uses pure shared-memory polling — FreeRTOS and ARM-Linux poll `flag`/`generation` fields; no doorbell is involved there.
 
 CAN controller: `xlnx-zynqmp-can` @ `0x50000000`, GIC SPI 6 (INTID 38). ARM-Linux uses `kvaser_pci` → `can0`. Both QEMU processes share Lima's `vcan0` via `can-host-socketcan`. ARM-Linux daemon `can-log-arm-linux` tails both sources to `/var/log/chimera-log/can-bus.log`.
 
