@@ -311,7 +311,7 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
     } else if (intid == R52_IVSHMEM0_INTID) {
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem0: SPI33 dispatched\n");
         freertos_ivshmem_isr(&arm_link, &arm_count, &arm_cpu_pct, &arm_mem_pct,
-                              &arm_last_hello_ticks);
+                              &arm_last_hello_ticks, (1U << 16) | 0U);
     } else {
         log_uart(HSOC_LOG_WARN, "[irq] unexpected intid=");
         log_hex32_uart(HSOC_LOG_WARN, intid);

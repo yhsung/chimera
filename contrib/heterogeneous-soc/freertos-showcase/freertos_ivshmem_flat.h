@@ -38,6 +38,7 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
                           uint32_t *count,
                           uint32_t *cpu_pct,
                           uint32_t *mem_pct,
-                          uint32_t *last_hello_ticks);
+                          uint32_t *last_hello_ticks,
+                          uint32_t doorbell_ring_value);
 
 #endif
