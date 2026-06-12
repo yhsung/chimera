@@ -28,8 +28,6 @@ void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
                            uintptr_t mmio_base,
                            uintptr_t shmem_base,
                            const char *name);
-int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
-                                struct hsoc_hello_msg *msg);
 void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
                                uint32_t seq,
                                int64_t ts_sec,

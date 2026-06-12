@@ -122,11 +122,11 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
             tick_to_timestamp_isr(&ts_sec, &ts_nsec);
             freertos_ivshmem_send_ack(link, msg.seq, ts_sec, ts_nsec);
 
-            /* Update the caller's stats/heartbeat bookkeeping, mirroring
-             * maybe_service_link()'s poll-path behavior. The ISR now always
-             * wins the flag-clear race, so the poll path never observes a
-             * HELLO on this link and these counters would otherwise stay
-             * frozen at zero. */
+            /* Update the caller's stats/heartbeat bookkeeping, mirroring the
+             * old poll path's behavior. The ISR now always wins the
+             * flag-clear race, so the poll path never observes a HELLO on
+             * this link and these counters would otherwise stay frozen at
+             * zero. */
             (*count)++;
             *cpu_pct = msg.cpu_pct_x100;
             *mem_pct = msg.mem_used_pct_x100;
@@ -172,38 +172,6 @@ void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
     link->name = name;
     link->layout->linux_to_freertos.flag = 0;
     link->layout->freertos_to_linux.flag = 0;
-}
-
-int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
-                                struct hsoc_hello_msg *msg)
-{
-    if (link->layout->linux_to_freertos.flag != 1) {
-        return 0;
-    }
-
-    log_uart(HSOC_LOG_VERBOSE, "[diag] flag=1 on ");
-    log_uart(HSOC_LOG_VERBOSE, link->name);
-    log_uart(HSOC_LOG_VERBOSE, "\n");
-
-    __sync_synchronize();
-    shmem_read(msg, &link->layout->linux_to_freertos.msg, sizeof(*msg));
-    link->layout->linux_to_freertos.flag = 0;
-    __sync_synchronize();
-
-    if (msg->magic != HSOC_HELLO_MAGIC ||
-        msg->version != HSOC_PROTO_VERSION ||
-        msg->msg_type != HSOC_MSG_HELLO) {
-        log_uart(HSOC_LOG_ERROR, "[diag] validation failed: magic=");
-        log_hex32(HSOC_LOG_ERROR, msg->magic);
-        log_uart(HSOC_LOG_ERROR, " ver=");
-        log_hex32(HSOC_LOG_ERROR, msg->version);
-        log_uart(HSOC_LOG_ERROR, " type=");
-        log_hex32(HSOC_LOG_ERROR, msg->msg_type);
-        log_uart(HSOC_LOG_ERROR, "\n");
-        return 0;
-    }
-
-    return 1;
 }
 
 void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,
