@@ -31,10 +31,10 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
  │  Debian Linux           │  /tmp/ivshmem-arm-freertos/    │  R52 FreeRTOS (bare-metal)       │
  │  QEMU virt (gic-ver.=3) │  IVSHMEM0_SHMEM=0x31000000     │  QEMU chimera-r52-freertos-demo│
  │                         │◄── ivshmem-stats-freertos ────  │                                  │
- │  linux-arm-stats →      │  /tmp/ivshmem-stats-freertos/  │  Polls all three channels every  │
- │  /var/log/chimera-log/chimera-cross-domain.log│  IVSHMEM3_SHMEM=0x40000000     │  1 ms; sends ACK with FreeRTOS   │
- └─────────────────────────┘                                │  tick timestamp; writes stats    │
-                                                            │  snapshot every 5 s              │
+ │  linux-arm-stats →      │  /tmp/ivshmem-stats-freertos/  │  IRQ-driven HELLO/ACK on all     │
+ │  /var/log/chimera-log/chimera-cross-domain.log│  IVSHMEM3_SHMEM=0x40000000     │  three channels (GIC SPI1-3);    │
+ └─────────────────────────┘                                │  FreeRTOS ISR sends ACK w/ tick  │
+                                                            │  timestamp; stats every 5 s      │
  ┌─────────────────────────┐      ivshmem-riscv-freertos    │                                  │
  │  RISCV-Linux (rv64)     │ ◄────────────────────────────► │                                  │
  │  Debian Linux           │  /tmp/ivshmem-riscv-freertos/  │                                  │
@@ -95,15 +95,18 @@ The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS
 | Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | All 4 guests → ARM collector (3 via /dev/kmsg, FreeRTOS via `log_uart`) |
 | IVSHMEM5 CAN FreeRTOS→ARM | `0x49000000` | `0x4A000000` (64 KiB) | 4 | FreeRTOS write only (decoded CAN frame) |
 
-**Signaling:** The HELLO/ACK channels (IVSHMEM0/1/2) are interrupt-driven: each Linux guest's `ivshmem-doorbell` rings FreeRTOS's `ivshmem-flat` DOORBELL register on HELLO, and FreeRTOS's ISR rings the guest's doorbell after sending ACK; each side falls back to a 200ms/10ms poll of `flag` fields if the IRQ doesn't fire. The stats channel (IVSHMEM3) still uses pure shared-memory polling — FreeRTOS and ARM-Linux poll `flag`/`generation` fields; no doorbell is involved there.
+**Signaling:** The HELLO/ACK channels (IVSHMEM0/1/2) are interrupt-driven on both sides: each Linux guest's `ivshmem-doorbell` rings FreeRTOS's `ivshmem-flat` DOORBELL register on HELLO, waking FreeRTOS's GIC SPI1/2/3 (INTID 33/34/35) ISR (`freertos_ivshmem_isr()`), which sends the ACK and rings the guest's doorbell in turn — FreeRTOS has no flag-poll fallback for these channels (the old poll path was removed once all three links became interrupt-driven). Each Linux daemon waits for that doorbell via `ppoll()` on `/dev/uio0` with a 200 ms timeout, falling back to a direct `flag` read if the IRQ doesn't arrive (e.g. UIO unavailable). The stats channel (IVSHMEM3) still uses pure shared-memory polling — FreeRTOS and ARM-Linux poll `flag`/`generation` fields; no doorbell is involved there.
 
 CAN controller: `xlnx-zynqmp-can` @ `0x50000000`, GIC SPI 6 (INTID 38). ARM-Linux uses `kvaser_pci` → `can0`. Both QEMU processes share Lima's `vcan0` via `can-host-socketcan`. ARM-Linux daemon `can-log-arm-linux` tails both sources to `/var/log/chimera-log/can-bus.log`.
 
-Only the boot-log channel uses the doorbell mechanism:
+Doorbell usage by channel — IVSHMEM0/1/2 use the doorbell as the real interrupt path on both ends; boot-log is the exception: FreeRTOS rings it, but nobody listens for the IRQ (the collector relies on its `generation` poll instead):
 
-| Channel | Who rings | Encoding | Who listens | Actual wakeup |
+| Channel | GIC SPI (INTID) | HELLO doorbell (Linux→FreeRTOS) | ACK doorbell (FreeRTOS→Linux) | Actual wakeup |
 |---|---|---|---|---|
-| Boot-log | FreeRTOS | `(collector_peer_id << 16) \| 0` | (doorbell ignored) | ARM `boot-collector` polls `generation` counter every 2 s |
+| IVSHMEM0 (ARM) | SPI1 (33) | `0` (peer 0 = FreeRTOS, vector 0) | `(1<<16)\|0` (peer 1 = ARM, vector 0) | GIC IRQ on FreeRTOS / `ppoll(/dev/uio0)` on ARM |
+| IVSHMEM1 (RISCV) | SPI2 (34) | `0` | `(1<<16)\|0` (peer 1 = RISCV, vector 0) | GIC IRQ on FreeRTOS / `ppoll(/dev/uio0)` on RISCV |
+| IVSHMEM2 (MIPS) | SPI3 (35) | `0` | `(1<<16)\|0` (peer 1 = MIPS, vector 0) | GIC IRQ on FreeRTOS / `ppoll(/dev/uio0)` on MIPS |
+| Boot-log | — | — | FreeRTOS rings `(collector_peer_id << 16) \| 0` | (doorbell ignored) — ARM `boot-collector` polls `generation` counter every 2 s |
 
 **Boot-log doorbell flow:**
 
@@ -186,6 +189,8 @@ Each `hsoc_channel` holds a `volatile uint32_t flag` (0 = empty, 1 = ready) foll
 
 ### Handshake sequence
 
+For the HELLO/ACK channels (IVSHMEM0/1/2), the `flag` transitions below are signaled via doorbell + GIC IRQ rather than polling — see **Signaling** under [Architecture](#architecture). The underlying shared-memory layout and message protocol are unchanged.
+
 ```mermaid
 sequenceDiagram
     participant L as Linux
@@ -195,15 +200,16 @@ sequenceDiagram
     L->>S: shm_write(msg)
     Note over L: __sync_synchronize()
     L->>S: flag = 1
-    S-->>F: poll detects flag == 1
-    Note over F: __sync_synchronize()
+    L->>F: ring doorbell (BAR0 DOORBELL = 0)
+    Note over F: GIC SPI1/2/3 IRQ → freertos_ivshmem_isr()
     F->>S: shmem_read(msg)
     F->>S: flag = 0
     Note over F: __sync_synchronize()
     F->>S: shmem_write(ack)
     Note over F: __sync_synchronize()
     F->>S: flag = 1
-    S-->>L: wait detects flag == 1
+    F->>L: ring doorbell ((1<<16)|0)
+    Note over L: ppoll(/dev/uio0, 200ms) wakes;<br/>flag-read fallback on timeout
     L->>S: shm_read(ack)
     Note over L: __sync_synchronize()
     L->>S: flag = 0
@@ -679,7 +685,7 @@ contrib/heterogeneous-soc/
     linker.ld                 — Linker script (RAM at 0x80000000, 8 MiB, KEEP trap handler)
     FreeRTOSConfig.h          — Kernel config (10 MHz CPU, 1 kHz tick, 64 KiB heap)
     ── Linux Guest Binaries (cross-compiled per arch) ──
-    linux_syslog.c            — syslog-{arm,riscv,mips}-linux: reads /proc/loadavg, /proc/meminfo, /proc/uptime, sends HELLO, waits for ACK, repeats on interval
+    linux_syslog.c            — syslog-{arm,riscv,mips}-linux: reads /proc/loadavg, /proc/meminfo, /proc/uptime, sends HELLO + rings ivshmem-doorbell, waits for ACK via ppoll(/dev/uio0, 200ms) with flag-read fallback, repeats on interval
     linux_stats.c             — linux-arm-stats (ARM only): polls generation every 2 s, logs FreeRTOS snapshot to /var/log/chimera-log/chimera-cross-domain.log
     bootlog_writer.c          — bootlog-{arm,riscv,mips}-linux: reads /dev/kmsg, writes kernel log lines into the guest's 1 MiB boot-log slot
     boot_collector.c          — boot-collector (ARM only): polls boot-log generation every 2 s, harvests completed slots to /var/log/chimera-log/boot-log/guest-*.log
