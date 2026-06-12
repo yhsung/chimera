@@ -666,8 +666,8 @@ contrib/heterogeneous-soc/
     bootlog_proto.h           — Boot-log protocol (hsoc_bootlog_header, 4 × 1 MiB slots)
     can_proto.h               — IVSHMEM5 CAN frame protocol (can_ivshmem_layout: magic + generation + can_ivshmem_frame; register decode helpers)
     ── FreeRTOS Firmware (bare-metal Cortex-R52, freertos-r52-demo.elf) ──
-    freertos_main.c           — main() + showcase_task: polls 3 HELLO/ACK channels, sends ACKs, writes stats snapshot every 5 s, runs boot-log monitor, initializes the CAN driver
-    freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, poll_hello, send_ack (volatile byte loops)
+    freertos_main.c           — main() + showcase_task: dispatches IRQ-driven HELLO/ACK for 3 channels via vApplicationIRQHandler, writes stats snapshot every 5 s, runs boot-log monitor, initializes the CAN driver
+    freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, isr (HELLO/ACK handling), send_ack (volatile byte loops)
     freertos_ivshmem_flat.h   — struct freertos_ivshmem_link, MMIO register offsets, declarations
     boot_log.c                — Boot-log monitor: waits for collector, rings doorbell when all 4 guests booted
     boot_log.h                — struct bootlog_monitor and function declarations
