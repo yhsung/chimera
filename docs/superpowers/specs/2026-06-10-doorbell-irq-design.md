@@ -319,7 +319,7 @@ with `IVSHMEM_VECTORS=4`.
 ### Normal operation
 1. Launch showcase: `guest-run-chimera-showcase.sh`
 2. Verify ARM-Linux syslog daemon starts and sends HELLO messages
-3. Check FreeRTOS UART output for `[irq] ivshmem0/ivshmem1/ivshmem2: IRQ handled` messages
+3. Check FreeRTOS UART output for `[irq] arm-linux/riscv-linux/mips-linux: HELLO handled via IRQ` messages
 4. Verify `chimera-cross-domain.log` on ARM-Linux shows ACK timestamps with seq numbers
 
 ### Latency comparison
