@@ -388,23 +388,18 @@ static void bind_uio_pci_generic(const char *bdf)
  *      receive (optional — if it fails, fall back to poll)
  * Returns 0 on success, -1 on failure (caller degrades gracefully).
  *
- * Doorbell/IRQ support is ARM-Linux-only: FreeRTOS's ISR only rings the
- * ARM<->FreeRTOS channel's doorbell. RISCV/MIPS builds skip this entirely
- * (busy-wait poll, unchanged) — without this guard, find_ivshmem_doorbell()
- * would still locate *their own* syslog ivshmem device (also vendor 0x1af4,
- * no STATS/BOOTLOG/CAN magic), bind UIO, and hybrid_wait_ack() would then
- * burn 200ms per HELLO/ACK cycle waiting for a doorbell IRQ that never
- * arrives before falling back to the flag check.
+ * Doorbell/IRQ support applies to all three senders (arm-linux,
+ * riscv-linux, mips-linux): FreeRTOS's ISR rings each link's own
+ * per-channel doorbell (see freertos_ivshmem_isr()'s doorbell_ring_value
+ * parameter), so find_ivshmem_doorbell() locating *this guest's own* syslog
+ * channel (excluding its BOOTLOG-magic channel) is exactly the right device
+ * to bind UIO to.
  */
 static int doorbell_init(void)
 {
     char res0_path[PATH_MAX];
     const char *bdf = getenv("IVSHMEM_BDF");
     int fd;
-
-    if (HSOC_SENDER_ID != HSOC_SENDER_ARM_LINUX) {
-        return -1;
-    }
 
     if (!bdf) {
         bdf = find_ivshmem_doorbell();
