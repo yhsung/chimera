@@ -89,20 +89,22 @@ static void tick_to_timestamp_isr(int64_t *ts_sec, int64_t *ts_nsec)
 }
 
 /*
- * Called from vApplicationIRQHandler on GIC SPI 1 (INTID 33).
- * Reads the HELLO from IVSHMEM0 shared memory, sends ACK, rings doorbell.
+ * Called from vApplicationIRQHandler on GIC SPI 1/2/3 (INTID 33/34/35) for
+ * the arm-linux/riscv-linux/mips-linux links respectively.
+ * Reads the HELLO from the link's shared memory, sends ACK, rings doorbell.
  * Follows the same volatile-byte-access rules as the poll path.
  *
  * This QEMU ivshmem-flat model (hw/misc/ivshmem-flat.c) raises the GIC IRQ
  * unconditionally whenever the peer signals our eventfd — INTSTATUS/INTMASK
  * are reserved/no-op in this device revision, so the shared flag below is
- * the only real gate, same as freertos_ivshmem_poll_hello().
+ * the only real gate.
  */
 void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
                           uint32_t *count,
                           uint32_t *cpu_pct,
                           uint32_t *mem_pct,
-                          uint32_t *last_hello_ticks)
+                          uint32_t *last_hello_ticks,
+                          uint32_t doorbell_ring_value)
 {
     struct hsoc_hello_msg msg;
     int64_t ts_sec, ts_nsec;
@@ -120,27 +122,32 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
             tick_to_timestamp_isr(&ts_sec, &ts_nsec);
             freertos_ivshmem_send_ack(link, msg.seq, ts_sec, ts_nsec);
 
-            /* Update the caller's stats/heartbeat bookkeeping, mirroring
-             * maybe_service_link()'s poll-path behavior. The ISR now always
-             * wins the flag-clear race, so the poll path never observes a
-             * HELLO on this link and these counters would otherwise stay
-             * frozen at zero. */
+            /* Update the caller's stats/heartbeat bookkeeping, mirroring the
+             * old poll path's behavior. The ISR now always wins the
+             * flag-clear race, so the poll path never observes a HELLO on
+             * this link and these counters would otherwise stay frozen at
+             * zero. */
             (*count)++;
             *cpu_pct = msg.cpu_pct_x100;
             *mem_pct = msg.mem_used_pct_x100;
             *last_hello_ticks = xTaskGetTickCountFromISR();
 
-            /* Ring doorbell (write (peer_id << 16) | vector to DOORBELL reg
-             * @ offset 0xc) to notify ARM-Linux that the ACK is ready.
-             * FreeRTOS joins the ivshmem-server first on this channel and is
-             * peer 0 (confirmed via IVPOSITION); ARM-Linux is peer 1. Same
-             * (peer_id << 16) | vector convention as boot_log.c's doorbell
-             * ring, with peer_id=1 (ARM-Linux) and vector=0. */
-            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = (1U << 16) | 0U;
+            /* Ring doorbell (write doorbell_ring_value = (peer_id << 16) |
+             * vector to DOORBELL reg @ offset 0xc) to notify the Linux guest
+             * that the ACK is ready. FreeRTOS joins each per-channel
+             * ivshmem-server first and is peer 0 (confirmed via IVPOSITION);
+             * the Linux guest is peer 1, vector 0 — same convention as
+             * boot_log.c's doorbell ring. The caller supplies
+             * doorbell_ring_value per link. */
+            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = doorbell_ring_value;
 
-            log_uart(HSOC_LOG_INFO, "[irq] ivshmem0: HELLO handled via IRQ\n");
+            log_uart(HSOC_LOG_INFO, "[irq] ");
+            log_uart(HSOC_LOG_INFO, link->name);
+            log_uart(HSOC_LOG_INFO, ": HELLO handled via IRQ\n");
         } else {
-            log_uart(HSOC_LOG_ERROR, "[irq] validation failed: magic=");
+            log_uart(HSOC_LOG_ERROR, "[irq] ");
+            log_uart(HSOC_LOG_ERROR, link->name);
+            log_uart(HSOC_LOG_ERROR, ": validation failed: magic=");
             log_hex32(HSOC_LOG_ERROR, msg.magic);
             log_uart(HSOC_LOG_ERROR, " ver=");
             log_hex32(HSOC_LOG_ERROR, msg.version);
@@ -165,38 +172,6 @@ void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
     link->name = name;
     link->layout->linux_to_freertos.flag = 0;
     link->layout->freertos_to_linux.flag = 0;
-}
-
-int freertos_ivshmem_poll_hello(struct freertos_ivshmem_link *link,
-                                struct hsoc_hello_msg *msg)
-{
-    if (link->layout->linux_to_freertos.flag != 1) {
-        return 0;
-    }
-
-    log_uart(HSOC_LOG_VERBOSE, "[diag] flag=1 on ");
-    log_uart(HSOC_LOG_VERBOSE, link->name);
-    log_uart(HSOC_LOG_VERBOSE, "\n");
-
-    __sync_synchronize();
-    shmem_read(msg, &link->layout->linux_to_freertos.msg, sizeof(*msg));
-    link->layout->linux_to_freertos.flag = 0;
-    __sync_synchronize();
-
-    if (msg->magic != HSOC_HELLO_MAGIC ||
-        msg->version != HSOC_PROTO_VERSION ||
-        msg->msg_type != HSOC_MSG_HELLO) {
-        log_uart(HSOC_LOG_ERROR, "[diag] validation failed: magic=");
-        log_hex32(HSOC_LOG_ERROR, msg->magic);
-        log_uart(HSOC_LOG_ERROR, " ver=");
-        log_hex32(HSOC_LOG_ERROR, msg->version);
-        log_uart(HSOC_LOG_ERROR, " type=");
-        log_hex32(HSOC_LOG_ERROR, msg->msg_type);
-        log_uart(HSOC_LOG_ERROR, "\n");
-        return 0;
-    }
-
-    return 1;
 }
 
 void freertos_ivshmem_send_ack(struct freertos_ivshmem_link *link,

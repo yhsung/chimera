@@ -191,30 +191,6 @@ static void write_stats_snapshot(void)
     log_uart(HSOC_LOG_VERBOSE, "[freertos] stats snapshot written\n");
 }
 
-static void maybe_service_link(struct freertos_ivshmem_link *link,
-                               const char *log_message,
-                               uint32_t *count,
-                               uint32_t *cpu_pct,
-                               uint32_t *mem_pct,
-                               TickType_t *last_hello_ticks)
-{
-    struct hsoc_hello_msg hello;
-    int64_t ts_sec;
-    int64_t ts_nsec;
-
-    if (!freertos_ivshmem_poll_hello(link, &hello)) {
-        return;
-    }
-
-    tick_to_timestamp(&ts_sec, &ts_nsec);
-    log_uart(HSOC_LOG_VERBOSE, log_message);
-    freertos_ivshmem_send_ack(link, hello.seq, ts_sec, ts_nsec);
-    (*count)++;
-    *cpu_pct = hello.cpu_pct_x100;
-    *mem_pct = hello.mem_used_pct_x100;
-    *last_hello_ticks = xTaskGetTickCount();
-}
-
 void log_hex32_uart(uint32_t level, uint32_t v)
 {
     static const char hex[] = "0123456789abcdef";
@@ -248,6 +224,8 @@ extern void FreeRTOS_Tick_Handler(void);
 
 #define R52_CAN_INTID 38U   /* CAN controller on GIC SPI 6 */
 #define R52_IVSHMEM0_INTID 33U /* IVSHMEM0 on GIC SPI 1 → INTID 33 */
+#define R52_IVSHMEM1_INTID 34U /* IVSHMEM1 (riscv-linux) on GIC SPI 2 → INTID 34 */
+#define R52_IVSHMEM2_INTID 35U /* IVSHMEM2 (mips-linux)  on GIC SPI 3 → INTID 35 */
 
 static uint32_t r52_tick_reload;
 
@@ -299,6 +277,36 @@ void vClearTickInterrupt(void)
     r52_write_cntp_tval(r52_tick_reload);
 }
 
+/*
+ * Enable a GIC SPI for interrupt-driven ivshmem HELLO/ACK reception: set
+ * priority, target CPU0, enable in ISENABLER, and configure edge-triggered.
+ * Shared by IVSHMEM0/1/2 (INTID 33/34/35).
+ */
+static void gic_enable_ivshmem_spi(uint32_t intid)
+{
+    volatile uint8_t  *iprio   = (volatile uint8_t  *)(GICD_BASE + GICD_IPRIORITYR);
+    volatile uint8_t  *itarget = (volatile uint8_t  *)(GICD_BASE + GICD_ITARGETSR);
+    volatile uint32_t *isen    = (volatile uint32_t *)(GICD_BASE + GICD_ISENABLER);
+    volatile uint32_t *icfgr   = (volatile uint32_t *)(GICD_BASE + GICD_ICFGR);
+
+    iprio[intid]   = 0xA0;
+    itarget[intid] = 0x01;
+    /* |= (not =) — GICD_ISENABLERn words are shared across IVSHMEM0/1/2's
+     * INTIDs (33/34/35) and R52_CAN_INTID (38), already enabled by
+     * can_init() above; preserve those bits. */
+    isen[intid / 32] |= (1U << (intid % 32));
+    /* Configure intid as edge-triggered (GICD_ICFGRn, the Int_config[1] bit
+     * at bit ((intid%16)*2)+1). ivshmem-flat signals via qemu_irq_pulse(): a
+     * momentary raise+lower with no sustained level. QEMU's GIC only latches
+     * a pending bit on this pulse for edge-triggered IRQs
+     * (gic_set_irq_generic); left at the default level-sensitive config, the
+     * pulse's immediate de-assert clears the CPU interrupt line before the
+     * vCPU observes it and the SPI is never delivered. |= preserves other
+     * IVSHMEM SPIs' and R52_CAN_INTID's (38) config bits sharing the same
+     * ICFGR word. */
+    icfgr[intid / 16] |= (1U << (((intid % 16) * 2) + 1));
+}
+
 /* Called by the ARM_CR5 port's FreeRTOS_IRQ_Handler with the ICCIAR value. */
 void vApplicationIRQHandler(uint32_t ulICCIAR)
 {
@@ -311,14 +319,20 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
     } else if (intid == R52_IVSHMEM0_INTID) {
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem0: SPI33 dispatched\n");
         freertos_ivshmem_isr(&arm_link, &arm_count, &arm_cpu_pct, &arm_mem_pct,
-                              &arm_last_hello_ticks);
+                              &arm_last_hello_ticks, (1U << 16) | 0U);
+    } else if (intid == R52_IVSHMEM1_INTID) {
+        log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem1: SPI34 dispatched\n");
+        freertos_ivshmem_isr(&riscv_link, &riscv_count, &riscv_cpu_pct, &riscv_mem_pct,
+                              &riscv_last_hello_ticks, (1U << 16) | 0U);
+    } else if (intid == R52_IVSHMEM2_INTID) {
+        log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem2: SPI35 dispatched\n");
+        freertos_ivshmem_isr(&mips_link, &mips_count, &mips_cpu_pct, &mips_mem_pct,
+                              &mips_last_hello_ticks, (1U << 16) | 0U);
     } else {
         log_uart(HSOC_LOG_WARN, "[irq] unexpected intid=");
         log_hex32_uart(HSOC_LOG_WARN, intid);
         log_uart(HSOC_LOG_WARN, "\n");
     }
-    /* Other ivshmem channels (RISCV/MIPS/stats) remain flag-polled; their
-     * IRQs (if any fire) are ignored. */
 }
 
 static void showcase_task(void *opaque)
@@ -336,32 +350,12 @@ static void showcase_task(void *opaque)
 
     can_init(CAN_MMIO, IVSHMEM5_SHMEM);
 
-    /* Enable IVSHMEM0 GIC SPI for interrupt-driven HELLO reception.
-     * Same gic_enable_spi() pattern as can_driver.c. The GICD_CTLR group-0
-     * forwarding is already enabled by vConfigureTickInterrupt(). */
-    {
-        volatile uint8_t  *iprio   = (volatile uint8_t  *)(GICD_BASE + GICD_IPRIORITYR);
-        volatile uint8_t  *itarget = (volatile uint8_t  *)(GICD_BASE + GICD_ITARGETSR);
-        volatile uint32_t *isen   = (volatile uint32_t *)(GICD_BASE + GICD_ISENABLER);
-        volatile uint32_t *icfgr  = (volatile uint32_t *)(GICD_BASE + GICD_ICFGR);
-        uint32_t intid = R52_IVSHMEM0_INTID;
-
-        iprio[intid]   = 0xA0;
-        itarget[intid] = 0x01;
-        /* |= (not =) — GICD_ISENABLER1 is shared with CAN_INTID (38),
-         * already enabled by can_init() above; preserve that bit. */
-        isen[intid / 32] |= (1U << (intid % 32));
-        /* Configure INTID 33 as edge-triggered (GICD_ICFGR2 bit 3 — the
-         * Int_config[1] bit for IRQ 33, at bit ((33%16)*2)+1). ivshmem-flat
-         * signals via qemu_irq_pulse(): a momentary raise+lower with no
-         * sustained level. QEMU's GIC only latches a pending bit on this
-         * pulse for edge-triggered IRQs (gic_set_irq_generic); left at the
-         * default level-sensitive config, the pulse's immediate de-assert
-         * clears the CPU interrupt line before the vCPU observes it and the
-         * SPI is never delivered. |= preserves CAN_INTID's (38) config bit,
-         * also in ICFGR2. */
-        icfgr[intid / 16] |= (1U << (((intid % 16) * 2) + 1));
-    }
+    /* Enable IVSHMEM0/1/2 GIC SPIs for interrupt-driven HELLO reception.
+     * The GICD_CTLR group-0 forwarding is already enabled by
+     * vConfigureTickInterrupt(). */
+    gic_enable_ivshmem_spi(R52_IVSHMEM0_INTID);
+    gic_enable_ivshmem_spi(R52_IVSHMEM1_INTID);
+    gic_enable_ivshmem_spi(R52_IVSHMEM2_INTID);
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
 
@@ -407,14 +401,9 @@ static void showcase_task(void *opaque)
     }
 
     for (;;) {
-        /* arm_link is serviced by freertos_ivshmem_isr() (interrupt-driven);
-         * polling it here would race the ISR for the linux_to_freertos.flag. */
-        maybe_service_link(&riscv_link,
-                           "[freertos] received hello from riscv-linux\n",
-                           &riscv_count, &riscv_cpu_pct, &riscv_mem_pct, &riscv_last_hello_ticks);
-        maybe_service_link(&mips_link,
-                           "[freertos] received hello from mips-linux\n",
-                           &mips_count, &mips_cpu_pct, &mips_mem_pct, &mips_last_hello_ticks);
+        /* arm_link, riscv_link, and mips_link are all serviced by
+         * freertos_ivshmem_isr() (interrupt-driven); polling them here would
+         * race the ISR for linux_to_freertos.flag. */
 
         if (++stats_tick >= 5000) {
             stats_tick = 0;

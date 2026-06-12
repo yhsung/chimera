@@ -95,7 +95,7 @@ The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS
 | Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | All 4 guests → ARM collector (3 via /dev/kmsg, FreeRTOS via `log_uart`) |
 | IVSHMEM5 CAN FreeRTOS→ARM | `0x49000000` | `0x4A000000` (64 KiB) | 4 | FreeRTOS write only (decoded CAN frame) |
 
-**Signaling:** The HELLO/ACK and stats channels use pure shared-memory polling — Linux and FreeRTOS poll `flag`/`generation` fields in shared memory; no doorbell is involved. The 4 vectors on these channels are vestigial.
+**Signaling:** The HELLO/ACK channels (IVSHMEM0/1/2) are interrupt-driven: each Linux guest's `ivshmem-doorbell` rings FreeRTOS's `ivshmem-flat` DOORBELL register on HELLO, and FreeRTOS's ISR rings the guest's doorbell after sending ACK; each side falls back to a 200ms/10ms poll of `flag` fields if the IRQ doesn't fire. The stats channel (IVSHMEM3) still uses pure shared-memory polling — FreeRTOS and ARM-Linux poll `flag`/`generation` fields; no doorbell is involved there.
 
 CAN controller: `xlnx-zynqmp-can` @ `0x50000000`, GIC SPI 6 (INTID 38). ARM-Linux uses `kvaser_pci` → `can0`. Both QEMU processes share Lima's `vcan0` via `can-host-socketcan`. ARM-Linux daemon `can-log-arm-linux` tails both sources to `/var/log/chimera-log/can-bus.log`.
 
@@ -666,8 +666,8 @@ contrib/heterogeneous-soc/
     bootlog_proto.h           — Boot-log protocol (hsoc_bootlog_header, 4 × 1 MiB slots)
     can_proto.h               — IVSHMEM5 CAN frame protocol (can_ivshmem_layout: magic + generation + can_ivshmem_frame; register decode helpers)
     ── FreeRTOS Firmware (bare-metal Cortex-R52, freertos-r52-demo.elf) ──
-    freertos_main.c           — main() + showcase_task: polls 3 HELLO/ACK channels, sends ACKs, writes stats snapshot every 5 s, runs boot-log monitor, initializes the CAN driver
-    freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, poll_hello, send_ack (volatile byte loops)
+    freertos_main.c           — main() + showcase_task: dispatches IRQ-driven HELLO/ACK for 3 channels via vApplicationIRQHandler, writes stats snapshot every 5 s, runs boot-log monitor, initializes the CAN driver
+    freertos_ivshmem_flat.c   — ivshmem-flat device driver: init, isr (HELLO/ACK handling), send_ack (volatile byte loops)
     freertos_ivshmem_flat.h   — struct freertos_ivshmem_link, MMIO register offsets, declarations
     boot_log.c                — Boot-log monitor: waits for collector, rings doorbell when all 4 guests booted
     boot_log.h                — struct bootlog_monitor and function declarations
