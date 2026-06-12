@@ -61,6 +61,10 @@ _main() {
             template://ubuntu-lts
     fi
 
+    echo "Setting Lima VM timezone to Asia/Taipei..."
+    limactl shell "${LIMA_NAME}" -- sudo timedatectl set-timezone Asia/Taipei 2>/dev/null || \
+        echo "  (timedatectl not available — timezone left at default)"
+
     if [[ "${VM_SOURCE_DIR}" != "${CHIMERA_ROOT}" ]]; then
         echo "Deploying chimera source tree to ${VM_SOURCE_DIR} ..."
         prepare_vm_source_tree

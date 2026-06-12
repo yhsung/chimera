@@ -13,6 +13,7 @@ require_file "${MIPS_DEBIAN_DISK}" "MIPS Debian rootfs disk"
 bash "${SCRIPT_DIR}/guest-prepare-debian-boot-assets.sh"
 
 exec "${qemu_bin}" \
+    -rtc base=localtime \
     -machine malta \
     -cpu 24Kf \
     -m 512M \
@@ -26,5 +27,5 @@ exec "${qemu_bin}" \
     -drive file="${MIPS_DEBIAN_DISK}",format=qcow2,if=ide \
     -virtfs local,path="${PINGPONG_DIR}",mount_tag="${PINGPONG_SHARE_TAG}",security_model=none,id="${PINGPONG_SHARE_TAG}" \
     -netdev tap,id=net0,ifname=tap-mips,script=no,downscript=no \
-    -device virtio-net-pci,netdev=net0 \
+    -device pcnet,netdev=net0 \
     -nographic

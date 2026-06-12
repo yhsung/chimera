@@ -95,9 +95,24 @@ _exec pkill -f "ivshmem-can-ft"                            2>/dev/null || true
 sleep 0.3
 _ok "stale processes cleaned"
 
+_step "Timezone: Asia/Taipei"
+sudo timedatectl set-timezone Asia/Taipei 2>/dev/null || true
+if [[ "$(timedatectl show -p Timezone --value 2>/dev/null)" == "Asia/Taipei" ]]; then
+    _ok "timezone set to Asia/Taipei"
+else
+    _info "timezone could not be set (timedatectl unavailable); QEMU -rtc base=localtime may drift"
+fi
+
 _step "CAN bus: vcan0 setup"
-if ! ip link show "${CAN_VCAN_IF}" >/dev/null 2>&1; then
+# The vcan.ko.zst module lives in linux-modules-extra, not the base
+# linux-modules package. On Apple VZ VMs (Lima --vm-type=vz) the module
+# is absent by default — install the package if modprobe fails.
+if ! modprobe vcan 2>/dev/null; then
+    _info "vcan module not found — installing linux-modules-extra-$(uname -r)..."
+    sudo apt-get install -y "linux-modules-extra-$(uname -r)" 2>/dev/null || true
     sudo modprobe vcan 2>/dev/null || true
+fi
+if ! ip link show "${CAN_VCAN_IF}" >/dev/null 2>&1; then
     sudo ip link add dev "${CAN_VCAN_IF}" type vcan 2>/dev/null || true
 fi
 sudo ip link set "${CAN_VCAN_IF}" up 2>/dev/null || true

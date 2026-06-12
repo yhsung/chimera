@@ -7,8 +7,15 @@ qemu_bin="$(find_qemu_system_binary qemu-system-arm)"
 
 require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 
+# ── vcan0 setup (gracefully degrade if unavailable) ───────────────────────────
+if ! ip link show "${CAN_VCAN_IF}" >/dev/null 2>&1; then
+    sudo modprobe vcan 2>/dev/null || true
+    sudo ip link add dev "${CAN_VCAN_IF}" type vcan 2>/dev/null || true
+fi
+sudo ip link set "${CAN_VCAN_IF}" up 2>/dev/null || true
+
 can_backend=()
-if [[ -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" ]]; then
+if [[ -S "${IVSHMEM_CAN_FREERTOS_SOCKET}" ]] && ip link show "${CAN_VCAN_IF}" 2>/dev/null | grep -q "UP"; then
     can_backend=(
         -object can-bus,id=canbus0
         -object "can-host-socketcan,id=ch0,if=${CAN_VCAN_IF},canbus=canbus0"
@@ -22,6 +29,7 @@ if [[ ${#can_backend[@]} -gt 0 ]]; then
 fi
 
 exec "${qemu_bin}" \
+    -rtc base=localtime \
     -machine "${machine_opts}" \
     -chardev socket,id=armft,path="${IVSHMEM_ARM_FREERTOS_SOCKET}" \
     -chardev socket,id=riscvft,path="${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
