@@ -319,7 +319,7 @@ with `IVSHMEM_VECTORS=4`.
 ### Normal operation
 1. Launch showcase: `guest-run-chimera-showcase.sh`
 2. Verify ARM-Linux syslog daemon starts and sends HELLO messages
-3. Check FreeRTOS UART output for `[irq] ivshmem0: IRQ handled` messages
+3. Check FreeRTOS UART output for `[irq] ivshmem0/ivshmem1/ivshmem2: IRQ handled` messages
 4. Verify `chimera-cross-domain.log` on ARM-Linux shows ACK timestamps with seq numbers
 
 ### Latency comparison
@@ -332,6 +332,6 @@ with `IVSHMEM_VECTORS=4`.
 3. Check log for `[uio] doorbell timeout — fallback poll used`
 
 ### Regression
-1. Verify RISCV and MIPS channels still pass their HELLO/ACK handshakes (they continue polling)
+1. Verify RISCV and MIPS channels still pass their HELLO/ACK handshakes (now interrupt-driven via doorbell + GIC IRQ, same as ARM)
 2. Verify CAN bus demo still works
 3. Verify stats snapshots still appear in chimera-cross-domain.log
