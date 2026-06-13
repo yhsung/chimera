@@ -196,7 +196,8 @@ auto_login_and_run() {
 auto_login_and_run "${SESSION}:0.1" \
     "mount /mnt/pingpong" \
     "ip link set can0 type can bitrate 500000 2>/dev/null; ip link set can0 up 2>/dev/null" \
-    "cp /mnt/pingpong/freertos-showcase/can-log-arm-linux /tmp/ && /tmp/can-log-arm-linux &" &
+    "cp /mnt/pingpong/freertos-showcase/can-log-arm-linux /tmp/ && /tmp/can-log-arm-linux &" \
+    "tail -F /var/log/chimera-log/can-bus.log &" &
 
 # Note: syslog-arm-linux is intentionally not launched here — the CAN E2E
 # harness focuses on CAN forwarding. The ivshmem HELLO/ACK channel is
@@ -247,9 +248,9 @@ while (( elapsed < TIMEOUT )); do
        [[ "${CAN_LOG_SEEN_SOCKETCAN}" -eq 1 ]]; then
         echo ""
         echo "[harness] PASS after ${elapsed}s — all three CAN path conditions met"
-        echo "  \342\234\223 FreeRTOS CAN RX decode"
-        echo "  \342\234\223 CAN/freertos (IVSHMEM5 forwarding)"
-        echo "  \342\234\223 CAN/socketcan (kvaser_pci path)"
+        printf '  \342\234\223 %s\n' "FreeRTOS CAN RX decode"
+        printf '  \342\234\223 %s\n' "CAN/freertos (IVSHMEM5 forwarding)"
+        printf '  \342\234\223 %s\n' "CAN/socketcan (kvaser_pci path)"
         exit 0
     fi
 
