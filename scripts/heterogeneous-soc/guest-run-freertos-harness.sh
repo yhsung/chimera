@@ -75,6 +75,11 @@ tmux split-window -h -t "${SESSION}:0.2" -l 50%
 tmux split-window -h -t "${SESSION}:0.5" -l 67%
 tmux split-window -h -t "${SESSION}:0.6" -l 50%
 
+# Keep panes alive even when their process exits; without this, a crash in
+# any pane (e.g., FreeRTOS QEMU) destroys the pane and renumbers the rest,
+# breaking the layout assumptions below.
+tmux set-option -t "${SESSION}" remain-on-exit on
+
 # ── ivshmem servers ──────────────────────────────────────────────────────────
 # Prepend env setup to every pane command so scripts inherit the correct paths
 # even though tmux panes open a fresh login shell that may have a different
