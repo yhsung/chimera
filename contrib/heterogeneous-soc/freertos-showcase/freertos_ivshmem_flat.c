@@ -141,9 +141,9 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
              * doorbell_ring_value per link. */
             link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = doorbell_ring_value;
 
-            log_uart(HSOC_LOG_INFO, "[irq] ");
-            log_uart(HSOC_LOG_INFO, link->name);
-            log_uart(HSOC_LOG_INFO, ": HELLO handled via IRQ\n");
+            log_uart(HSOC_LOG_VERBOSE, "[irq] ");
+            log_uart(HSOC_LOG_VERBOSE, link->name);
+            log_uart(HSOC_LOG_VERBOSE, ": HELLO handled via IRQ\n");
         } else {
             log_uart(HSOC_LOG_ERROR, "[irq] ");
             log_uart(HSOC_LOG_ERROR, link->name);
