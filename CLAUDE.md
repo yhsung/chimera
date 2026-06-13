@@ -141,6 +141,32 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run
 
 **Environment overrides:** `SHELL_HARNESS_TIMEOUT` (default 60).
 
+### `guest-run-can-e2e-harness.sh` (full-stack, ~1 min)
+
+End-to-end CAN verification: launches FreeRTOS + ARM Linux (2-pane tmux,
+all 6 ivshmem servers backgrounded) with CAN passthrough, sends a CAN
+frame from Lima's `vcan0`, and verifies:
+1. FreeRTOS decodes the frame (`CAN RX:` in FreeRTOS UART)
+2. ARM `can-log-arm-linux` daemon logs `CAN/freertos` in
+   `/var/log/chimera-log/can-bus.log` (proves IVSHMEM5 forwarding)
+3. ARM daemon logs `CAN/socketcan` in the same file (proves the
+   `kvaser_pci` → `can0` path)
+
+Conditions 2 and 3 are checked by `tail -F`-ing `can-bus.log` into the
+ARM pane (no SSH/netdev — `can-log-arm-linux` writes those lines only to
+the log file, never to stdout) and grepping the captured pane.
+
+Requires all showcase build artifacts (FreeRTOS ELF, ARM kernel/initrd,
+ARM Debian qcow2, `can-log-arm-linux`). Exit 0 only when all three
+conditions are met.
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-can-e2e-harness.sh
+```
+
+**Environment overrides:** `CAN_E2E_TIMEOUT` (default 180), `CAN_TEST_ID` (default `123`), `CAN_TEST_DATA` (default `DEADBEEF`).
+
 ### Harness implementation notes
 
 - **`remain-on-exit on`** must be set on the tmux session.  Without it, a QEMU crash destroys its pane and tmux renumbers the remaining panes, breaking all `send-keys -t 0.N` targets.
