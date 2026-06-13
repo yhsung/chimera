@@ -54,8 +54,7 @@ cleanup
 # ---- Prerequisites check ----
 MISSING=""
 for f in "${FREERTOS_DEMO_ELF}" "${ARM_KERNEL_IMAGE}" "${ARM_INITRD_IMAGE}" \
-         "${ARM_DEBIAN_DISK}" "${FREERTOS_SHOWCASE_DIR}/can-log-arm-linux" \
-         "${FREERTOS_SHOWCASE_DIR}/hello-arm-linux"; do
+         "${ARM_DEBIAN_DISK}" "${FREERTOS_SHOWCASE_DIR}/can-log-arm-linux"; do
     if [[ ! -f "$f" ]]; then
         MISSING+="  MISSING: ${f}\n"
     fi
@@ -193,8 +192,11 @@ auto_login_and_run() {
 auto_login_and_run "${SESSION}:0.6" \
     "mount /mnt/pingpong" \
     "ip link set can0 type can bitrate 500000 2>/dev/null; ip link set can0 up 2>/dev/null" \
-    "cp /mnt/pingpong/freertos-showcase/can-log-arm-linux /tmp/ && /tmp/can-log-arm-linux &" \
-    "/mnt/pingpong/freertos-showcase/hello-arm-linux" &
+    "cp /mnt/pingpong/freertos-showcase/can-log-arm-linux /tmp/ && /tmp/can-log-arm-linux &" &
+
+# Note: syslog-arm-linux is intentionally not launched here — the CAN E2E
+# harness focuses on CAN forwarding. The ivshmem HELLO/ACK channel is
+# tested by the freertos-harness and debian-harness.
 
 # ---- Monitor loop ----
 _info "Sending CAN frame: ${CAN_VCAN_IF} ${CAN_TEST_ID}#${CAN_TEST_DATA}"
