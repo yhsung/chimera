@@ -129,6 +129,7 @@ clean:
 check: test_can_decode test_shell_parse
 	./test_can_decode
 	./test_shell_parse
+	./test-syslog-format.sh
 
 test_can_decode: test_can_decode.c can_proto.h
 	cc -O2 -Wall -o $@ test_can_decode.c

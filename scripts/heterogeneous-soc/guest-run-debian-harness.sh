@@ -286,15 +286,16 @@ tmux send-keys -t "${SESSION}:0.6" \
 
 auto_login_and_run() {
     local pane="$1"
-    local hello_bin="$2"
-    local label="$3"
+    local bootlog_cmd="$2"
+    local hello_bin="$3"
+    local label="$4"
     local timeout=300
     local elapsed=0
 
-    # Write PCI-enable + hello_bin to a short-named script in the 9p share dir
-    # so the guest only needs to receive a ~22-char path.  Long tmux send-keys
-    # strings (50+ chars for binary paths, 110+ chars for the PCI one-liner)
-    # drop characters on the slow RISCV UART emulation.
+    # Write PCI-enable, bootlog command, and hello binary to a short-named script
+    # in the 9p share dir so the guest only needs to receive a ~22-char path.
+    # Long tmux send-keys strings (50+ chars for binary paths, 110+ chars for the
+    # PCI one-liner) drop characters on the slow RISCV UART emulation.
     local pane_idx="${pane##*.}"
     {
         printf '#!/bin/sh\n'
@@ -302,6 +303,7 @@ auto_login_and_run() {
         printf 'for v in /sys/bus/pci/devices/*/vendor; do\n'
         printf '    [ "$(cat "$v" 2>/dev/null)" = "0x1af4" ] && echo 1 > "$(dirname "$v")/enable" 2>/dev/null || true\n'
         printf 'done\n'
+        printf '%s\n' "${bootlog_cmd}"
         printf '%s\n' "${hello_bin}"
     } > "${PINGPONG_DIR}/r${pane_idx}.sh"
 
@@ -330,12 +332,19 @@ auto_login_and_run() {
     return 1
 }
 
-auto_login_and_run "${SESSION}:0.4" "/mnt/pingpong/freertos-showcase/hello-arm-linux"   "ARM"   &
+auto_login_and_run "${SESSION}:0.4" \
+    "/mnt/pingpong/freertos-showcase/bootlog-arm-linux &" \
+    "/mnt/pingpong/freertos-showcase/hello-arm-linux" \
+    "ARM" &
 PID_ARM=$!
-auto_login_and_run "${SESSION}:0.5" "/mnt/pingpong/freertos-showcase/hello-riscv-linux" "RISCV" &
+auto_login_and_run "${SESSION}:0.5" \
+    "/mnt/pingpong/freertos-showcase/bootlog-riscv-linux &" \
+    "/mnt/pingpong/freertos-showcase/hello-riscv-linux" \
+    "RISCV" &
 PID_RISCV=$!
 # MIPS: copy hello binary to local /tmp to avoid 9p exec issues
 auto_login_and_run "${SESSION}:0.6" \
+    "cp /mnt/pingpong/freertos-showcase/bootlog-mips-linux /tmp/ && /tmp/bootlog-mips-linux &" \
     "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/ && /tmp/hello-mips-linux" \
     "MIPS" &
 PID_MIPS=$!
@@ -376,6 +385,23 @@ while (( elapsed < HARNESS_TIMEOUT )); do
         echo "=== Matching FreeRTOS output ==="
         echo "${pane_content}" | grep -E "received hello|flag=1|\[diag\]" | tail -20
         echo "${pane_content}" > "${FREERTOS_LOG}"
+
+        echo ""
+        echo "[debian-harness] Verifying boot-log collector output..."
+        # Give the collector time to harvest after the pass signal.
+        sleep 5
+
+        # Check boot-log files via SSH into ARM guest.
+        BOOT_LOG_CHECK=$(timeout 10 ssh -p ${ARM_SSH_PORT} \
+            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            root@localhost 'ls -la /var/log/chimera-log/boot-log/ 2>/dev/null || echo "DIR_NOT_FOUND"' 2>/dev/null || echo "SSH_FAILED")
+
+        if echo "${BOOT_LOG_CHECK}" | grep -q "guest-arm"; then
+            _ok "Boot-log collector wrote guest-arm.log"
+        else
+            _warn "Boot-log files not found in /var/log/chimera-log/boot-log/ — collector may not have run"
+            _warn "SSH/collector response: ${BOOT_LOG_CHECK}"
+        fi
 
         # Wait for background auto-login tasks to finish.
         wait ${PID_ARM}  2>/dev/null || true

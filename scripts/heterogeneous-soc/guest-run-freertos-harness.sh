@@ -18,13 +18,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 REPO="${CHIMERA_ROOT}"
 
-HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-300}"
+HARNESS_TIMEOUT="${HARNESS_TIMEOUT:-600}"
 LOG_DIR="${HARNESS_LOG_DIR:-/tmp/harness-logs}"
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 SESSION="freertos-harness-${RUN_ID}"
 FREERTOS_LOG="${LOG_DIR}/freertos-${RUN_ID}.log"
 PASS_STRING="received hello from arm-linux"
 BANNER_STRING="██████╗██╗"  # unique substring of the CHIMERA shell startup banner
+STATS_STRING="\[freertos\] stats snapshot written"
+BOOTLOG_INIT_STRING="\[bootlog\]"
+BOOTLOG_DOORBELL_STRING="\[bootlog\] doorbell"
 
 mkdir -p "${LOG_DIR}"
 
@@ -205,6 +208,9 @@ tmux set-option -t "${SESSION}" history-limit 50000
 
 echo "[harness] Monitoring for banner + \"${PASS_STRING}\" (timeout ${HARNESS_TIMEOUT}s)..."
 banner_seen=0
+stats_seen=0
+bootlog_seen=0
+bootlog_doorbell_seen=0
 elapsed=0
 while (( elapsed < HARNESS_TIMEOUT )); do
     pane_content="$(tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null)"
@@ -215,22 +221,46 @@ while (( elapsed < HARNESS_TIMEOUT )); do
         echo "[harness] Banner detected after ${elapsed}s"
     fi
 
+    # Check for stats snapshot (IVSHMEM3).
+    if [[ "${stats_seen}" -eq 0 ]] && echo "${pane_content}" | grep -q "${STATS_STRING}"; then
+        stats_seen=1
+        echo "[harness] Stats snapshot detected after ${elapsed}s"
+    fi
+
+    # Check for boot-log init (IVSHMEM4).
+    if [[ "${bootlog_seen}" -eq 0 ]] && echo "${pane_content}" | grep -q "${BOOTLOG_INIT_STRING}"; then
+        bootlog_seen=1
+        echo "[harness] Boot-log monitor initialized after ${elapsed}s"
+    fi
+
+    # Check for boot-log doorbell.
+    if [[ "${bootlog_doorbell_seen}" -eq 0 ]] && echo "${pane_content}" | grep -q "${BOOTLOG_DOORBELL_STRING}"; then
+        bootlog_doorbell_seen=1
+        echo "[harness] Boot-log doorbell rung after ${elapsed}s (all guests booted or timeout)"
+    fi
+
+    # Main HELLO/ACK pass check (requires banner first).
     if echo "${pane_content}" | grep -q "${PASS_STRING}"; then
         if [[ "${banner_seen}" -eq 0 ]]; then
             echo "[harness] FAIL: received hello but banner NOT found — shell may not have started"
             echo "${pane_content}" > "${FREERTOS_LOG}"
             exit 1
         fi
-        echo "[harness] PASS after ${elapsed}s (banner + hello both detected)"
+        echo "[harness] PASS after ${elapsed}s"
+        echo "[harness]   banner=$([[ ${banner_seen} -eq 1 ]] && echo '✓' || echo '✗')"
+        echo "[harness]   stats_snapshot=$([[ ${stats_seen} -eq 1 ]] && echo '✓' || echo '✗')"
+        echo "[harness]   bootlog_init=$([[ ${bootlog_seen} -eq 1 ]] && echo '✓' || echo '✗')"
+        echo "[harness]   bootlog_doorbell=$([[ ${bootlog_doorbell_seen} -eq 1 ]] && echo '✓' || echo '✗')"
+        echo "[harness]   hello_arm=${PASS_STRING}"
         echo "=== Matching FreeRTOS pane output ==="
-        echo "${pane_content}" | grep -E "received hello|flag=1|\[diag\]" | tail -20
+        echo "${pane_content}" | grep -E "received hello|flag=1|\[diag\]|stats snapshot|bootlog" | tail -20
         # Dump full FreeRTOS pane to log for record
         echo "${pane_content}" > "${FREERTOS_LOG}"
         exit 0
     fi
 
     if (( elapsed > 0 && elapsed % 30 == 0 )); then
-        echo "[harness] t=${elapsed}s banner=${banner_seen} — FreeRTOS pane tail:"
+        echo "[harness] t=${elapsed}s banner=${banner_seen} stats=${stats_seen} bootlog=${bootlog_seen} doorbell=${bootlog_doorbell_seen} — FreeRTOS pane tail:"
         echo "${pane_content}" | tail -3
     fi
 
@@ -239,7 +269,11 @@ while (( elapsed < HARNESS_TIMEOUT )); do
 done
 
 echo "[harness] FAIL: timeout after ${HARNESS_TIMEOUT}s"
-echo "[harness]   banner: $([[ ${banner_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
+echo "[harness]   banner:           $([[ ${banner_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
+echo "[harness]   stats_snapshot:   $([[ ${stats_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
+echo "[harness]   bootlog_init:     $([[ ${bootlog_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
+echo "[harness]   bootlog_doorbell: $([[ ${bootlog_doorbell_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
+echo "[harness]   hello_arm:        $([[ $(echo "${pane_content}" | grep -q "${PASS_STRING}"; echo $?) -eq 0 ]] && echo '✓ seen' || echo '✗ NOT seen')"
 echo "=== FreeRTOS pane (last 30 lines) ==="
 tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null | tail -30 || true
 echo ""

@@ -100,6 +100,8 @@ Launches the FreeRTOS firmware plus ivshmem servers (ARM, RISCV, MIPS, stats, bo
 1. **CHIMERA banner** — `██████╗██╗` appears in FreeRTOS UART (proves `shell_init()` ran)
 2. **Hello handshake** — `received hello from arm-linux` appears (proves IVSHMEM link works)
 
+The harness also tracks (non-fatal) whether `[freertos] stats snapshot written` and `[bootlog]` lines appear, reported in the PASS/FAIL summary.
+
 **Quick run:**
 ```bash
 limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-freertos-harness.sh
@@ -119,6 +121,51 @@ Stage 1 installs prerequisites; Stage 2 fetches Debian kernel .debs, creates qco
 **Pass condition:** FreeRTOS UART contains `received hello from arm-linux`, `… riscv-linux`, and `… mips-linux`.
 
 **Environment overrides:**  `HARNESS_TIMEOUT` (default 600), `SKIP_PREREQS`, `SKIP_ROOTFS`, `SKIP_FETCH`, `SKIP_BUILD`.
+
+### `guest-run-freertos-shell-harness.sh` (lightweight, ~10 s)
+
+Launches FreeRTOS QEMU with all mandatory ivshmem servers (no Linux
+guests) and verifies the firmware boots, UART works, and the shell
+initialises by monitoring the autonomous serial output.
+
+**Pass conditions** (all must be met):
+1. **CHIMERA banner** — `██████╗██╗` appears (proves `shell_init()` ran)
+2. **Shell prompt** — `chimera>` appears (proves shell task is running)
+3. **Showcase task** — `showcase task started` appears (proves main loop runs)
+4. **CAN init** — `CAN controller enabled` appears (proves CAN driver init)
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-freertos-shell-harness.sh
+```
+
+**Environment overrides:** `SHELL_HARNESS_TIMEOUT` (default 60).
+
+### `guest-run-can-e2e-harness.sh` (full-stack, ~1 min)
+
+End-to-end CAN verification: launches FreeRTOS + ARM Linux (2-pane tmux,
+all 6 ivshmem servers backgrounded) with CAN passthrough, sends a CAN
+frame from Lima's `vcan0`, and verifies:
+1. FreeRTOS decodes the frame (`CAN RX:` in FreeRTOS UART)
+2. ARM `can-log-arm-linux` daemon logs `CAN/freertos` in
+   `/var/log/chimera-log/can-bus.log` (proves IVSHMEM5 forwarding)
+3. ARM daemon logs `CAN/socketcan` in the same file (proves the
+   `kvaser_pci` → `can0` path)
+
+Conditions 2 and 3 are checked by `tail -F`-ing `can-bus.log` into the
+ARM pane (no SSH/netdev — `can-log-arm-linux` writes those lines only to
+the log file, never to stdout) and grepping the captured pane.
+
+Requires all showcase build artifacts (FreeRTOS ELF, ARM kernel/initrd,
+ARM Debian qcow2, `can-log-arm-linux`). Exit 0 only when all three
+conditions are met.
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-can-e2e-harness.sh
+```
+
+**Environment overrides:** `CAN_E2E_TIMEOUT` (default 180), `CAN_TEST_ID` (default `123`), `CAN_TEST_DATA` (default `DEADBEEF`).
 
 ### Harness implementation notes
 
