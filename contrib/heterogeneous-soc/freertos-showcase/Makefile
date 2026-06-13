@@ -111,22 +111,27 @@ boot-collector: boot_collector.c bootlog_proto.h
 	$(CC_ARM) $(CFLAGS_LINUX) -o $@ boot_collector.c
 
 freertos-r52-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c can_driver.c \
+		uart_driver.c shell.c \
 		freertos_ivshmem_flat.h freertos_libc.c startup.S linker.ld FreeRTOSConfig.h \
 		hello_proto.h stats_proto.h bootlog_proto.h boot_log.h \
-		can_driver.h can_proto.h $(FREERTOS_SRCS)
+		can_driver.h can_proto.h uart_driver.h shell.h shell_parse.h $(FREERTOS_SRCS)
 	$(CC_BARE) $(CFLAGS_BARE) \
 	  -I. \
 	  -I$(FREERTOS_KERNEL_DIR)/include \
 	  -I$(FREERTOS_PORT_DIR) \
-	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c can_driver.c freertos_libc.c \
+	  startup.S freertos_main.c freertos_ivshmem_flat.c boot_log.c can_driver.c uart_driver.c shell.c freertos_libc.c \
 	  $(FREERTOS_SRCS) \
 	  $(LDFLAGS_BARE) -o $@
 
 clean:
-	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf test_can_decode
+	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf test_can_decode test_shell_parse
 
-check: test_can_decode
+check: test_can_decode test_shell_parse
 	./test_can_decode
+	./test_shell_parse
 
 test_can_decode: test_can_decode.c can_proto.h
 	cc -O2 -Wall -o $@ test_can_decode.c
+
+test_shell_parse: test_shell_parse.c shell_parse.h
+	cc -O2 -Wall -o $@ test_shell_parse.c

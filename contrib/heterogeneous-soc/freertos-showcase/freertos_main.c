@@ -8,6 +8,8 @@
 #include "bootlog_proto.h"
 #include "boot_log.h"
 #include "can_driver.h"
+#include "uart_driver.h"
+#include "shell.h"
 
 /* Minimum log severity for output. Messages below this level are suppressed.
  * Override at build time with -DFREERTOS_LOG_LEVEL=HSOC_LOG_VERBOSE etc. */
@@ -15,10 +17,13 @@
 #define FREERTOS_LOG_LEVEL HSOC_LOG_INFO
 #endif
 
+/* Runtime-adjustable copy of the initial log level, settable via the
+ * shell's `loglevel` command. */
+volatile uint32_t g_freertos_log_level = FREERTOS_LOG_LEVEL;
+
+/* Used by the startup-diagnostics block in showcase_task(); PL011 register
+ * offsets (no longer needed here) moved to uart_driver.c. */
 #define UART0_BASE 0x10000000UL
-#define PL011_DR   0x00    /* data register */
-#define PL011_FR   0x18    /* flag register */
-#define PL011_FR_TXFF 0x20 /* transmit FIFO full */
 
 #define IVSHMEM0_MMIO 0x30000000UL
 #define IVSHMEM0_SHMEM 0x31000000UL
@@ -51,17 +56,8 @@ static TickType_t arm_last_hello_ticks;
 static TickType_t riscv_last_hello_ticks;
 static TickType_t mips_last_hello_ticks;
 static struct bootlog_monitor bootlog;
-
-static void uart_putc(char ch)
-{
-    volatile uint32_t *dr = (volatile uint32_t *)(UART0_BASE + PL011_DR);
-    volatile uint32_t *fr = (volatile uint32_t *)(UART0_BASE + PL011_FR);
-
-    while ((*fr & PL011_FR_TXFF) != 0) {
-    }
-
-    *dr = (uint32_t)(uint8_t)ch;
-}
+static struct chimera_shell_ctx g_shell_ctx;
+static TaskHandle_t g_showcase_task_handle;
 
 static char *utoa_dec(char *buf, uint32_t val)
 {
@@ -98,7 +94,7 @@ void log_uart(uint32_t level, const char *msg)
     const char *tag;
 
     /* Suppress messages below the configured log level */
-    if (level < FREERTOS_LOG_LEVEL) {
+    if (level < g_freertos_log_level) {
         return;
     }
 
@@ -328,6 +324,8 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem2: SPI35 dispatched\n");
         freertos_ivshmem_isr(&mips_link, &mips_count, &mips_cpu_pct, &mips_mem_pct,
                               &mips_last_hello_ticks, (1U << 16) | 0U);
+    } else if (intid == R52_UART_INTID) {
+        uart_rx_isr();
     } else {
         log_uart(HSOC_LOG_WARN, "[irq] unexpected intid=");
         log_hex32_uart(HSOC_LOG_WARN, intid);
@@ -356,6 +354,31 @@ static void showcase_task(void *opaque)
     gic_enable_ivshmem_spi(R52_IVSHMEM0_INTID);
     gic_enable_ivshmem_spi(R52_IVSHMEM1_INTID);
     gic_enable_ivshmem_spi(R52_IVSHMEM2_INTID);
+
+    g_shell_ctx.guests[0].name = "arm-linux";
+    g_shell_ctx.guests[0].link = &arm_link;
+    g_shell_ctx.guests[0].hello_count = &arm_count;
+    g_shell_ctx.guests[0].cpu_pct_x100 = &arm_cpu_pct;
+    g_shell_ctx.guests[0].mem_pct_x100 = &arm_mem_pct;
+    g_shell_ctx.guests[0].last_hello_ticks = &arm_last_hello_ticks;
+
+    g_shell_ctx.guests[1].name = "riscv-linux";
+    g_shell_ctx.guests[1].link = &riscv_link;
+    g_shell_ctx.guests[1].hello_count = &riscv_count;
+    g_shell_ctx.guests[1].cpu_pct_x100 = &riscv_cpu_pct;
+    g_shell_ctx.guests[1].mem_pct_x100 = &riscv_mem_pct;
+    g_shell_ctx.guests[1].last_hello_ticks = &riscv_last_hello_ticks;
+
+    g_shell_ctx.guests[2].name = "mips-linux";
+    g_shell_ctx.guests[2].link = &mips_link;
+    g_shell_ctx.guests[2].hello_count = &mips_count;
+    g_shell_ctx.guests[2].cpu_pct_x100 = &mips_cpu_pct;
+    g_shell_ctx.guests[2].mem_pct_x100 = &mips_mem_pct;
+    g_shell_ctx.guests[2].last_hello_ticks = &mips_last_hello_ticks;
+
+    g_shell_ctx.showcase_task_handle = g_showcase_task_handle;
+
+    shell_init(&g_shell_ctx);
 
     log_uart(HSOC_LOG_INFO, "[freertos] showcase task started\n");
 
@@ -507,7 +530,7 @@ int main(void)
 
     log_uart(HSOC_LOG_INFO, "[freertos] booting demo firmware\n");
     rc = xTaskCreate(showcase_task, "showcase", 2048, 0,
-                     tskIDLE_PRIORITY + 1, 0);
+                     tskIDLE_PRIORITY + 1, &g_showcase_task_handle);
     if (rc != pdPASS) {
         log_uart(HSOC_LOG_ERROR, "[freertos] failed to create showcase task\n");
         return 1;
