@@ -185,7 +185,7 @@ static bool doorbell_available = false;
 /*
  * Wait for ACK from FreeRTOS using hybrid interrupt + poll strategy:
  *   1. If UIO is available (uio_fd >= 0): ppoll(fd, 200ms) for doorbell IRQ
- *   2. On timeout or if UIO is absent: busy-wait on flag directly
+ *   2. On timeout or if UIO is absent: poll flag directly, bounded to 200ms
  *   3. Read the ACK message from shared memory
  */
 static void hybrid_wait_ack(struct hsoc_layout *shm,
@@ -204,10 +204,20 @@ static void hybrid_wait_ack(struct hsoc_layout *shm,
             /* Fallback path: IRQ missed or timed out, poll flag directly */
         }
     } else {
-        /* No UIO available (RISCV/MIPS build or binding failed): busy-wait */
+        /* No usable UIO interrupt: poll the flag directly, bounded by the
+         * same budget as the IRQ path. Bounding this matters: doorbell_ring()
+         * was already called once for this seq, so if FreeRTOS's ISR truly
+         * never fires we must return and let main_loop()'s ACK-timeout/retry
+         * path re-send rather than spin here forever. */
+        struct timespec start, now;
+        clock_gettime(CLOCK_MONOTONIC, &start);
         while (1) {
             __sync_synchronize();
             if (shm->freertos_to_linux.flag == 1) break;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            long elapsed_ms = (now.tv_sec - start.tv_sec) * 1000 +
+                              (now.tv_nsec - start.tv_nsec) / 1000000;
+            if (elapsed_ms >= (long)UIO_TIMEOUT_MS) break;
         }
     }
 
@@ -259,7 +269,8 @@ static const char *find_ivshmem_resource(void)
         __sync_synchronize();
         munmap(p, 4096);
 
-        if (magic == HSOC_STATS_MAGIC || magic == HSOC_BOOTLOG_MAGIC) continue;
+        if (magic == HSOC_STATS_MAGIC || magic == HSOC_BOOTLOG_MAGIC || magic == CAN_IVSHMEM_MAGIC)
+            continue;
 
         strncpy(resource_path, candidate, sizeof(resource_path) - 1);
         resource_path[sizeof(resource_path) - 1] = '\0';
@@ -435,17 +446,35 @@ static int doorbell_init(void)
     }
 
     /* Bind to uio_pci_generic and open /dev/uio0 for interrupt receive —
-     * this is optional. RISCV/MIPS builds skip this (find_ivshmem_doorbell
-     * returns NULL above since those guests have no doorbell channel), so
-     * uio_fd stays -1 and the poll fallback is used. On ARM-Linux, retry a
-     * few times: the bind (driver_override + bind write, above) and udev's
-     * creation of /dev/uio0 are not synchronous with this call. */
+     * this is optional; on failure uio_fd stays -1 and the flag-poll
+     * fallback in hybrid_wait_ack() is used. Retry a few times: the bind
+     * (driver_override + bind write, above) and udev's creation of
+     * /dev/uio0 are not synchronous with this call. */
     if (!getenv("IVSHMEM_NO_UIO")) {
         bind_uio_pci_generic(bdf);
         for (int attempt = 0; attempt < 10 && uio_fd < 0; attempt++) {
             uio_fd = open("/dev/uio0", O_RDWR);
             if (uio_fd >= 0) break;
             usleep(100000); /* 100ms */
+        }
+
+        /* uio_pci_generic only supports legacy INTx, but ivshmem-doorbell
+         * is MSI-X-only (PCI_INTERRUPT_PIN=0), so the kernel assigns
+         * irq=0 ("No IRQ assigned to device") and every read()/poll() on
+         * /dev/uio0 fails with -EIO. Cast to the u16 __poll_t, -EIO
+         * (0xFFFB) has the POLLIN bit set, so poll() in hybrid_wait_ack()
+         * would return immediately with POLLIN forever — turning the
+         * intended 200ms IRQ wait into an unthrottled non-blocking spin.
+         * Detect that up front and use the flag-poll fallback instead. */
+        if (uio_fd >= 0) {
+            char irq_path[PATH_MAX], irq_val[16];
+            if (snprintf(irq_path, sizeof(irq_path),
+                         "/sys/bus/pci/devices/%s/irq", bdf) < (int)sizeof(irq_path) &&
+                read_first_line(irq_path, irq_val, sizeof(irq_val)) &&
+                strcmp(irq_val, "0") == 0) {
+                close(uio_fd);
+                uio_fd = -1;
+            }
         }
     }
 
