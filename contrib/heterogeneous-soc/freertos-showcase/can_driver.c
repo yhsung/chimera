@@ -142,3 +142,9 @@ void can_rx_isr(void)
     can_ivshmem->generation = can_ivshmem->generation + 1;
     __sync_synchronize();
 }
+
+void can_get_status(struct can_status *out)
+{
+    out->sr = can_rd(CAN_REG_SR);
+    out->rx_frames = can_ivshmem->generation;
+}
