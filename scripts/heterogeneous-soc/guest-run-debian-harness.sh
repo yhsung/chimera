@@ -58,10 +58,12 @@ cleanup() {
     pkill -f "qemu-system-aarch64.*arm-phase5"           2>/dev/null || true
     pkill -f "qemu-system-riscv64.*riscv-phase5"         2>/dev/null || true
     pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
-    pkill -f "ivshmem-server"                            2>/dev/null || true
+    pkill ivshmem-server 2>/dev/null || true
     rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" \
           "${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
-          "${IVSHMEM_MIPS_FREERTOS_SOCKET}" 2>/dev/null || true
+          "${IVSHMEM_MIPS_FREERTOS_SOCKET}" \
+          "${IVSHMEM_STATS_FREERTOS_SOCKET}" \
+          "${IVSHMEM_BOOTLOG_SOCKET}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -75,7 +77,9 @@ pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5
 rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" \
       "${IVSHMEM_RISCV_FREERTOS_SOCKET}" \
-      "${IVSHMEM_MIPS_FREERTOS_SOCKET}" 2>/dev/null || true
+      "${IVSHMEM_MIPS_FREERTOS_SOCKET}" \
+      "${IVSHMEM_STATS_FREERTOS_SOCKET}" \
+      "${IVSHMEM_BOOTLOG_SOCKET}" 2>/dev/null || true
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Stage 1: Install prerequisites
@@ -199,10 +203,22 @@ tmux split-window -h -t "${SESSION}:0.3"
 tmux split-window -h -t "${SESSION}:0.1"
 tmux split-window -h -t "${SESSION}:0.5"
 
+# Keep panes alive even when their process exits; without this, a crash in
+# any pane destroys the pane and renumbers the rest, breaking the pane-index
+# assumptions used by send-keys and auto_login_and_run below.
+tmux set-option -t "${SESSION}" remain-on-exit on
+
 BUILD_DIR="${BUILD_DIR:-/home/yhsung.guest/chimera-build-linux}"
 PANE_ENV="export CHIMERA_ROOT='${CHIMERA_ROOT}'; export BUILD_DIR='${BUILD_DIR}'; export FREERTOS_DEMO_ELF='${FREERTOS_DEMO_ELF}';"
 
 # ── 2f. Start ivshmem servers ────────────────────────────────────────────────
+
+# ivshmem-server requires the parent directory to exist; the wrapper scripts
+# in guest-start-ivshmem-server-*.sh handle this, but here we launch the
+# binary directly, so create them ourselves.
+mkdir -p "${IVSHMEM_ARM_FREERTOS_DIR}" "${IVSHMEM_RISCV_FREERTOS_DIR}" \
+         "${IVSHMEM_MIPS_FREERTOS_DIR}" "${IVSHMEM_STATS_FREERTOS_DIR}" \
+         "${IVSHMEM_BOOTLOG_DIR}"
 
 IVSHMEM_BIN="$(find_ivshmem_server)"
 echo "[debian-harness] Starting ivshmem servers..."
@@ -217,19 +233,31 @@ tmux send-keys -t "${SESSION}:0.1" \
 tmux send-keys -t "${SESSION}:0.2" \
     "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_MIPS_FREERTOS_SOCKET}\" -M ivshmem-mips-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 
-# Wait for all three sockets.
+# The stats and bootlog servers run outside tmux (backgrounded) so we don't
+# need dedicated panes for them.  guest-run-r52-freertos-phase5.sh's QEMU
+# invocation requires both sockets.
+"${IVSHMEM_BIN}" -F -M ivshmem-stats-ft -S "${IVSHMEM_STATS_FREERTOS_SOCKET}" \
+    -l "${IVSHMEM_SIZE}" -n "${IVSHMEM_VECTORS}" &
+"${IVSHMEM_BIN}" -F -M ivshmem-bootlog -S "${IVSHMEM_BOOTLOG_SOCKET}" \
+    -l "${IVSHMEM_BOOTLOG_SIZE}" -n "${IVSHMEM_BOOTLOG_VECTORS}" -v &
+
+# Wait for all five sockets to exist and be listening.
 for _i in $(seq 1 60); do
     if [[ -S "${IVSHMEM_ARM_FREERTOS_SOCKET}"  ]] && \
        ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_ARM_FREERTOS_SOCKET}" && \
        [[ -S "${IVSHMEM_RISCV_FREERTOS_SOCKET}" ]] && \
        ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_RISCV_FREERTOS_SOCKET}" && \
        [[ -S "${IVSHMEM_MIPS_FREERTOS_SOCKET}"  ]] && \
-       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_MIPS_FREERTOS_SOCKET}"; then
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_MIPS_FREERTOS_SOCKET}" && \
+       [[ -S "${IVSHMEM_STATS_FREERTOS_SOCKET}" ]] && \
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_STATS_FREERTOS_SOCKET}" && \
+       [[ -S "${IVSHMEM_BOOTLOG_SOCKET}"        ]] && \
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_BOOTLOG_SOCKET}"; then
         break
     fi
     sleep 0.5
 done
-_ok "All three ivshmem servers listening"
+_ok "All five ivshmem servers listening"
 
 # ── 2g. Launch FreeRTOS QEMU ─────────────────────────────────────────────────
 
