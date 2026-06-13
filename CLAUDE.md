@@ -167,6 +167,59 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run
 
 **Environment overrides:** `CAN_E2E_TIMEOUT` (default 180), `CAN_TEST_ID` (default `123`), `CAN_TEST_DATA` (default `DEADBEEF`).
 
+### `guest-run-riscv-hello-harness.sh` (full-stack, ~1-2 min)
+
+End-to-end RISCV-Linux ↔ FreeRTOS HELLO/ACK verification over IVSHMEM1:
+launches FreeRTOS (3 mandatory ivshmem channels: ARM/RISCV/MIPS) and a
+RISC-V Linux guest running `syslog-riscv-linux` with
+`SYSLOG_INTERVAL_SEC=1` for fast round trips. Verifies:
+1. FreeRTOS boots and the IVSHMEM1 IRQ path is initialised
+   (`showcase task started`)
+2. RISCV-Linux completes >=5 HELLO/ACK round trips
+   (`[riscv-linux] ACK`)
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-riscv-hello-harness.sh
+```
+
+**Environment overrides:** `RISCV_HELLO_TIMEOUT` (default 240).
+
+### `guest-run-stats-e2e-harness.sh` (full-stack, ~1-2 min)
+
+End-to-end ARM-side consumption of the stats snapshot channel (IVSHMEM3):
+launches FreeRTOS (3 mandatory ivshmem channels + stats) and an ARM Linux
+guest running `linux-arm-stats`. Verifies:
+1. FreeRTOS publishes the stats magic (`showcase task started`)
+2. `linux-arm-stats` finds the BAR2 via sysfs (`[stats] logging to ...`)
+3. A generation change is logged (`[stats] gen=<N> logged`, N>=1)
+4. `chimera-cross-domain.log` gets a correctly-formatted snapshot line
+   (`gen=<N> arm=...`)
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-stats-e2e-harness.sh
+```
+
+**Environment overrides:** `STATS_E2E_TIMEOUT` (default 240).
+
+### `guest-run-shell-e2e-harness.sh` (lightweight, ~15 s)
+
+FreeRTOS-only interactive shell test: launches FreeRTOS with the 3
+mandatory ivshmem channels plus the CAN ivshmem channel (`canft`, no
+`canbus` object — makes `can status`'s `rx_frames` deterministic), then
+drives all 6 shell commands (`help`, `stats`, `sysinfo`, `links`,
+`loglevel`, `can status`) plus one unrecognized command over real UART RX
+via `tmux send-keys`, checking each command's output against
+`README.md`'s "Interactive Shell" table.
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-shell-e2e-harness.sh
+```
+
+**Environment overrides:** `SHELL_E2E_TIMEOUT` (default 60).
+
 ### Harness implementation notes
 
 - **`remain-on-exit on`** must be set on the tmux session.  Without it, a QEMU crash destroys its pane and tmux renumbers the remaining panes, breaking all `send-keys -t 0.N` targets.
