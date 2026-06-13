@@ -76,10 +76,14 @@ sudo ip link set "${CAN_VCAN_IF}" up
 sudo setcap cap_net_raw+eip "${ARM_QEMU}" 2>/dev/null || true
 sudo setcap cap_net_raw+eip "${FREERTOS_QEMU}" 2>/dev/null || true
 
-# ---- tmux session ----
+# ---- tmux session (simple 2-pane layout) ----
+#   pane 0.0: FreeRTOS QEMU
+#   pane 0.1: ARM Linux QEMU
+# ivshmem servers run in background (not in tmux panes)
 tmux new-session -d -s "${SESSION}" -x 220 -y 55
 tmux set-option -t "${SESSION}" history-limit 50000
 tmux set-option -t "${SESSION}" remain-on-exit on
+tmux split-window -v -t "${SESSION}:0.0" -l 50%
 
 # ivshmem servers (background)
 IVSHMEM_BIN="$(find_ivshmem_server)"
@@ -112,7 +116,7 @@ _info "All 6 ivshmem servers ready"
 
 # ---- FreeRTOS QEMU (pane 0.5) ----
 _info "Starting FreeRTOS QEMU..."
-tmux send-keys -t "${SESSION}:0.5" \
+tmux send-keys -t "${SESSION}:0.0" \
     "exec '${FREERTOS_QEMU}' \
     -machine 'chimera-r52-freertos-demo,ivshmem-arm-freertos=armft,ivshmem-riscv-freertos=riscvft,ivshmem-mips-freertos=mipsft,ivshmem-stats-freertos=statsft,ivshmem-bootlog-freertos=bootft,canbus=canbus0,ivshmem-can-freertos=canft' \
     -chardev socket,id=armft,path='${IVSHMEM_ARM_FREERTOS_SOCKET}' \
@@ -127,9 +131,9 @@ tmux send-keys -t "${SESSION}:0.5" \
     -nographic" Enter
 sleep 3
 
-# ---- ARM Linux QEMU (pane 0.6) ----
+# ---- ARM Linux QEMU (pane 0.1) ----
 _info "Starting ARM Linux QEMU with CAN..."
-tmux send-keys -t "${SESSION}:0.6" \
+tmux send-keys -t "${SESSION}:0.1" \
     "exec '${ARM_QEMU}' \
     -machine virt,gic-version=3 \
     -cpu cortex-a53 -m 512M -smp 2 \
@@ -189,7 +193,7 @@ auto_login_and_run() {
     return 1
 }
 
-auto_login_and_run "${SESSION}:0.6" \
+auto_login_and_run "${SESSION}:0.1" \
     "mount /mnt/pingpong" \
     "ip link set can0 type can bitrate 500000 2>/dev/null; ip link set can0 up 2>/dev/null" \
     "cp /mnt/pingpong/freertos-showcase/can-log-arm-linux /tmp/ && /tmp/can-log-arm-linux &" &
@@ -214,7 +218,7 @@ while (( elapsed < TIMEOUT )); do
 
     # Check FreeRTOS pane for CAN RX.
     if [[ "${FREERTOS_CAN_SEEN}" -eq 0 ]]; then
-        ft_content="$(tmux capture-pane -p -t "${SESSION}:0.5" -S -50000 2>/dev/null)"
+        ft_content="$(tmux capture-pane -p -t "${SESSION}:0.0" -S -50000 2>/dev/null)"
         if echo "${ft_content}" | grep -qi "CAN RX:"; then
             FREERTOS_CAN_SEEN=1
             _ok "FreeRTOS received and decoded CAN frame"
@@ -268,7 +272,7 @@ _fail "FAIL: timeout after ${TIMEOUT}s"
 if [[ "${FREERTOS_CAN_SEEN}" -eq 0 ]]; then
     _fail "  FreeRTOS CAN RX:   NOT SEEN"
     echo "  === FreeRTOS pane tail ==="
-    tmux capture-pane -p -t "${SESSION}:0.5" -S -50000 2>/dev/null | tail -20 || true
+    tmux capture-pane -p -t "${SESSION}:0.0" -S -50000 2>/dev/null | tail -20 || true
 fi
 if [[ "${CAN_LOG_SEEN_FREERTOS}" -eq 0 ]]; then
     _fail "  CAN/freertos:      NOT SEEN (IVSHMEM5 may be down)"
@@ -277,5 +281,5 @@ if [[ "${CAN_LOG_SEEN_SOCKETCAN}" -eq 0 ]]; then
     _fail "  CAN/socketcan:     NOT SEEN (kvaser_pci or can0 may be down)"
 fi
 echo "=== ARM Linux pane (last 20) ==="
-tmux capture-pane -p -t "${SESSION}:0.6" 2>/dev/null | tail -20 || true
+tmux capture-pane -p -t "${SESSION}:0.1" 2>/dev/null | tail -20 || true
 exit 1
