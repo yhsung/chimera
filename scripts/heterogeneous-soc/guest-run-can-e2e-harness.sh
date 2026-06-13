@@ -134,27 +134,7 @@ sleep 3
 # ---- ARM Linux QEMU (pane 0.1) ----
 _info "Starting ARM Linux QEMU with CAN..."
 tmux send-keys -t "${SESSION}:0.1" \
-    "exec '${ARM_QEMU}' \
-    -machine virt,gic-version=3 \
-    -cpu cortex-a53 -m 512M -smp 2 \
-    -bios '${ARM_UEFI_BIOS}' \
-    -kernel '${ARM_KERNEL_IMAGE}' \
-    -initrd '${ARM_INITRD_IMAGE}' \
-    -append 'console=ttyAMA0 root=/dev/vda rw' \
-    -chardev socket,id=ivshmem,path='${IVSHMEM_ARM_FREERTOS_SOCKET}' \
-    -device ivshmem-doorbell,chardev=ivshmem,vectors=${IVSHMEM_VECTORS} \
-    -chardev socket,id=ivshmem_boot,path='${IVSHMEM_BOOTLOG_SOCKET}' \
-    -device ivshmem-doorbell,chardev=ivshmem_boot,vectors=1 \
-    -chardev socket,id=ivshmem_can,path='${IVSHMEM_CAN_FREERTOS_SOCKET}' \
-    -device ivshmem-doorbell,chardev=ivshmem_can,vectors=${IVSHMEM_VECTORS} \
-    -object can-bus,id=canbus0 \
-    -object 'can-host-socketcan,id=ch0,if=${CAN_VCAN_IF},canbus=canbus0' \
-    -device kvaser_pci,canbus=canbus0 \
-    -drive file='${ARM_DEBIAN_DISK}',format=qcow2,if=virtio \
-    -virtfs local,path='${PINGPONG_DIR}',mount_tag=pingpong,security_model=none,id=pingpong \
-    -netdev user,id=eth0,hostfwd=tcp::${ARM_SSH_PORT}-:22 \
-    -device virtio-net-pci,netdev=eth0 \
-    -nographic" Enter
+    "exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-arm-phase5.sh'" Enter
 
 # ---- Auto-login and launch CAN daemon ----
 auto_login_and_run() {
