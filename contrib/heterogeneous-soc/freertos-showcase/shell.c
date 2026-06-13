@@ -249,6 +249,14 @@ static void cmd_can(const struct chimera_shell_ctx *ctx, int argc, char *argv[])
     shell_print("\n");
 }
 
+static const char shell_banner[] =
+    " ██████╗██╗  ██╗██╗███╗   ███╗███████╗██████╗  █████╗ \n"
+    "██╔════╝██║  ██║██║████╗ ████║██╔════╝██╔══██╗██╔══██╗\n"
+    "██║     ███████║██║██╔████╔██║█████╗  ██████╔╝███████║\n"
+    "██║     ██╔══██║██║██║╚██╔╝██║██╔══╝  ██╔══██╗██╔══██║\n"
+    "╚██████╗██║  ██║██║██║ ╚═╝ ██║███████╗██║  ██║██║  ██║\n"
+    " ╚═════╝╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝\n";
+
 static void shell_dispatch(const struct chimera_shell_ctx *ctx, char *line)
 {
     char *argv[SHELL_MAX_ARGS];
@@ -278,6 +286,7 @@ static void shell_task(void *param)
     uint32_t len = 0;
     uint8_t last_term = 0;
 
+    shell_print(shell_banner);
     shell_print("\n" SHELL_PROMPT);
 
     for (;;) {

@@ -24,6 +24,7 @@ RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 SESSION="freertos-harness-${RUN_ID}"
 FREERTOS_LOG="${LOG_DIR}/freertos-${RUN_ID}.log"
 PASS_STRING="received hello from arm-linux"
+BANNER_STRING="██████╗██╗"  # unique substring of the CHIMERA shell startup banner
 
 mkdir -p "${LOG_DIR}"
 
@@ -33,9 +34,9 @@ cleanup() {
     pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
     pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
     pkill -f "qemu-system-riscv64.*run-riscv-phase5"     2>/dev/null || true
-    pkill -f "ivshmem-server.*arm-freertos\|ivshmem-server.*riscv-freertos\|ivshmem-server.*mips-freertos\|ivshmem-server.*stats" 2>/dev/null || true
+    pkill ivshmem-server 2>/dev/null || true
     pkill -f "qemu-system-mips.*run-chimera" 2>/dev/null || true
-    rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" "${IVSHMEM_STATS_FREERTOS_SOCKET}" 2>/dev/null || true
+    rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" "${IVSHMEM_STATS_FREERTOS_SOCKET}" "${IVSHMEM_BOOTLOG_SOCKET}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -45,7 +46,7 @@ pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
 pkill -f "qemu-system-aarch64.*run-arm-phase5"       2>/dev/null || true
 pkill -f "qemu-system-mips.*run-chimera"             2>/dev/null || true
 sleep 0.5
-rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" "${IVSHMEM_STATS_FREERTOS_SOCKET}" 2>/dev/null || true
+rm -f "${IVSHMEM_ARM_FREERTOS_SOCKET}" "${IVSHMEM_RISCV_FREERTOS_SOCKET}" "${IVSHMEM_MIPS_FREERTOS_SOCKET}" "${IVSHMEM_STATS_FREERTOS_SOCKET}" "${IVSHMEM_BOOTLOG_SOCKET}" 2>/dev/null || true
 
 # ── Build ────────────────────────────────────────────────────────────────────
 if [[ -z "${SKIP_BUILD:-}" ]]; then
@@ -75,6 +76,11 @@ tmux split-window -h -t "${SESSION}:0.2" -l 50%
 tmux split-window -h -t "${SESSION}:0.5" -l 67%
 tmux split-window -h -t "${SESSION}:0.6" -l 50%
 
+# Keep panes alive even when their process exits; without this, a crash in
+# any pane (e.g., FreeRTOS QEMU) destroys the pane and renumbers the rest,
+# breaking the layout assumptions below.
+tmux set-option -t "${SESSION}" remain-on-exit on
+
 # ── ivshmem servers ──────────────────────────────────────────────────────────
 # Prepend env setup to every pane command so scripts inherit the correct paths
 # even though tmux panes open a fresh login shell that may have a different
@@ -83,6 +89,13 @@ BUILD_DIR="${BUILD_DIR:-/home/yhsung.guest/chimera-build-linux}"
 # Explicitly set FREERTOS_DEMO_ELF so the pane command can't be overridden by the
 # Lima VM's ~/.bashrc which may have an old path from a previous build in ~/chimera-src.
 PANE_ENV="export CHIMERA_ROOT='${CHIMERA_ROOT}'; export BUILD_DIR='${BUILD_DIR}'; export FREERTOS_DEMO_ELF='${FREERTOS_DEMO_ELF}';"
+
+# ivshmem-server requires the parent directory to exist; the scripts in
+# guest-start-ivshmem-server-*.sh handle this, but here we launch the
+# binary directly, so create them ourselves.
+mkdir -p "${IVSHMEM_ARM_FREERTOS_DIR}" "${IVSHMEM_RISCV_FREERTOS_DIR}" \
+         "${IVSHMEM_MIPS_FREERTOS_DIR}" "${IVSHMEM_STATS_FREERTOS_DIR}" \
+         "${IVSHMEM_BOOTLOG_DIR}"
 
 IVSHMEM_BIN="$(find_ivshmem_server)"
 tmux send-keys -t "${SESSION}:0.0" \
@@ -94,7 +107,13 @@ tmux send-keys -t "${SESSION}:0.2" \
 tmux send-keys -t "${SESSION}:0.3" \
     "\"${IVSHMEM_BIN}\" -F -S \"${IVSHMEM_STATS_FREERTOS_SOCKET}\" -M ivshmem-stats-ft -l ${IVSHMEM_SIZE} -n ${IVSHMEM_VECTORS}" Enter
 
-# Wait for sockets to exist and be listening.
+# The bootlog server runs outside tmux (backgrounded) so we don't need a
+# dedicated pane for it.  guest-run-r52-freertos-phase5.sh's QEMU
+# invocation requires this socket.
+"${IVSHMEM_BIN}" -F -M ivshmem-bootlog -S "${IVSHMEM_BOOTLOG_SOCKET}" \
+    -l "${IVSHMEM_BOOTLOG_SIZE}" -n "${IVSHMEM_BOOTLOG_VECTORS}" -v &
+
+# Wait for all five sockets to exist and be listening.
 for _i in $(seq 1 60); do
     if [[ -S "${IVSHMEM_ARM_FREERTOS_SOCKET}"   ]] && \
        ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_ARM_FREERTOS_SOCKET}"   && \
@@ -103,7 +122,9 @@ for _i in $(seq 1 60); do
        [[ -S "${IVSHMEM_MIPS_FREERTOS_SOCKET}"  ]] && \
        ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_MIPS_FREERTOS_SOCKET}"  && \
        [[ -S "${IVSHMEM_STATS_FREERTOS_SOCKET}" ]] && \
-       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_STATS_FREERTOS_SOCKET}"; then
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_STATS_FREERTOS_SOCKET}" && \
+       [[ -S "${IVSHMEM_BOOTLOG_SOCKET}"        ]] && \
+       ss -xl 2>/dev/null | grep -Fq "${IVSHMEM_BOOTLOG_SOCKET}"; then
         break
     fi
     sleep 0.5
@@ -182,13 +203,25 @@ auto_login_and_run "${SESSION}:0.7" \
 # pipe-pane buffering issues).  Set a large scroll buffer so we see history.
 tmux set-option -t "${SESSION}" history-limit 50000
 
-echo "[harness] Monitoring for \"${PASS_STRING}\" (timeout ${HARNESS_TIMEOUT}s)..."
+echo "[harness] Monitoring for banner + \"${PASS_STRING}\" (timeout ${HARNESS_TIMEOUT}s)..."
+banner_seen=0
 elapsed=0
 while (( elapsed < HARNESS_TIMEOUT )); do
     pane_content="$(tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null)"
 
+    # Check for the CHIMERA startup banner (must appear before PASS).
+    if [[ "${banner_seen}" -eq 0 ]] && echo "${pane_content}" | grep -q "${BANNER_STRING}"; then
+        banner_seen=1
+        echo "[harness] Banner detected after ${elapsed}s"
+    fi
+
     if echo "${pane_content}" | grep -q "${PASS_STRING}"; then
-        echo "[harness] PASS after ${elapsed}s"
+        if [[ "${banner_seen}" -eq 0 ]]; then
+            echo "[harness] FAIL: received hello but banner NOT found — shell may not have started"
+            echo "${pane_content}" > "${FREERTOS_LOG}"
+            exit 1
+        fi
+        echo "[harness] PASS after ${elapsed}s (banner + hello both detected)"
         echo "=== Matching FreeRTOS pane output ==="
         echo "${pane_content}" | grep -E "received hello|flag=1|\[diag\]" | tail -20
         # Dump full FreeRTOS pane to log for record
@@ -197,7 +230,7 @@ while (( elapsed < HARNESS_TIMEOUT )); do
     fi
 
     if (( elapsed > 0 && elapsed % 30 == 0 )); then
-        echo "[harness] t=${elapsed}s — FreeRTOS pane tail:"
+        echo "[harness] t=${elapsed}s banner=${banner_seen} — FreeRTOS pane tail:"
         echo "${pane_content}" | tail -3
     fi
 
@@ -206,6 +239,7 @@ while (( elapsed < HARNESS_TIMEOUT )); do
 done
 
 echo "[harness] FAIL: timeout after ${HARNESS_TIMEOUT}s"
+echo "[harness]   banner: $([[ ${banner_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
 echo "=== FreeRTOS pane (last 30 lines) ==="
 tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null | tail -30 || true
 echo ""
