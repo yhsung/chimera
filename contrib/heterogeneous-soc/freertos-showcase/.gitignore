@@ -10,3 +10,4 @@ bootlog-riscv-linux
 bootlog-mips-linux
 boot-collector
 test_can_decode
+test_shell_parse

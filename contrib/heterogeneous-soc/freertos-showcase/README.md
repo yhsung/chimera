@@ -23,6 +23,11 @@ messages to a bare-metal Cortex-R52 FreeRTOS firmware over ivshmem shared memory
 | `freertos_ivshmem_flat.h` | `struct freertos_ivshmem_link`, MMIO register offsets (`INTMASK`/`INTSTATUS`/`IVPOSITION`/`DOORBELL`), function declarations |
 | `boot_log.c` | Boot-log monitor (`bootlog_init`, `bootlog_tick`, `bootlog_write`) — waits for collector peer ID from ARM, rings doorbell when all guests are booted, writes FreeRTOS UART output into its boot-log slot |
 | `boot_log.h` | `struct bootlog_monitor` and function declarations |
+| `uart_driver.c` | PL011 UART driver — `uart_putc()` (TX), `uart_init_rx()` / `uart_rx_isr()` (RX via GIC SPI32, feeds `uart_rx_queue`) |
+| `uart_driver.h` | `uart_rx_queue` (`QueueHandle_t`), `uart_putc()`/`uart_init_rx()`/`uart_rx_isr()` declarations, `R52_UART_INTID` |
+| `shell.c` | Interactive UART command shell — `shell_task` (line editing, tokenizing, dispatch), `help`/`stats`/`sysinfo`/`links`/`loglevel`/`can status` commands |
+| `shell.h` | `struct chimera_shell_ctx`/`struct chimera_shell_guest`, `shell_init()` declaration |
+| `shell_parse.h` | Freestanding-libc-safe parsing helpers: `shell_str_eq`, `shell_parse_uint`, `shell_tokenize` |
 | `freertos_libc.c` | Freestanding libc implementations: `memcpy`, `memmove`, `memset`, `memcmp`, `strcpy`, `strlen` |
 | `string.h` | libc string header (freestanding) |
 | `stdlib.h` | Minimal libc stdlib header (`EXIT_SUCCESS`/`EXIT_FAILURE`) |

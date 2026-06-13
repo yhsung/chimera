@@ -366,6 +366,38 @@ Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mou
 
 ---
 
+## Interactive Shell
+
+The FreeRTOS firmware exposes an interactive debug shell on UART0 — the same
+serial console used for log output (`-nographic`, tmux pane 5 in the 9-pane
+layout above). UART0 RX is interrupt-driven (GIC SPI32 / INTID 32,
+level-sensitive); a dedicated `shell` task reads bytes from `uart_rx_queue`
+(filled by `uart_rx_isr()`), does line editing (echo, backspace/DEL, CR/LF),
+tokenizes, and dispatches into `shell_cmd_table[]` (`shell.c`).
+
+Attach to the FreeRTOS pane and type at the `chimera> ` prompt:
+
+```bash
+limactl shell qemu-dev -- tmux send-keys -t freertos-showcase:0.5 "help" Enter
+limactl shell qemu-dev -- tmux capture-pane -p -t freertos-showcase:0.5 | tail -20
+```
+
+### Commands
+
+| Command | Output |
+|---|---|
+| `help` | One line per command: `name - help text` |
+| `stats` | Per guest (arm-linux/riscv-linux/mips-linux): `<name>: hello=<count> cpu=<x.xx>% mem=<x.xx>%` |
+| `sysinfo` | `heap_free=<bytes> uptime_s=<n> shell_stack_hiwat=<words> showcase_stack_hiwat=<words>` |
+| `links` | Per guest: `<name>: ivpos=<hex> l2f_flag=<n> f2l_flag=<n> since_hello=<ms>ms` |
+| `loglevel [N]` | No arg: print current level (`0`=VERBOSE..`3`=ERROR) and name. `N` in `0-3`: set `g_freertos_log_level`. Out of range: `usage: loglevel [0-3]` |
+| `can status` | `sr=<hex> rx_frames=<count>` from the CAN controller's status register and the IVSHMEM5 generation counter |
+
+Output from `log_uart()` (heartbeats, IRQ diagnostics, etc.) can interleave
+with shell echo/output — both write to UART0 with no shared mutex.
+
+---
+
 ## Guest Networking & Avahi Discovery
 
 All three Linux guests share a flat L2 network managed by a Linux bridge inside the Lima VM:
@@ -678,7 +710,12 @@ contrib/heterogeneous-soc/
     boot_log.c                — Boot-log monitor: waits for collector, rings doorbell when all 4 guests booted
     boot_log.h                — struct bootlog_monitor and function declarations
     can_driver.c              — xlnx-zynqmp-can driver: GIC SPI 6 (INTID 38) RX ISR, decodes RXFIFO registers, publishes frame to IVSHMEM5
-    can_driver.h              — CAN controller register offsets (xlnx-zynqmp-can), can_init()/can_rx_isr() declarations
+    can_driver.h              — CAN controller register offsets (xlnx-zynqmp-can), can_init()/can_rx_isr()/can_get_status() declarations
+    uart_driver.c             — PL011 UART driver: uart_putc() (TX), uart_init_rx()/uart_rx_isr() (RX via GIC SPI32)
+    uart_driver.h             — uart_rx_queue, uart_putc()/uart_init_rx()/uart_rx_isr() declarations, R52_UART_INTID
+    shell.c                   — Interactive UART shell: shell_task (line editing, tokenizing, dispatch), help/stats/sysinfo/links/loglevel/can status
+    shell.h                   — struct chimera_shell_ctx/chimera_shell_guest, shell_init() declaration
+    shell_parse.h             — Freestanding-safe parsing helpers: shell_str_eq, shell_parse_uint, shell_tokenize
     freertos_libc.c           — Freestanding libc (memcpy, memmove, memset, memcmp, strcpy, strlen)
     string.h / stdlib.h       — Libc headers for freestanding environment
     startup.S                 — RISC-V _start: set stack pointer, install mtvec, clear BSS, call main

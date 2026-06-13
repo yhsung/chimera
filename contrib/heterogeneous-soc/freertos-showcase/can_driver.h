@@ -25,4 +25,12 @@ void can_init(uintptr_t can_mmio_base, uintptr_t ivshmem_can_shmem_base);
 /* Called from vApplicationIRQHandler when INTID 38 (CAN SPI 6) fires. */
 void can_rx_isr(void);
 
+struct can_status {
+    uint32_t sr;        /* CAN_REG_SR (StatusRegister) */
+    uint32_t rx_frames; /* can_ivshmem->generation (frames forwarded) */
+};
+
+/* Snapshot of CAN controller status, for the shell's `can status` command. */
+void can_get_status(struct can_status *out);
+
 #endif
