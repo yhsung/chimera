@@ -90,7 +90,41 @@ See `README.md` → **Guest Networking & Avahi Discovery** for the full bridge/T
 
 ## CI / Headless Testing
 
-See `README.md` → **CI / Headless Testing** for the two harness scripts (`guest-run-debian-harness.sh`, `guest-run-freertos-harness.sh`), their pass conditions, timeouts, and environment overrides.
+Two harness scripts provide automated pass/fail CI testing inside the Lima VM.  Both use a detached tmux session, capture FreeRTOS UART output via `tmux capture-pane`, and exit 0 on PASS / 1 on FAIL.
+
+### `guest-run-freertos-harness.sh` (lightweight, ~30 s)
+
+Launches the FreeRTOS firmware plus ivshmem servers (ARM, RISCV, MIPS, stats, bootlog) and three Linux guests.  Designed for fast iteration when only FreeRTOS or ivshmem code changes.
+
+**Pass conditions** (both must be met):
+1. **CHIMERA banner** — `██████╗██╗` appears in FreeRTOS UART (proves `shell_init()` ran)
+2. **Hello handshake** — `received hello from arm-linux` appears (proves IVSHMEM link works)
+
+**Quick run:**
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-freertos-harness.sh
+```
+
+**Environment overrides:**
+| Variable | Default | Use |
+|---|---|---|
+| `HARNESS_TIMEOUT` | 300 | seconds to wait for pass conditions |
+| `HARNESS_LOG_DIR` | `/tmp/harness-logs` | directory for log files |
+| `SKIP_BUILD` | (unset) | skip `guest-build-freertos-showcase.sh` if non-empty |
+
+### `guest-run-debian-harness.sh` (full-stack, ~10 min)
+
+Stage 1 installs prerequisites; Stage 2 fetches Debian kernel .debs, creates qcow2 rootfs disks, extracts kernels, builds FreeRTOS, boots all guests, and verifies FreeRTOS receives hello messages from **all three** Linux senders.
+
+**Pass condition:** FreeRTOS UART contains `received hello from arm-linux`, `… riscv-linux`, and `… mips-linux`.
+
+**Environment overrides:**  `HARNESS_TIMEOUT` (default 600), `SKIP_PREREQS`, `SKIP_ROOTFS`, `SKIP_FETCH`, `SKIP_BUILD`.
+
+### Harness implementation notes
+
+- **`remain-on-exit on`** must be set on the tmux session.  Without it, a QEMU crash destroys its pane and tmux renumbers the remaining panes, breaking all `send-keys -t 0.N` targets.
+- **Five ivshmem servers** are required: ARM, RISCV, MIPS, stats, and bootlog.  `guest-run-r52-freertos-phase5.sh` expects the bootlog socket to exist.  The data-channel servers run inside tmux panes; stats and bootlog run as background processes.
+- **Socket directories** must be created with `mkdir -p` before launching ivshmem-server directly (the wrapper scripts handle this, but the harnesses invoke the binary).
 
 ## Git Conventions
 
@@ -111,6 +145,47 @@ When the master agent is working inside a git worktree (isolated branch), **all 
 ## Shell Scripting
 
 - Target tmux 3.4+: use `-l N%` for pane sizing (the `-p N` flag was removed), handle pane renumbering explicitly after splits, and account for read-only mounted paths.
+- **`tmux set-option remain-on-exit on`** — always set this in harness scripts. When a QEMU process exits inside a tmux pane, tmux destroys the pane and renumbers all subsequent panes, silently breaking every `send-keys -t 0.N` target.  `remain-on-exit on` keeps the pane (marked "dead") so indices stay stable.
+- **`pkill` without `-f`** — use `pkill ivshmem-server` (matches 15-char process name) rather than `pkill -f <long-regex>`.  The `-f` flag matches the full command line including the invoking shell's own `-c '...'` string, potentially killing the SSH/limactl session itself (exit 255).
+
+## Deploy Path: Worktree → macOS → Lima-local
+
+`host-install-lima-host.sh` deploys the worktree to `/Users/yhsung/chimera-src` on macOS.  Inside the Lima VM, `$HOME` resolves to `/home/yhsung.guest` and `~` expansion from the **local** shell (macOS) resolves to `/Users/yhsung`.  This creates two different source trees:
+
+| Path | Populated by | Used by |
+|---|---|---|
+| `/Users/yhsung/chimera-src` | `host-install-lima-host.sh` | reference / diff |
+| `/home/yhsung.guest/chimera-src` | manual deploy or `cp` from `/Users/…` | `guest-build-freertos-showcase.sh` |
+
+**After editing source in the worktree, you must deploy to the Lima-local path:**
+```bash
+# Option A: Run host-install, then copy inside Lima
+bash scripts/heterogeneous-soc/host-install-lima-host.sh
+limactl shell qemu-dev -- cp /Users/yhsung/chimera-src/path/to/file $HOME/chimera-src/path/to/file
+
+# Option B: Transfer directly via base64 (avoids quoting issues)
+base64 -i <worktree-file> | limactl shell qemu-dev -- bash -c 'base64 -d > /home/yhsung.guest/chimera-src/path/to/file'
+```
+
+## FreeRTOS Exception Handlers
+
+`contrib/heterogeneous-soc/freertos-showcase/startup.S` defines the ARM exception vector table.  The handlers for Undefined, Prefetch Abort, and Data Abort were originally `b .` (branch-to-self → infinite loop at 100 % CPU).
+
+This caused a **silent hang** whenever the firmware accessed unmapped MMIO regions — specifically the CAN controller (`0x50000000`) and IVSHMEM5 SHMEM (`0x4A000000`) when those QEMU devices are not instantiated (no `canbus` / no CAN ivshmem chardev on the QEMU command line).  The `can_init()` write to `can_ivshmem->magic` triggered a synchronous external abort, and the handler looped forever.
+
+**Current handlers skip the faulting instruction and continue:**
+```asm
+undef_handler:  subs pc, lr, #0   /* return to faulting insn (will re-fault) */
+pabt_handler:   subs pc, lr, #4   /* skip faulting insn, continue */
+dabt_handler:   subs pc, lr, #4   /* skip faulting insn, continue */
+```
+
+`subs pc, lr, #N` subtracts N from the ABT-mode link register (faulting-insn + 8) and copies SPSR_abt to CPSR, returning to the instruction after the fault.  This means:
+- Writes to unmapped CAN / IVSHMEM5 regions are silently dropped
+- `can_init()` completes harmlessly whether CAN hardware is present or not
+- The firmware always boots to the shell and prints the CHIMERA banner
+
+**When adding new MMIO peripherals**, ensure addresses are always mapped in the QEMU machine model (`hw/arm/chimera_r52_freertos_demo.c`) OR verify the data-abort handler tolerates faults on those regions.
 
 ## Direct Lima Access (for debugging)
 
@@ -153,5 +228,7 @@ All scripts inherit defaults from `scripts/heterogeneous-soc/common.sh`. Commonl
 | `IVSHMEM_RISCV_FREERTOS_DIR` | `/tmp/ivshmem-riscv-freertos` | RISCV channel socket dir |
 | `IVSHMEM_MIPS_FREERTOS_DIR` | `/tmp/ivshmem-mips-freertos` | MIPS channel socket dir |
 | `IVSHMEM_STATS_FREERTOS_DIR` | `/tmp/ivshmem-stats-freertos` | Stats channel socket dir |
+| `IVSHMEM_BOOTLOG_DIR` | `/tmp/ivshmem-bootlog` | Boot-log channel socket dir |
+| `IVSHMEM_CAN_FREERTOS_DIR` | `/tmp/ivshmem-can-freertos` | CAN forwarding channel socket dir |
 | `ASSET_DIR` | `$HOME/iso` | Debian ISOs and disk images |
 | `LIMA_NAME` | `qemu-dev` | Lima VM name |
