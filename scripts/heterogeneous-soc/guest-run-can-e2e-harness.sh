@@ -131,10 +131,30 @@ tmux send-keys -t "${SESSION}:0.0" \
     -nographic" Enter
 sleep 3
 
-# ---- ARM Linux QEMU (pane 0.1) ----
+# ---- ARM Linux QEMU (pane 0.1, user-mode net) ----
+# Note: Use direct QEMU invocation instead of guest-run-arm-phase5.sh
+# because that script requires TAP networking (tap-arm) which needs root.
 _info "Starting ARM Linux QEMU with CAN..."
 tmux send-keys -t "${SESSION}:0.1" \
-    "exec '${CHIMERA_ROOT}/scripts/heterogeneous-soc/guest-run-arm-phase5.sh'" Enter
+    "exec '${ARM_QEMU}' \
+    -machine virt,gic-version=3 \
+    -cpu cortex-a53 -m 512M -smp 2 \
+    -bios '${ARM_UEFI_BIOS}' \
+    -kernel '${ARM_KERNEL_IMAGE}' \
+    -initrd '${ARM_INITRD_IMAGE}' \
+    -append 'console=ttyAMA0 root=/dev/vda rw' \
+    -chardev socket,id=ivshmem,path='${IVSHMEM_ARM_FREERTOS_SOCKET}' \
+    -device ivshmem-doorbell,chardev=ivshmem,vectors=${IVSHMEM_VECTORS} \
+    -chardev socket,id=ivshmem_boot,path='${IVSHMEM_BOOTLOG_SOCKET}' \
+    -device ivshmem-doorbell,chardev=ivshmem_boot,vectors=1 \
+    -chardev socket,id=ivshmem_can,path='${IVSHMEM_CAN_FREERTOS_SOCKET}' \
+    -device ivshmem-doorbell,chardev=ivshmem_can,vectors=${IVSHMEM_VECTORS} \
+    -object can-bus,id=canbus0 \
+    -object 'can-host-socketcan,id=ch0,if=${CAN_VCAN_IF},canbus=canbus0' \
+    -device kvaser_pci,canbus=canbus0 \
+    -drive file='${ARM_DEBIAN_DISK}',format=qcow2,if=virtio \
+    -virtfs local,path='${PINGPONG_DIR}',mount_tag=pingpong,security_model=none,id=pingpong \
+    -nographic" Enter
 
 # ---- Auto-login and launch CAN daemon ----
 auto_login_and_run() {
@@ -205,23 +225,19 @@ while (( elapsed < TIMEOUT )); do
         fi
     fi
 
-    # Check ARM daemon log via SSH.
+    # Check ARM daemon output via tmux pane (daemon prints [can] stderr).
     if [[ "${CAN_LOG_SEEN_FREERTOS}" -eq 0 ]] || [[ "${CAN_LOG_SEEN_SOCKETCAN}" -eq 0 ]]; then
-        arm_log="$(timeout 5 ssh -p "${ARM_SSH_PORT}" \
-            -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout=3 \
-            root@localhost 'cat /var/log/chimera-log/can-bus.log 2>/dev/null || echo "LOG_NOT_FOUND"' 2>/dev/null || true)"
-
-        if [[ -n "${arm_log}" ]]; then
-            if [[ "${CAN_LOG_SEEN_FREERTOS}" -eq 0 ]] && \
-               echo "${arm_log}" | grep -q "CAN/freertos"; then
-                CAN_LOG_SEEN_FREERTOS=1
-                _ok "ARM daemon logged CAN/freertos frame (IVSHMEM5 path works)"
-            fi
+        arm_content="$(tmux capture-pane -p -t "${SESSION}:0.1" -S -50000 2>/dev/null)"
+        if [[ -n "${arm_content}" ]]; then
             if [[ "${CAN_LOG_SEEN_SOCKETCAN}" -eq 0 ]] && \
-               echo "${arm_log}" | grep -q "CAN/socketcan"; then
+               echo "${arm_content}" | grep -qi "CAN/socketcan"; then
                 CAN_LOG_SEEN_SOCKETCAN=1
                 _ok "ARM daemon logged CAN/socketcan frame (kvaser_pci path works)"
+            fi
+            if [[ "${CAN_LOG_SEEN_FREERTOS}" -eq 0 ]] && \
+               echo "${arm_content}" | grep -qi "CAN/freertos"; then
+                CAN_LOG_SEEN_FREERTOS=1
+                _ok "ARM daemon logged CAN/freertos frame (IVSHMEM5 path works)"
             fi
         fi
     fi
