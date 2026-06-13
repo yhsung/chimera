@@ -373,7 +373,9 @@ serial console used for log output (`-nographic`, tmux pane 5 in the 9-pane
 layout above). UART0 RX is interrupt-driven (GIC SPI32 / INTID 32,
 level-sensitive); a dedicated `shell` task reads bytes from `uart_rx_queue`
 (filled by `uart_rx_isr()`), does line editing (echo, backspace/DEL, CR/LF),
-tokenizes, and dispatches into `shell_cmd_table[]` (`shell.c`).
+tokenizes, and dispatches into `shell_cmd_table[]` (`shell.c`). On startup,
+before the first prompt, the shell prints a "CHIMERA" ASCII-art banner
+(ANSI-Shadow FIGlet font, UTF-8 box-drawing characters).
 
 Attach to the FreeRTOS pane and type at the `chimera> ` prompt:
 
