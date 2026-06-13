@@ -30,8 +30,11 @@ _ok()   { printf '\033[0;32m  \342\234\223 %s\033[0m\n' "$*"; }
 _fail() { printf '\033[0;31m  \342\234\227 %s\033[0m\n' "$*"; }
 _info() { printf '  %s\n' "$*"; }
 
+QEMU_PID=""
 cleanup() {
-    pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
+    if [[ -n "${QEMU_PID}" ]]; then
+        kill "${QEMU_PID}" 2>/dev/null || true
+    fi
     pkill ivshmem-server 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
@@ -88,18 +91,17 @@ _info "Starting FreeRTOS QEMU; UART -> ${FREERTOS_LOG}"
 QEMU_PID=$!
 
 # ── Monitor loop ──────────────────────────────────────────────────────────
-# Pass conditions (all observable from FreeRTOS autonomous output):
+# Pass conditions (all observable from FreeRTOS autonomous output at
+# default log level HSOC_LOG_INFO):
 #   1. CHIMERA banner "██╗██╗"     -> shell_init() ran, UART TX works
 #   2. Shell prompt "chimera>"     -> shell task is running
-#   3. "[diag] tick_rate_hz="      -> startup diagnostics printed
-#   4. "[diag] heap_free=0x"       -> periodic health diagnostics
-#   5. "[freertos] stats snapshot" -> IVSHMEM3 stats snapshot written
+#   3. "[freertos] showcase task"  -> showcase loop is running
+#   4. "[freertos] CAN controller" -> CAN driver initialized
 PASS_STRINGS=(
     "BANNER:${BANNER_STRING:-██████╗██╗}"
     "SHELL:chimera>"
-    "DIAG_STARTUP:tick_rate_hz="
-    "DIAG_HEALTH:heap_free=0x"
-    "STATS:stats snapshot written"
+    "SHOWCASE:showcase task started"
+    "CAN:CAN controller enabled"
 )
 
 echo "[harness] Monitoring for shell/diag output (timeout ${HARNESS_TIMEOUT}s)..."
@@ -131,7 +133,7 @@ while (( elapsed < HARNESS_TIMEOUT )); do
         echo ""
         echo "[harness] PASS after ${elapsed}s — all shell/diag conditions met"
         echo "=== Matching output ==="
-        echo "${content}" | grep -E "chimera>|\[diag\]|stats snapshot|banner" | tail -15
+        echo "${content}" | grep -E "chimera>|showcase|CAN controller|banner" | tail -15
         exit 0
     fi
 
@@ -145,7 +147,7 @@ while (( elapsed < HARNESS_TIMEOUT )); do
     fi
 
     sleep 1
-    (( elapsed++ ))
+    (( ++elapsed ))
 done
 
 # ── Timeout — FAIL ────────────────────────────────────────────────────────
