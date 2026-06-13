@@ -6,13 +6,31 @@
     .globl _start
 _start:
     b    reset_handler            /* Reset */
-    b    .                        /* Undefined */
+    ldr  pc, =undef_handler       /* Undefined */
     ldr  pc, =FreeRTOS_SWI_Handler/* Supervisor Call (FreeRTOS yield) */
-    b    .                        /* Prefetch Abort */
-    b    .                        /* Data Abort */
+    ldr  pc, =pabt_handler        /* Prefetch Abort */
+    ldr  pc, =dabt_handler        /* Data Abort */
     nop                           /* Reserved (HYP trap entry on R-profile) */
     ldr  pc, =FreeRTOS_IRQ_Handler/* IRQ */
     b    .                        /* FIQ */
+
+    /* ── Abort handlers ────────────────────────────────────────────────────
+     * When the CAN controller / IVSHMEM5 channel is not instantiated in QEMU,
+     * accesses to those MMIO regions cause a synchronous external abort.
+     * The handler skips the faulting load/store and returns to the next
+     * instruction so the firmware can initialise whatever hardware is present
+     * and continue booting.
+     *
+     * ABT-mode LR = faulting instruction address + 8.
+     * Return to LR - 4 to skip the faulting instruction.
+     *----------------------------------------------------------------------- */
+    .section .text.init, "ax"
+undef_handler:
+    subs pc, lr, #0              /* undefined: return to faulting insn */
+pabt_handler:
+    subs pc, lr, #4              /* prefetch abort: skip and continue */
+dabt_handler:
+    subs pc, lr, #4              /* data abort: skip and continue  */
 
     /* ── Reset ───────────────────────────────────────────────────────────── */
     .section .text.init, "ax"

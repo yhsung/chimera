@@ -61,7 +61,13 @@ void can_init(uintptr_t can_mmio_base, uintptr_t ivshmem_can_shmem_base)
         (volatile struct can_ivshmem_layout *)ivshmem_can_shmem_base;
 
     /* Publish the channel identity once so the ARM-Linux daemon can find this
-     * BAR2 by magic, then zero the generation counter. */
+     * BAR2 by magic, then zero the generation counter.
+     *
+     * When the CAN ivshmem channel is not instantiated in QEMU these
+     * writes raise a synchronous external abort.  The data-abort handler
+     * (startup.S) skips the faulting store and returns to the next
+     * instruction, so the entire function completes harmlessly whether
+     * the hardware is present or not. */
     can_ivshmem->magic = CAN_IVSHMEM_MAGIC;
     can_ivshmem->generation = 0;
     __sync_synchronize();
@@ -70,6 +76,15 @@ void can_init(uintptr_t can_mmio_base, uintptr_t ivshmem_can_shmem_base)
     can_wr(CAN_REG_MSR, 0);
     can_wr(CAN_REG_SRR, CAN_SRR_CEN);
     can_wr(CAN_REG_IER, CAN_ISR_RXOK);
+
+    /*
+     * Clear any pending interrupts before enabling the GIC SPI.
+     * Without this, a spurious pending interrupt (which can occur when
+     * no CAN bus is attached to the QEMU model) may cause an interrupt
+     * storm that pegs the CPU at 100 %.
+     */
+    can_wr(CAN_REG_ICR, can_rd(CAN_REG_ISR));
+    __sync_synchronize();
 
     gic_enable_spi(CAN_INTID);
 
