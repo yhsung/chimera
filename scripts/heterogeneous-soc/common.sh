@@ -135,13 +135,35 @@ prepare_vm_source_tree() {
         return 0
     fi
 
-    rm -rf "${VM_SOURCE_DIR}"
     mkdir -p "${VM_SOURCE_DIR}"
-    rsync -a \
+
+    local stamp="${VM_SOURCE_DIR}/.chimera-last-sync"
+
+    # Warn (don't clobber) if files were edited directly in VM_SOURCE_DIR
+    # since the last sync — --update below will skip them rather than
+    # overwrite with the (older) host copy.
+    if [[ -e "${stamp}" ]]; then
+        local vm_changed
+        vm_changed="$(find "${VM_SOURCE_DIR}" -type f \
+            ! -path "${VM_SOURCE_DIR}/.git/*" \
+            ! -path "${VM_SOURCE_DIR}/build-linux/*" \
+            ! -name '.DS_Store' \
+            ! -name '.chimera-last-sync' \
+            -newer "${stamp}" 2>/dev/null || true)"
+        if [[ -n "${vm_changed}" ]]; then
+            echo "warning: ${VM_SOURCE_DIR} has local changes not synced back to ${CHIMERA_ROOT}:" >&2
+            echo "${vm_changed}" | sed "s|^${VM_SOURCE_DIR}/|  |" >&2
+        fi
+    fi
+
+    rsync -a --update \
         --exclude '.git/' \
         --exclude 'build-linux/' \
         --exclude '.DS_Store' \
+        --exclude '.chimera-last-sync' \
         "${CHIMERA_ROOT}/" "${VM_SOURCE_DIR}/"
+
+    touch "${stamp}"
 }
 
 find_ivshmem_server() {
