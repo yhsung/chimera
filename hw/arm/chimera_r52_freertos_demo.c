@@ -38,10 +38,6 @@ static const MemMapEntry chimera_r52_memmap[] = {
     [CHIMERA_R52_FREERTOS_IVSHMEM0_SHMEM] = {
         0x31000000, CHIMERA_R52_FREERTOS_IVSHMEM_SIZE
     },
-    [CHIMERA_R52_FREERTOS_IVSHMEM1_MMIO] =  { 0x35000000, 0x00001000 },
-    [CHIMERA_R52_FREERTOS_IVSHMEM1_SHMEM] = {
-        0x36000000, CHIMERA_R52_FREERTOS_IVSHMEM_SIZE
-    },
     [CHIMERA_R52_FREERTOS_IVSHMEM2_MMIO] =  { 0x3A000000, 0x00001000 },
     [CHIMERA_R52_FREERTOS_IVSHMEM2_SHMEM] = {
         0x3B000000, CHIMERA_R52_FREERTOS_IVSHMEM_SIZE
@@ -80,7 +76,6 @@ static const MemMapEntry chimera_r52_memmap[] = {
     }
 
 CHIMERA_R52_CHARDEV_PROP(ivshmem_arm_freertos)
-CHIMERA_R52_CHARDEV_PROP(ivshmem_riscv_freertos)
 CHIMERA_R52_CHARDEV_PROP(ivshmem_mips_freertos)
 CHIMERA_R52_CHARDEV_PROP(ivshmem_stats_freertos)
 CHIMERA_R52_CHARDEV_PROP(ivshmem_bootlog_freertos)
@@ -168,7 +163,7 @@ static void chimera_r52_machine_init(MachineState *machine)
     DeviceState *gicdev;
     SysBusDevice *gicsbd;
     int ppibase;
-    Chardev *arm_chr = NULL, *riscv_chr = NULL, *mips_chr = NULL;
+    Chardev *arm_chr = NULL, *mips_chr = NULL;
     Chardev *stats_chr = NULL, *bootlog_chr = NULL;
     Chardev *can_chr = NULL;
     bool have_links = true;
@@ -177,9 +172,6 @@ static void chimera_r52_machine_init(MachineState *machine)
     have_links &= chimera_r52_require_chardev(
         s->ivshmem_arm_freertos, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_ARM,
         &arm_chr);
-    have_links &= chimera_r52_require_chardev(
-        s->ivshmem_riscv_freertos, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_RISCV,
-        &riscv_chr);
     have_links &= chimera_r52_require_chardev(
         s->ivshmem_mips_freertos, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_MIPS,
         &mips_chr);
@@ -273,11 +265,6 @@ static void chimera_r52_machine_init(MachineState *machine)
         chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM0_SHMEM].base,
         CHIMERA_R52_FREERTOS_IVSHMEM_SIZE, CHIMERA_R52_FREERTOS_IVSHMEM0_SPI);
     chimera_r52_connect_ivshmem(
-        gicdev, riscv_chr,
-        chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM1_MMIO].base,
-        chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM1_SHMEM].base,
-        CHIMERA_R52_FREERTOS_IVSHMEM_SIZE, CHIMERA_R52_FREERTOS_IVSHMEM1_SPI);
-    chimera_r52_connect_ivshmem(
         gicdev, mips_chr,
         chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM2_MMIO].base,
         chimera_r52_memmap[CHIMERA_R52_FREERTOS_IVSHMEM2_SHMEM].base,
@@ -346,13 +333,6 @@ static void chimera_r52_machine_class_init(ObjectClass *oc, const void *data)
     object_class_property_set_description(
         oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_ARM,
         "Chardev id for the ARM/Linux <-> FreeRTOS ivshmem link");
-
-    object_class_property_add_str(oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_RISCV,
-                                  chimera_r52_get_ivshmem_riscv_freertos,
-                                  chimera_r52_set_ivshmem_riscv_freertos);
-    object_class_property_set_description(
-        oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_RISCV,
-        "Chardev id for the RISC-V/Linux <-> FreeRTOS ivshmem link");
 
     object_class_property_add_str(oc, CHIMERA_R52_FREERTOS_PROP_IVSHMEM_MIPS,
                                   chimera_r52_get_ivshmem_mips_freertos,

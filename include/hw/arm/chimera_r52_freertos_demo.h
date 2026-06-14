@@ -16,7 +16,6 @@
     MACHINE_TYPE_NAME("chimera-r52-freertos-demo")
 
 #define CHIMERA_R52_FREERTOS_PROP_IVSHMEM_ARM "ivshmem-arm-freertos"
-#define CHIMERA_R52_FREERTOS_PROP_IVSHMEM_RISCV "ivshmem-riscv-freertos"
 #define CHIMERA_R52_FREERTOS_PROP_IVSHMEM_MIPS "ivshmem-mips-freertos"
 #define CHIMERA_R52_FREERTOS_PROP_IVSHMEM_STATS "ivshmem-stats-freertos"
 #define CHIMERA_R52_FREERTOS_PROP_IVSHMEM_BOOTLOG "ivshmem-bootlog-freertos"
@@ -44,7 +43,6 @@ struct ChimeraR52FreeRTOSMachineState {
     Object *cpu;
     DeviceState *gic;
     char *ivshmem_arm_freertos;
-    char *ivshmem_riscv_freertos;
     char *ivshmem_mips_freertos;
     char *ivshmem_stats_freertos;
     char *ivshmem_bootlog_freertos;
@@ -59,8 +57,6 @@ enum {
     CHIMERA_R52_FREERTOS_UART,
     CHIMERA_R52_FREERTOS_IVSHMEM0_MMIO,
     CHIMERA_R52_FREERTOS_IVSHMEM0_SHMEM,
-    CHIMERA_R52_FREERTOS_IVSHMEM1_MMIO,
-    CHIMERA_R52_FREERTOS_IVSHMEM1_SHMEM,
     CHIMERA_R52_FREERTOS_IVSHMEM2_MMIO,
     CHIMERA_R52_FREERTOS_IVSHMEM2_SHMEM,
     CHIMERA_R52_FREERTOS_IVSHMEM3_MMIO,
@@ -76,7 +72,6 @@ enum {
 enum {
     CHIMERA_R52_FREERTOS_UART_SPI = 0,
     CHIMERA_R52_FREERTOS_IVSHMEM0_SPI = 1,
-    CHIMERA_R52_FREERTOS_IVSHMEM1_SPI = 2,
     CHIMERA_R52_FREERTOS_IVSHMEM2_SPI = 3,
     CHIMERA_R52_FREERTOS_IVSHMEM3_SPI = 4,
     CHIMERA_R52_FREERTOS_IVSHMEM4_SPI = 5,
