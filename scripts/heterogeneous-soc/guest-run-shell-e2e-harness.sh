@@ -184,6 +184,7 @@ check_regex "sysinfo: 4 numeric fields" \
 # boot (heap_4 itself supports runtime alloc/free), so heap_free MUST
 # be equal; a future change that allocates during shell/showcase
 # activity will break this. configTOTAL_HEAP_SIZE=65536, safety margin=4096.
+# With heap-test additions: 12 commands total between the two sysinfo calls.
 echo ""
 echo "[harness] Checking heap leak (heap_free before vs after 12 commands)..."
 mapfile -t HEAP_VALUES < <(echo "${OUTPUT}" | grep -oE 'heap_free=[0-9]+' | grep -oE '[0-9]+')
