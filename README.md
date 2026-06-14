@@ -21,6 +21,19 @@ The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`;
 
 `CONFIG_CHIMERA_FREERTOS_DEMO` (`hw/riscv/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` for their respective targets.
 
+### Licensing
+
+This repository is a QEMU fork; QEMU itself — including the
+`chimera-r52-freertos-demo` machine and `ivshmem-flat` device above — is
+licensed under **GPL-2.0-or-later** (see the top-level `LICENSE` and
+`COPYING`).
+
+`contrib/heterogeneous-soc/` (FreeRTOS firmware + guest test programs) and
+`scripts/heterogeneous-soc/` (all build/launch/CI scripts) are independent
+of QEMU's codebase — they contain no QEMU headers and are not linked into
+any QEMU binary — and are licensed separately under **Apache-2.0**. See the
+`LICENSE` and `NOTICE` files in each of those two directories.
+
 ---
 
 ## Architecture
