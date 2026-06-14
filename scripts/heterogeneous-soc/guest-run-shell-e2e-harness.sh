@@ -124,7 +124,7 @@ send_cmd "links"
 send_cmd "loglevel"
 send_cmd "can status"
 send_cmd "frobnicate"
-# Second sysinfo: paired with the first (line 119) to detect heap leaks
+# Second sysinfo: paired with the first (line 122) to detect heap leaks
 # that occur during shell/showcase activity. Equal in firmware to the
 # first; only the order in the captured output differs.
 send_cmd "sysinfo"
