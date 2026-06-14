@@ -292,11 +292,18 @@ limactl shell qemu-dev -- <command>
 ```
 
 ### Accessing guest tmux panes
-```bash
-# Capture a tmux pane (pane numbering: 0.0–0.5 = top 5 ivshmem servers + FreeRTOS, 0.6 = ARM, 0.7 = RISCV, 0.8 = MIPS)
-limactl shell qemu-dev -- tmux capture-pane -p -t freertos-showcase:0.6 | tail -50
 
-# Send a command to a running guest pane
+Panes are named (`ivshmem-arm`, `ivshmem-riscv`, `ivshmem-mips`, `ivshmem-stats`, `ivshmem-bootlog`, `freertos`, `arm-linux`, `riscv-linux`, `mips-linux` — pane indices 0.0–0.8 in that order) and addressable via `guest-tmux-pane.sh`:
+
+```bash
+# Capture a pane by name
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh arm-linux capture | tail -50
+
+# Send a command to a running guest pane by name
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh arm-linux send "ls /var/log/chimera-log/boot-log/"
+
+# Equivalent raw-index form (pane numbering: 0.0–0.5 = top 5 ivshmem servers + FreeRTOS, 0.6 = ARM, 0.7 = RISCV, 0.8 = MIPS)
+limactl shell qemu-dev -- tmux capture-pane -p -t freertos-showcase:0.6 | tail -50
 limactl shell qemu-dev -- tmux send-keys -t freertos-showcase:0.6 "ls /var/log/chimera-log/boot-log/" Enter
 ```
 
