@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # host-open-phase5-iterm.sh
 # Opens a new iTerm2 window, connects to the Lima VM, and launches the
 # Phase 5 interactive tmux showcase.

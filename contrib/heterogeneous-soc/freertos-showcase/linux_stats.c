@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>

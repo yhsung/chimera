@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-prepare-debian-rootfs.sh
 #
 # Create minimal Debian rootfs qcow2 disk images via debootstrap.

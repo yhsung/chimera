@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-install-ssh-keys-to-guests.sh
 #
 # Inject macOS SSH public key into each Debian guest qcow2 image so

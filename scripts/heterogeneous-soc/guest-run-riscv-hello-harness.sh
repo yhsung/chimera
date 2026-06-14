@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-riscv-hello-harness.sh — headless pass/fail test for the
 # RISCV-Linux <-> FreeRTOS HELLO/ACK handshake over IVSHMEM1.
 #

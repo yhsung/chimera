@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-freertos-harness.sh — headless pass/fail harness for the FreeRTOS ivshmem demo.
 #
 # Runs everything in a detached tmux session (same layout as guest-run-phase5-tmux.sh).

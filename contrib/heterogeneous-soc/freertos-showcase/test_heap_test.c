@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Host unit test for shell_heap_test.h parse helper.
  * Build: cc -O2 -Wall -o test_heap_test test_heap_test.c */
 #include <assert.h>

@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Host unit test for can_proto.h decode helpers. Build: cc -O2 -Wall -o test_can_decode test_can_decode.c */
 #include <assert.h>
 #include <stdint.h>

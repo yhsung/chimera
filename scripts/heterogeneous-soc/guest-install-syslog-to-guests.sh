@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-install-syslog-to-guests.sh
 #
 # Inject syslog-*-linux daemons into each Debian guest qcow2 image at

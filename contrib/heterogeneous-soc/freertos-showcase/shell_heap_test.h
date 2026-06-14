@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef HETEROGENEOUS_SOC_FREERTOS_SHELL_HEAP_TEST_H
 #define HETEROGENEOUS_SOC_FREERTOS_SHELL_HEAP_TEST_H
 

@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "string.h"
 
 void *memcpy(void *dest, const void *src, size_t n)

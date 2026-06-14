@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-can-harness.sh — headless pass/fail test for CAN RX on FreeRTOS.
 #
 # Brings up vcan0, starts ivshmem-server instances for all six FreeRTOS

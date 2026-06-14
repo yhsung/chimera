@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-shell-e2e-harness.sh — headless pass/fail test for the FreeRTOS
 # interactive UART shell, driven over real serial RX.
 #

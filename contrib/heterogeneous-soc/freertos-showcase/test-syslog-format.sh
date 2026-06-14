@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # Verifies syslog-arm-linux's SYSINFO line format via its self-test mode
 # (SYSLOG_SELFTEST=1 prints one line and exits — no ivshmem/FreeRTOS needed).
 # Run on Linux with cross-compiled syslog-arm-linux present.

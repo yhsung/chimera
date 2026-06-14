@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # shellcheck disable=SC2154
 #
 # One-shot deployment of the Chimera Lima VM on macOS.

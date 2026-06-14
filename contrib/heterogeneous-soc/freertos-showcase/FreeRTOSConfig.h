@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 

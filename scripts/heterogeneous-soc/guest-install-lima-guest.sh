@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 set -euo pipefail
 
 # ── Register foreign architectures for cross-arch kernel downloads ────────

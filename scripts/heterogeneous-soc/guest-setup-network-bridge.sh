@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-setup-network-bridge.sh
 #
 # Creates bridge chbr0 (172.16.100.0/24) and tap-arm, tap-riscv, tap-mips

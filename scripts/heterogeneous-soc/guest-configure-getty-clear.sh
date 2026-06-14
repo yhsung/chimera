@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-configure-getty-clear.sh
 #
 # Prepend a screen-clear escape sequence (ESC[2J ESC[H) to /etc/issue in each

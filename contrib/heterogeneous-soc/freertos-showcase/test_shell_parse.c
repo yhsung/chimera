@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 /* Host unit test for shell_parse.h helpers. Build: cc -O2 -Wall -o test_shell_parse test_shell_parse.c */
 #include <assert.h>
 #include <stdio.h>

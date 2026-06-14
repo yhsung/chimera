@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-tmux-pane.sh
 #
 # Address panes of the "freertos-showcase" tmux session (see

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-freertos-shell-harness.sh — headless pass/fail test for FreeRTOS
 # shell and diagnostic output.
 #

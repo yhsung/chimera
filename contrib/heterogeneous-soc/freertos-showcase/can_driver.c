@@ -1,3 +1,9 @@
+/*
+ * Copyright 2026 Yuehhsin Sung
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "can_driver.h"
 #include "can_proto.h"
 #include "freertos_ivshmem_flat.h"   /* for HSOC_LOG_* levels */

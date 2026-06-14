@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # DEPRECATED: guest-prepare-demo-guest-overlays.sh has been replaced by
 # guest-prepare-debian-rootfs.sh (which configures systemd directly in the rootfs).
 # This stub exists for backward compatibility only.

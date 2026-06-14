@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
+
 CC_ARM ?= aarch64-linux-gnu-gcc
 CC_RISCV ?= riscv64-linux-gnu-gcc
 CC_MIPS ?= mipsel-linux-gnu-gcc

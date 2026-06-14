@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-debian-harness.sh — headless pass/fail harness for the Debian ivshmem demo.
 #
 # Two-stage pipeline:

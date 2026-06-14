@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Yuehhsin Sung
 # guest-run-stats-e2e-harness.sh — headless pass/fail test for ARM-Linux-side
 # consumption of the FreeRTOS stats snapshot channel (IVSHMEM3).
 #
