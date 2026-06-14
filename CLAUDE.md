@@ -25,7 +25,7 @@ bash scripts/heterogeneous-soc/host-install-lima-host.sh
 **Step 2 — Launch the full showcase** (from macOS host; re-run any time):
 
 ```bash
-limactl shell qemu-dev -- bash /Users/yhsung/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
+limactl shell qemu-dev -- bash $HOME/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
 `guest-run-chimera-showcase.sh` handles all prerequisites, builds, and opens the 8-pane tmux session.
@@ -250,14 +250,14 @@ When the master agent is working inside a git worktree (isolated branch), **all 
 
 ## Deploy Path: Worktree → macOS → Lima (writable mount)
 
-`host-install-lima-host.sh` deploys the worktree to `/Users/yhsung/chimera-src` on macOS via `rsync`. The Lima VM `qemu-dev` mounts the macOS home directory (`~`) **read-write** via virtiofs at the same path, so `/Users/yhsung/chimera-src` is directly writable from inside Lima — no second copy is required.
+`host-install-lima-host.sh` deploys the worktree to `$HOME/chimera-src` on macOS via `rsync`. The Lima VM `qemu-dev` mounts the macOS home directory (`~`) **read-write** via virtiofs at the same path, so `$HOME/chimera-src` is directly writable from inside Lima — no second copy is required.
 
-`scripts/heterogeneous-soc/common.sh` detects this automatically: when `CHIMERA_ROOT` (derived from the running script's own path) is under `/Users/` and writable, `VM_SOURCE_DIR`, `BUILD_DIR`, and `PINGPONG_DIR` all resolve under `/Users/yhsung/chimera-src` directly, and `prepare_vm_source_tree` becomes a no-op.
+`scripts/heterogeneous-soc/common.sh` detects this automatically: when `CHIMERA_ROOT` (derived from the running script's own path) is under `/Users/` and writable, `VM_SOURCE_DIR`, `BUILD_DIR`, and `PINGPONG_DIR` all resolve under `$HOME/chimera-src` directly, and `prepare_vm_source_tree` becomes a no-op.
 
 **After editing source in the worktree, re-run host-install and build in place — no copy step:**
 ```bash
 bash scripts/heterogeneous-soc/host-install-lima-host.sh
-limactl shell qemu-dev -- bash /Users/yhsung/chimera-src/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
+limactl shell qemu-dev -- bash $HOME/chimera-src/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
 ```
 
 A pre-existing Lima-local copy at `/home/yhsung.guest/chimera-src` (Lima `$HOME`) may still be present from before this mount was made writable. It is no longer required by any script that sources `common.sh` and can be left in place or removed.
