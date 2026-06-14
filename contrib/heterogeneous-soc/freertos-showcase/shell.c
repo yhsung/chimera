@@ -319,6 +319,10 @@ static void cmd_heap_test(const struct chimera_shell_ctx *ctx, int argc, char *a
         return;
 
     case HEAP_TEST_RELEASE: {
+        if (heap_test_count == 0) {
+            shell_print("heap_test: nothing to release\n");
+            return;
+        }
         uint32_t freed = 0;
         while (heap_test_count > 0) {
             heap_test_count--;
