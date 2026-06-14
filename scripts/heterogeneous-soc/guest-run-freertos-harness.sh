@@ -4,7 +4,9 @@
 # Runs everything in a detached tmux session (same layout as guest-run-phase5-tmux.sh).
 # FreeRTOS UART is captured to a log file via tmux pipe-pane.
 # auto_login_and_run() drives the Linux guests when the shell is ready.
-# Pass condition: FreeRTOS log contains "received hello from arm-linux".
+# Pass conditions (both must be met):
+#   1. FreeRTOS UART contains the CHIMERA banner (shell_init() ran)
+#   2. ARM Linux pane logs "[arm-linux] ACK" (HELLO/ACK round trip, IVSHMEM0)
 #
 # Exit 0 = PASS, Exit 1 = FAIL.
 #
@@ -23,7 +25,9 @@ LOG_DIR="${HARNESS_LOG_DIR:-/tmp/harness-logs}"
 RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 SESSION="freertos-harness-${RUN_ID}"
 FREERTOS_LOG="${LOG_DIR}/freertos-${RUN_ID}.log"
-PASS_STRING="received hello from arm-linux"
+# ARM-Linux pane's own syslog-arm-linux output, proven by
+# guest-run-riscv-hello-harness.sh's "[<sender>] ACK" pattern.
+ARM_ACK_STRING='\[arm-linux\] ACK'
 BANNER_STRING="██████╗██╗"  # unique substring of the CHIMERA shell startup banner
 STATS_STRING="\[freertos\] stats snapshot written"
 BOOTLOG_INIT_STRING="\[bootlog\]"
@@ -59,6 +63,11 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
         || { echo "[harness] BUILD FAILED — see ${LOG_DIR}/build-${RUN_ID}.log"; exit 1; }
 fi
 require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
+
+# Bring up chbr0 + tap-arm/tap-riscv/tap-mips (idempotent; required by
+# guest-run-arm-phase5.sh / guest-run-riscv-phase5.sh / guest-run-chimera.sh's
+# tap netdevs).
+bash "${SCRIPT_DIR}/guest-setup-network-bridge.sh"
 
 # ── tmux session ─────────────────────────────────────────────────────────────
 # Same pane layout as guest-run-phase5-tmux.sh:
@@ -195,22 +204,23 @@ auto_login_and_run() {
 
 auto_login_and_run "${SESSION}:0.5" \
     "cp /mnt/pingpong/freertos-showcase/linux-arm-stats /tmp/ && /tmp/linux-arm-stats &" \
-    "/mnt/pingpong/freertos-showcase/hello-arm-linux" &
+    "SYSLOG_INTERVAL_SEC=1 /mnt/pingpong/freertos-showcase/syslog-arm-linux &" &
 auto_login_and_run "${SESSION}:0.6" \
-    "/mnt/pingpong/freertos-showcase/hello-riscv-linux" &
+    "SYSLOG_INTERVAL_SEC=1 /mnt/pingpong/freertos-showcase/syslog-riscv-linux &" &
 auto_login_and_run "${SESSION}:0.7" \
-    "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/hello-mips-linux && /tmp/hello-mips-linux" &
+    "cp /mnt/pingpong/freertos-showcase/syslog-mips-linux /tmp/syslog-mips-linux && SYSLOG_INTERVAL_SEC=1 /tmp/syslog-mips-linux &" &
 
 # ── Monitor ──────────────────────────────────────────────────────────────────
 # Poll the FreeRTOS pane (0.4) directly via tmux capture-pane (avoids all
 # pipe-pane buffering issues).  Set a large scroll buffer so we see history.
 tmux set-option -t "${SESSION}" history-limit 50000
 
-echo "[harness] Monitoring for banner + \"${PASS_STRING}\" (timeout ${HARNESS_TIMEOUT}s)..."
+echo "[harness] Monitoring for banner + \"${ARM_ACK_STRING}\" (timeout ${HARNESS_TIMEOUT}s)..."
 banner_seen=0
 stats_seen=0
 bootlog_seen=0
 bootlog_doorbell_seen=0
+arm_ack_seen=0
 elapsed=0
 while (( elapsed < HARNESS_TIMEOUT )); do
     pane_content="$(tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null)"
@@ -239,28 +249,31 @@ while (( elapsed < HARNESS_TIMEOUT )); do
         echo "[harness] Boot-log doorbell rung after ${elapsed}s (all guests booted or timeout)"
     fi
 
-    # Main HELLO/ACK pass check (requires banner first).
-    if echo "${pane_content}" | grep -q "${PASS_STRING}"; then
-        if [[ "${banner_seen}" -eq 0 ]]; then
-            echo "[harness] FAIL: received hello but banner NOT found — shell may not have started"
-            echo "${pane_content}" > "${FREERTOS_LOG}"
-            exit 1
+    # ARM HELLO/ACK round trip, proven via syslog-arm-linux's own output.
+    if [[ "${arm_ack_seen}" -eq 0 ]]; then
+        if tmux capture-pane -p -t "${SESSION}:0.5" -S -50000 2>/dev/null | grep -q "${ARM_ACK_STRING}"; then
+            arm_ack_seen=1
+            echo "[harness] ARM HELLO/ACK round trip detected after ${elapsed}s"
         fi
+    fi
+
+    # Main pass check (requires banner first).
+    if [[ "${banner_seen}" -eq 1 && "${arm_ack_seen}" -eq 1 ]]; then
         echo "[harness] PASS after ${elapsed}s"
         echo "[harness]   banner=$([[ ${banner_seen} -eq 1 ]] && echo '✓' || echo '✗')"
         echo "[harness]   stats_snapshot=$([[ ${stats_seen} -eq 1 ]] && echo '✓' || echo '✗')"
         echo "[harness]   bootlog_init=$([[ ${bootlog_seen} -eq 1 ]] && echo '✓' || echo '✗')"
         echo "[harness]   bootlog_doorbell=$([[ ${bootlog_doorbell_seen} -eq 1 ]] && echo '✓' || echo '✗')"
-        echo "[harness]   hello_arm=${PASS_STRING}"
+        echo "[harness]   hello_arm=${ARM_ACK_STRING}"
         echo "=== Matching FreeRTOS pane output ==="
-        echo "${pane_content}" | grep -E "received hello|flag=1|\[diag\]|stats snapshot|bootlog" | tail -20
+        echo "${pane_content}" | grep -E "flag=1|\[diag\]|stats snapshot|bootlog" | tail -20
         # Dump full FreeRTOS pane to log for record
         echo "${pane_content}" > "${FREERTOS_LOG}"
         exit 0
     fi
 
     if (( elapsed > 0 && elapsed % 30 == 0 )); then
-        echo "[harness] t=${elapsed}s banner=${banner_seen} stats=${stats_seen} bootlog=${bootlog_seen} doorbell=${bootlog_doorbell_seen} — FreeRTOS pane tail:"
+        echo "[harness] t=${elapsed}s banner=${banner_seen} stats=${stats_seen} bootlog=${bootlog_seen} doorbell=${bootlog_doorbell_seen} arm_ack=${arm_ack_seen} — FreeRTOS pane tail:"
         echo "${pane_content}" | tail -3
     fi
 
@@ -273,7 +286,7 @@ echo "[harness]   banner:           $([[ ${banner_seen} -eq 1 ]] && echo '✓ se
 echo "[harness]   stats_snapshot:   $([[ ${stats_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
 echo "[harness]   bootlog_init:     $([[ ${bootlog_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
 echo "[harness]   bootlog_doorbell: $([[ ${bootlog_doorbell_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
-echo "[harness]   hello_arm:        $([[ $(echo "${pane_content}" | grep -q "${PASS_STRING}"; echo $?) -eq 0 ]] && echo '✓ seen' || echo '✗ NOT seen')"
+echo "[harness]   hello_arm:        $([[ ${arm_ack_seen} -eq 1 ]] && echo '✓ seen' || echo '✗ NOT seen')"
 echo "=== FreeRTOS pane (last 30 lines) ==="
 tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null | tail -30 || true
 echo ""

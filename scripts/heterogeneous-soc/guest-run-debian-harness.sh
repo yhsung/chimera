@@ -7,10 +7,11 @@
 #            rootfs disks, extract kernels, build FreeRTOS showcase, boot all
 #            guests, and verify FreeRTOS receives hello messages from every sender.
 #
-# Pass condition: FreeRTOS UART contains:
-#   "received hello from arm-linux"
-#   "received hello from riscv-linux"
-#   "received hello from mips-linux"
+# Pass conditions (all must be met):
+#   1. FreeRTOS UART contains "showcase task started" (IVSHMEM IRQ wiring up)
+#   2. ARM Linux pane logs   "[arm-linux] ACK"   (HELLO/ACK round trip, IVSHMEM0)
+#   3. RISCV Linux pane logs "[riscv-linux] ACK" (HELLO/ACK round trip, IVSHMEM1)
+#   4. MIPS Linux pane logs  "[mips-linux] ACK"  (HELLO/ACK round trip, IVSHMEM2)
 #
 # Exit 0 = PASS, Exit 1 = FAIL.
 #
@@ -34,12 +35,13 @@ SESSION="debian-harness-${RUN_ID}"
 FREERTOS_LOG="${LOG_DIR}/freertos-${RUN_ID}.log"
 SETUP_LOG="${LOG_DIR}/setup-${RUN_ID}.log"
 
-# Pass condition: all three senders must be acknowledged.
-PASS_STRINGS=(
-    "received hello from arm-linux"
-    "received hello from riscv-linux"
-    "received hello from mips-linux"
-)
+# Pass conditions: FreeRTOS boots + each Linux guest completes a HELLO/ACK
+# round trip, proven via that guest's own syslog-*-linux "[<sender>] ACK"
+# output (same pattern as guest-run-riscv-hello-harness.sh).
+FREERTOS_PASS_STRING="showcase task started"
+ARM_PASS_STRING='\[arm-linux\] ACK'
+RISCV_PASS_STRING='\[riscv-linux\] ACK'
+MIPS_PASS_STRING='\[mips-linux\] ACK'
 
 mkdir -p "${LOG_DIR}"
 
@@ -173,14 +175,16 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
 fi
 require_file "${FREERTOS_DEMO_ELF}" "FreeRTOS demo ELF"
 
-# Check that hello binaries exist (may be absent if cross-compiler is missing).
-MISSING_HELLO=0
-for bin in "${HELLO_ARM_BINARY}" "${HELLO_RISCV_BINARY}" "${HELLO_MIPS_BINARY}"; do
+# Check that syslog binaries exist (may be absent if cross-compiler is missing).
+for bin in "${SYSLOG_ARM_BINARY}" "${SYSLOG_RISCV_BINARY}" "${SYSLOG_MIPS_BINARY}"; do
     if [[ ! -f "${bin}" ]]; then
-        _warn "$(basename "${bin}") not found — MIPS guest will not send hello"
-        MISSING_HELLO=1
+        _warn "$(basename "${bin}") not found — that guest will not send HELLO"
     fi
 done
+
+# Bring up chbr0 + tap-arm/tap-riscv/tap-mips (idempotent; required by
+# guest-run-arm-phase5.sh and guest-run-riscv-phase5.sh's tap netdevs).
+bash "${SCRIPT_DIR}/guest-setup-network-bridge.sh"
 
 # ── 2e. Launch tmux session ──────────────────────────────────────────────────
 # Same 7-pane layout as guest-run-phase5-tmux.sh:
@@ -194,7 +198,7 @@ done
 
 tmux new-session -d -s "${SESSION}" -x 220 -y 55
 # Set large history-limit BEFORE any pane produces output so that early
-# FreeRTOS "received hello" messages are never evicted from the buffer.
+# pass-condition lines are never evicted from the scrollback buffer.
 tmux set-option -t "${SESSION}" history-limit 100000
 tmux split-window -v -t "${SESSION}:0.0" -l 80%
 tmux split-window -v -t "${SESSION}:0.1" -l 45%
@@ -289,7 +293,11 @@ auto_login_and_run() {
     local bootlog_cmd="$2"
     local hello_bin="$3"
     local label="$4"
-    local timeout=300
+    # MIPS Debian under qemu-system-mipsel boots much slower than ARM/RISCV
+    # (observed login prompt at ~330-360s vs ~60-120s for ARM/RISCV), so the
+    # shared timeout must cover MIPS's worst case while leaving headroom
+    # under HARNESS_TIMEOUT (600s) for the post-login ACK to appear.
+    local timeout=500
     local elapsed=0
 
     # Write PCI-enable, bootlog command, and hello binary to a short-named script
@@ -334,57 +342,66 @@ auto_login_and_run() {
 
 auto_login_and_run "${SESSION}:0.4" \
     "/mnt/pingpong/freertos-showcase/bootlog-arm-linux &" \
-    "/mnt/pingpong/freertos-showcase/hello-arm-linux" \
+    "SYSLOG_INTERVAL_SEC=1 /mnt/pingpong/freertos-showcase/syslog-arm-linux &" \
     "ARM" &
 PID_ARM=$!
 auto_login_and_run "${SESSION}:0.5" \
     "/mnt/pingpong/freertos-showcase/bootlog-riscv-linux &" \
-    "/mnt/pingpong/freertos-showcase/hello-riscv-linux" \
+    "SYSLOG_INTERVAL_SEC=1 /mnt/pingpong/freertos-showcase/syslog-riscv-linux &" \
     "RISCV" &
 PID_RISCV=$!
-# MIPS: copy hello binary to local /tmp to avoid 9p exec issues
+# MIPS: copy syslog binary to local /tmp to avoid 9p exec issues
 auto_login_and_run "${SESSION}:0.6" \
     "cp /mnt/pingpong/freertos-showcase/bootlog-mips-linux /tmp/ && /tmp/bootlog-mips-linux &" \
-    "cp /mnt/pingpong/freertos-showcase/hello-mips-linux /tmp/ && /tmp/hello-mips-linux" \
+    "cp /mnt/pingpong/freertos-showcase/syslog-mips-linux /tmp/ && SYSLOG_INTERVAL_SEC=1 /tmp/syslog-mips-linux &" \
     "MIPS" &
 PID_MIPS=$!
 
-# ── 2j. Monitor FreeRTOS output ──────────────────────────────────────────────
+# ── 2j. Monitor FreeRTOS + per-guest output ──────────────────────────────────
 
 echo ""
-echo "[debian-harness] Monitoring FreeRTOS UART for pass strings (timeout ${HARNESS_TIMEOUT}s)..."
-echo "[debian-harness]   ARM:   \"${PASS_STRINGS[0]}\""
-echo "[debian-harness]   RISCV: \"${PASS_STRINGS[1]}\""
-echo "[debian-harness]   MIPS:  \"${PASS_STRINGS[2]}\""
+echo "[debian-harness] Monitoring for FreeRTOS boot + HELLO/ACK round trips (timeout ${HARNESS_TIMEOUT}s)..."
+echo "[debian-harness]   FreeRTOS: \"${FREERTOS_PASS_STRING}\""
+echo "[debian-harness]   ARM:      \"${ARM_PASS_STRING}\""
+echo "[debian-harness]   RISCV:    \"${RISCV_PASS_STRING}\""
+echo "[debian-harness]   MIPS:     \"${MIPS_PASS_STRING}\""
 
-# Track which pass strings we've seen.
-declare -A seen
-for s in "${PASS_STRINGS[@]}"; do
-    seen["$s"]=0
-done
+FREERTOS_SEEN=0
+ARM_SEEN=0
+RISCV_SEEN=0
+MIPS_SEEN=0
 
 elapsed=0
 while (( elapsed < HARNESS_TIMEOUT )); do
-    pane_content="$(tmux capture-pane -p -t "${SESSION}:0.3" -S -50000 2>/dev/null)"
-
-    all_seen=1
-    for s in "${PASS_STRINGS[@]}"; do
-        if [[ "${seen[$s]}" -eq 0 ]]; then
-            if echo "${pane_content}" | grep -qF "$s"; then
-                seen["$s"]=1
-                _ok "Detected: $s"
-            else
-                all_seen=0
-            fi
+    if [[ "${FREERTOS_SEEN}" -eq 0 ]]; then
+        if tmux capture-pane -p -t "${SESSION}:0.3" -S -50000 2>/dev/null | grep -q "${FREERTOS_PASS_STRING}"; then
+            FREERTOS_SEEN=1
+            _ok "Detected: ${FREERTOS_PASS_STRING}"
         fi
-    done
+    fi
+    if [[ "${ARM_SEEN}" -eq 0 ]]; then
+        if tmux capture-pane -p -t "${SESSION}:0.4" -S -50000 2>/dev/null | grep -q "${ARM_PASS_STRING}"; then
+            ARM_SEEN=1
+            _ok "Detected: ${ARM_PASS_STRING}"
+        fi
+    fi
+    if [[ "${RISCV_SEEN}" -eq 0 ]]; then
+        if tmux capture-pane -p -t "${SESSION}:0.5" -S -50000 2>/dev/null | grep -q "${RISCV_PASS_STRING}"; then
+            RISCV_SEEN=1
+            _ok "Detected: ${RISCV_PASS_STRING}"
+        fi
+    fi
+    if [[ "${MIPS_SEEN}" -eq 0 ]]; then
+        if tmux capture-pane -p -t "${SESSION}:0.6" -S -50000 2>/dev/null | grep -q "${MIPS_PASS_STRING}"; then
+            MIPS_SEEN=1
+            _ok "Detected: ${MIPS_PASS_STRING}"
+        fi
+    fi
 
-    if [[ "$all_seen" -eq 1 ]]; then
+    if [[ "${FREERTOS_SEEN}" -eq 1 && "${ARM_SEEN}" -eq 1 && "${RISCV_SEEN}" -eq 1 && "${MIPS_SEEN}" -eq 1 ]]; then
         echo ""
-        echo "[debian-harness] PASS after ${elapsed}s — all three senders acknowledged"
-        echo "=== Matching FreeRTOS output ==="
-        echo "${pane_content}" | grep -E "received hello|flag=1|\[diag\]" | tail -20
-        echo "${pane_content}" > "${FREERTOS_LOG}"
+        echo "[debian-harness] PASS after ${elapsed}s — FreeRTOS booted and all three senders acknowledged"
+        tmux capture-pane -p -t "${SESSION}:0.3" -S -50000 2>/dev/null > "${FREERTOS_LOG}" || true
 
         echo ""
         echo "[debian-harness] Verifying boot-log collector output..."
@@ -411,12 +428,8 @@ while (( elapsed < HARNESS_TIMEOUT )); do
     fi
 
     if (( elapsed > 0 && elapsed % 30 == 0 )); then
-        printf "[debian-harness] t=%3ds — seen: " "${elapsed}"
-        for s in "${PASS_STRINGS[@]}"; do
-            if [[ "${seen[$s]}" -eq 1 ]]; then printf "✓ "; else printf "… "; fi
-        done
-        echo ""
-        echo "${pane_content}" | tail -3
+        printf "[debian-harness] t=%3ds  freertos=%d arm=%d riscv=%d mips=%d\n" \
+            "${elapsed}" "${FREERTOS_SEEN}" "${ARM_SEEN}" "${RISCV_SEEN}" "${MIPS_SEEN}"
     fi
 
     sleep 2
@@ -428,13 +441,10 @@ done
 echo ""
 _fail "FAIL: timeout after ${HARNESS_TIMEOUT}s"
 
-MISSING_COUNT=0
-for s in "${PASS_STRINGS[@]}"; do
-    if [[ "${seen[$s]}" -eq 0 ]]; then
-        _fail "  Never saw: $s"
-        MISSING_COUNT=$(( MISSING_COUNT + 1 ))
-    fi
-done
+[[ "${FREERTOS_SEEN}" -eq 0 ]] && _fail "  Never saw: ${FREERTOS_PASS_STRING} (FreeRTOS pane)"
+[[ "${ARM_SEEN}"      -eq 0 ]] && _fail "  Never saw: ${ARM_PASS_STRING} (ARM pane)"
+[[ "${RISCV_SEEN}"    -eq 0 ]] && _fail "  Never saw: ${RISCV_PASS_STRING} (RISCV pane)"
+[[ "${MIPS_SEEN}"     -eq 0 ]] && _fail "  Never saw: ${MIPS_PASS_STRING} (MIPS pane)"
 
 echo ""
 echo "[debian-harness] === FreeRTOS pane (last 30 lines) ==="
