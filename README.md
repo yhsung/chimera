@@ -408,6 +408,7 @@ limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmu
 | `links` | Per guest: `<name>: ivpos=<hex> l2f_flag=<n> f2l_flag=<n> since_hello=<ms>ms` |
 | `loglevel [N]` | No arg: print current level (`0`=VERBOSE..`3`=ERROR) and name. `N` in `0-3`: set `g_freertos_log_level`. Out of range: `usage: loglevel [0-3]` |
 | `can status` | `sr=<hex> rx_frames=<count>` from the CAN controller's status register and the IVSHMEM5 generation counter |
+| `heap-test <subcmd>` | `alloc <N>` / `free` / `release` / `show` — `pvPortMalloc` N bytes, `vPortFree` the most-recent, `vPortFree` all, show outstanding + heap summary (`count`, `heap_free`, `heap_total`, `allocator=heap_4`) |
 
 Output from `log_uart()` (heartbeats, IRQ diagnostics, etc.) can interleave
 with shell echo/output — both write to UART0 with no shared mutex.
