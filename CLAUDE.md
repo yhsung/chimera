@@ -16,7 +16,7 @@ consumes this repository as its `qemu/` git submodule.
 ## Building QEMU
 
 ```bash
-./configure --target-list=aarch64-softmmu,arm-softmmu,riscv64-softmmu,mipsel-softmmu --enable-debug
+./configure --target-list=aarch64-softmmu,arm-softmmu,mipsel-softmmu --enable-debug
 ninja
 ```
 
@@ -26,13 +26,6 @@ Build output goes to the current directory. The chimera-2 scripts use
 ## Naming: mipsel, not mips
 
 The QEMU target for MIPS little-endian is `mipsel-softmmu`, producing `qemu-system-mipsel`. Build artifacts, binaries, and `pkill` patterns must use `mipsel` (not `mips`).
-
-## Naming: r52 (FreeRTOS's CPU) vs. the RISCV-Linux channel
-
-The bare-metal FreeRTOS guest runs on a Cortex-R52 (`qemu-system-arm`,
-machine `chimera-r52-freertos-demo`, binary `freertos-r52-demo.elf`). The
-disambiguating prefix for FreeRTOS's *own* architecture is **`r52`** (not
-`arm`, which is the Cortex-A53 ARM-Linux guest).
 
 ## Wire Protocol (Critical Constraints)
 

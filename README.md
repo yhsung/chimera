@@ -16,14 +16,14 @@ All custom code lives in a small surface area on top of upstream QEMU:
 
 | File | Purpose |
 |---|---|
-| `hw/arm/chimera_r52_freertos_demo.c` | Custom `chimera-r52-freertos-demo` QEMU machine: one Cortex-R52 core, GICv2, pl011 UART, six `ivshmem-flat` devices (3 HELLO/ACK + 1 stats + 1 boot-log + 1 CAN) |
+| `hw/arm/chimera_r52_freertos_demo.c` | Custom `chimera-r52-freertos-demo` QEMU machine: one Cortex-R52 core, GICv2, pl011 UART, five `ivshmem-flat` devices (2 HELLO/ACK + 1 stats + 1 boot-log + 1 CAN) |
 | `include/hw/arm/chimera_r52_freertos_demo.h` | Machine state, memory map enum, IRQ numbers |
 | `hw/misc/ivshmem-flat.c` | `ivshmem-flat` sysbus device — memory-mapped ivshmem without PCI, connects to ivshmem-server via Unix socket |
 | `include/hw/misc/ivshmem-flat.h` | Device state and interface |
 
 The `ivshmem-flat` device is a sysbus alternative to the PCI `ivshmem-doorbell`; FreeRTOS uses it because bare-metal targets lack a PCI bus. Linux guests use the standard PCI `ivshmem-doorbell`.
 
-`CONFIG_CHIMERA_FREERTOS_DEMO` (`hw/riscv/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` for their respective targets.
+`CONFIG_CHIMERA_R52_FREERTOS_DEMO` (`hw/arm/Kconfig`) selects `CONFIG_IVSHMEM_FLAT_DEVICE` (`hw/misc/Kconfig`) automatically. Both are `default y` when targeting `arm-softmmu`.
 
 ### ivshmem Device Types
 
@@ -43,12 +43,11 @@ The `chimera-r52-freertos-demo` machine is configured with the following DRAM la
 
 The RAM is added to the system memory map via `memory_region_add_subregion()` using the memmap's `base` (0x80000000) and `machine->ram` (sized by `default_ram_size`).
 
-The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS to all six ivshmem servers simultaneously:
+The custom QEMU machine (`hw/arm/chimera_r52_freertos_demo.c`) connects FreeRTOS to all five ivshmem servers simultaneously:
 
 | Link | MMIO base | SHMEM base | Vectors | Direction |
 |---|---|---|---|---|
 | ARM ↔ FreeRTOS | `0x30000000` | `0x31000000` | 4 | bidirectional (HELLO/ACK) |
-| RISCV ↔ FreeRTOS | `0x35000000` | `0x36000000` | 4 | bidirectional (HELLO/ACK) |
 | MIPS ↔ FreeRTOS | `0x3A000000` | `0x3B000000` | 4 | bidirectional (HELLO/ACK) |
 | Stats FreeRTOS→ARM | `0x3F000000` | `0x40000000` | 4 | FreeRTOS write only (stats snapshot) |
 | Boot-log (all guests → ARM) | `0x44000000` | `0x45000000` | 1 | All 4 guests → ARM collector |
@@ -81,10 +80,6 @@ This ensures message body writes are globally visible before the flag is set, an
 
 The QEMU target for MIPS little-endian is `mipsel-softmmu`, producing `qemu-system-mipsel`. Build artifacts, binaries, and `pkill` patterns must use `mipsel` (not `mips`).
 
-### Naming: r52 (FreeRTOS's CPU) vs. the RISCV-Linux channel
-
-The bare-metal FreeRTOS guest runs on a Cortex-R52 (`qemu-system-arm`, machine `chimera-r52-freertos-demo`, binary `freertos-r52-demo.elf`). The disambiguating prefix for FreeRTOS's own architecture is **`r52`** (not `arm`, which is the Cortex-A53 ARM-Linux guest).
-
 ---
 
 ## Licensing
@@ -110,6 +105,6 @@ See the [upstream QEMU build documentation](https://www.qemu.org/docs/master/sys
 To build with the Chimera machine model configured:
 
 ```bash
-./configure --target-list=aarch64-softmmu,arm-softmmu,riscv64-softmmu,mipsel-softmmu --enable-debug
-ninja qemu-system-aarch64 qemu-system-arm qemu-system-riscv64 qemu-system-mipsel
+./configure --target-list=aarch64-softmmu,arm-softmmu,mipsel-softmmu --enable-debug
+ninja qemu-system-aarch64 qemu-system-arm qemu-system-mipsel
 ```
