@@ -7,8 +7,11 @@
 # rx_frames=0 from zero-initialized IVSHMEM5 shared memory -- see the plan's
 # Design Decisions for why this is required). No Linux guests are started.
 #
-# Sends each of the 6 shell commands via `tmux send-keys` and verifies the
-# exact output documented in README.md's "Interactive Shell" section:
+# Sends the 6 documented shell commands + 1 unrecognized command via
+# `tmux send-keys`, then a second `sysinfo` (as the final command) so we
+# can compare heap_free=N before/after the 7-command sequence and assert
+# the firmware has not leaked heap during shell/showcase activity. Verifies
+# the exact output documented in README.md's "Interactive Shell" section:
 #   help, stats, sysinfo, links, loglevel, can status
 # plus one unrecognized-command check (shell_dispatch's default branch).
 #
