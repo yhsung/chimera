@@ -348,21 +348,31 @@ sequenceDiagram
 
 `guest-run-phase5-tmux.sh` opens a single 9-pane tmux window:
 
-| Pane | Contents |
-|---|---|
-| 0 | `ivshmem-server` — ARM ↔ FreeRTOS |
-| 1 | `ivshmem-server` — RISCV ↔ FreeRTOS |
-| 2 | `ivshmem-server` — MIPS ↔ FreeRTOS |
-| 3 | `ivshmem-server` — stats → ARM |
-| 4 | `ivshmem-server` — boot-log → ARM |
-| 5 | R52 FreeRTOS (HELLO/ACK on all channels; stats snapshot every 5 s; CAN RX → IVSHMEM5; boot-log monitor) |
-| 6 | ARM-Linux: `linux-arm-stats` (bg), `syslog-arm-linux`, `bootlog-arm-linux`, brings up `can0` + `can-log-arm-linux`, `boot-collector` |
-| 7 | RISCV-Linux: `syslog-riscv-linux`, `bootlog-riscv-linux` |
-| 8 | MIPS-Linux: `syslog-mips-linux`, `bootlog-mips-linux` |
+| Pane | Name | Contents |
+|---|---|---|
+| 0 | `ivshmem-arm` | `ivshmem-server` — ARM ↔ FreeRTOS |
+| 1 | `ivshmem-riscv` | `ivshmem-server` — RISCV ↔ FreeRTOS |
+| 2 | `ivshmem-mips` | `ivshmem-server` — MIPS ↔ FreeRTOS |
+| 3 | `ivshmem-stats` | `ivshmem-server` — stats → ARM |
+| 4 | `ivshmem-bootlog` | `ivshmem-server` — boot-log → ARM |
+| 5 | `freertos` | R52 FreeRTOS (HELLO/ACK on all channels; stats snapshot every 5 s; CAN RX → IVSHMEM5; boot-log monitor) |
+| 6 | `arm-linux` | ARM-Linux: `linux-arm-stats` (bg), `syslog-arm-linux`, `bootlog-arm-linux`, brings up `can0` + `can-log-arm-linux`, `boot-collector` |
+| 7 | `riscv-linux` | RISCV-Linux: `syslog-riscv-linux`, `bootlog-riscv-linux` |
+| 8 | `mips-linux` | MIPS-Linux: `syslog-mips-linux`, `bootlog-mips-linux` |
 
 The CAN ivshmem-server (IVSHMEM5) is started in the background by the launcher and does not get a dedicated pane.
 
 Navigate with **Ctrl-b** + arrow keys. All Linux panes auto-login as `root`, mount the 9p virtfs share, and launch their daemons once the guest boots. The syslog daemons (`syslog-{arm,riscv,mips}-linux`) are pre-installed into each guest's `/usr/local/bin/` by `guest-install-syslog-to-guests.sh` and run directly from the guest filesystem. In pane 6, `linux-arm-stats` runs in the background before `syslog-arm-linux` starts; stats are appended to `/var/log/chimera-log/chimera-cross-domain.log` inside the ARM guest.
+
+### Targeting panes by name
+
+Each pane carries a tmux title (visible via `pane-border-status`) and can be addressed by name with `guest-tmux-pane.sh` instead of the numeric index:
+
+```bash
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh list
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh freertos send "stats"
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh freertos capture 20
+```
 
 ---
 
@@ -382,6 +392,10 @@ Attach to the FreeRTOS pane and type at the `chimera> ` prompt:
 ```bash
 limactl shell qemu-dev -- tmux send-keys -t freertos-showcase:0.5 "help" Enter
 limactl shell qemu-dev -- tmux capture-pane -p -t freertos-showcase:0.5 | tail -20
+
+# or, by name:
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh freertos send "help"
+limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-tmux-pane.sh freertos capture 20
 ```
 
 ### Commands
