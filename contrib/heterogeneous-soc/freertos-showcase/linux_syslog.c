@@ -21,6 +21,7 @@
 #define HSOC_VENDOR_ID      "0x1af4"
 #define HSOC_STATS_MAGIC    0x53544154U
 #define HSOC_BOOTLOG_MAGIC  0x424C5447U  /* "BLTG" — boot-log channel, skip */
+#define HSOC_IVPOSITION_OFFSET 0x008U   /* BAR0 IVPOSITION register offset */
 #define HSOC_DOORBELL_OFFSET  0x00cU    /* BAR0 doorbell register offset */
 #define UIO_TIMEOUT_MS         200UL
 
@@ -181,6 +182,11 @@ static void shm_read(void *dst, const volatile void *src, size_t n)
 static int uio_fd = -1;
 static volatile uint32_t *bar0 = NULL;
 static bool doorbell_available = false;
+/* This guest's IVPOSITION (peer ID) on the syslog ivshmem link, latched in
+ * doorbell_init(). Connection order to the per-channel ivshmem-server is a
+ * race between this guest's QEMU process and FreeRTOS's, so this guest is
+ * not guaranteed to be peer 1. */
+static uint32_t own_ivpos = 1;
 
 /*
  * Wait for ACK from FreeRTOS using hybrid interrupt + poll strategy:
@@ -445,6 +451,11 @@ static int doorbell_init(void)
         return -1;
     }
 
+    /* Latch our own IVPOSITION (peer ID) so doorbell_ring() can target the
+     * other peer (FreeRTOS) regardless of which side joined the
+     * ivshmem-server first. */
+    own_ivpos = bar0[HSOC_IVPOSITION_OFFSET / sizeof(uint32_t)];
+
     /* Bind to uio_pci_generic and open /dev/uio0 for interrupt receive —
      * this is optional; on failure uio_fd stays -1 and the flag-poll
      * fallback in hybrid_wait_ack() is used. Retry a few times: the bind
@@ -486,13 +497,14 @@ static int doorbell_init(void)
 
 /*
  * Ring the doorbell to interrupt FreeRTOS, signalling that a new HELLO message
- * has been written to IVSHMEM0 shared memory.
+ * has been written to shared memory.
  *
  * ivshmem PCI DOORBELL register (BAR0 + 0x0c): a single uint32_t encoding
- * (peer_id << 16) | vector_id. FreeRTOS's qemu-system-arm machine has far
- * fewer devices to realize at startup than this guest's qemu-system-aarch64
- * machine, so it consistently wins the race to connect to the ivshmem-server
- * and joins first (peer 0); this guest joins second (peer 1).
+ * (peer_id << 16) | vector_id. Exactly two peers share this link — this
+ * guest and FreeRTOS — with IVPOSITION values 0 and 1. Connection order to
+ * the per-channel ivshmem-server is a race between this guest's QEMU process
+ * and FreeRTOS's, so this guest is not guaranteed to be peer 1; XOR'ing our
+ * own latched IVPOSITION (own_ivpos) with 1 always yields FreeRTOS's peer ID.
  */
 static void doorbell_ring(void)
 {
@@ -500,9 +512,9 @@ static void doorbell_ring(void)
 
     /* IVSHMEM DOORBELL register (BAR0 + 0x0c):
      * Write (peer_id << 16) | vector_id as a single uint32_t.
-     * peer_id=0 = FreeRTOS (joined first, ahead of this guest=1).
+     * peer_id = own_ivpos ^ 1 = FreeRTOS's peer ID on this link.
      * vector=0 = use eventfd[0]. */
-    bar0[HSOC_DOORBELL_OFFSET / sizeof(uint32_t)] = 0U;
+    bar0[HSOC_DOORBELL_OFFSET / sizeof(uint32_t)] = (own_ivpos ^ 1U) << 16;
     __sync_synchronize();
 }
 

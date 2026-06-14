@@ -315,15 +315,15 @@ void vApplicationIRQHandler(uint32_t ulICCIAR)
     } else if (intid == R52_IVSHMEM0_INTID) {
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem0: SPI33 dispatched\n");
         freertos_ivshmem_isr(&arm_link, &arm_count, &arm_cpu_pct, &arm_mem_pct,
-                              &arm_last_hello_ticks, (1U << 16) | 0U);
+                              &arm_last_hello_ticks);
     } else if (intid == R52_IVSHMEM1_INTID) {
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem1: SPI34 dispatched\n");
         freertos_ivshmem_isr(&riscv_link, &riscv_count, &riscv_cpu_pct, &riscv_mem_pct,
-                              &riscv_last_hello_ticks, (1U << 16) | 0U);
+                              &riscv_last_hello_ticks);
     } else if (intid == R52_IVSHMEM2_INTID) {
         log_uart(HSOC_LOG_VERBOSE, "[irq] ivshmem2: SPI35 dispatched\n");
         freertos_ivshmem_isr(&mips_link, &mips_count, &mips_cpu_pct, &mips_mem_pct,
-                              &mips_last_hello_ticks, (1U << 16) | 0U);
+                              &mips_last_hello_ticks);
     } else if (intid == R52_UART_INTID) {
         uart_rx_isr();
     } else {

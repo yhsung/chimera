@@ -103,8 +103,7 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
                           uint32_t *count,
                           uint32_t *cpu_pct,
                           uint32_t *mem_pct,
-                          uint32_t *last_hello_ticks,
-                          uint32_t doorbell_ring_value)
+                          uint32_t *last_hello_ticks)
 {
     struct hsoc_hello_msg msg;
     int64_t ts_sec, ts_nsec;
@@ -132,14 +131,16 @@ void freertos_ivshmem_isr(struct freertos_ivshmem_link *link,
             *mem_pct = msg.mem_used_pct_x100;
             *last_hello_ticks = xTaskGetTickCountFromISR();
 
-            /* Ring doorbell (write doorbell_ring_value = (peer_id << 16) |
-             * vector to DOORBELL reg @ offset 0xc) to notify the Linux guest
-             * that the ACK is ready. FreeRTOS joins each per-channel
-             * ivshmem-server first and is peer 0 (confirmed via IVPOSITION);
-             * the Linux guest is peer 1, vector 0 — same convention as
-             * boot_log.c's doorbell ring. The caller supplies
-             * doorbell_ring_value per link. */
-            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] = doorbell_ring_value;
+            /* Ring doorbell (write (peer_id << 16) | vector to DOORBELL reg
+             * @ offset 0xc) to notify the Linux guest that the ACK is ready.
+             * Exactly two peers share this link — FreeRTOS and one Linux
+             * guest — with IVPOSITION values 0 and 1. Connection order to
+             * the per-channel ivshmem-server is a race between this QEMU
+             * process and the Linux guest's QEMU process, so FreeRTOS is not
+             * guaranteed to be peer 0; XOR'ing our own latched IVPOSITION
+             * with 1 always yields the other peer's ID. Vector is always 0. */
+            link->mmio_base[FREERTOS_IVSHMEM_DOORBELL / sizeof(uint32_t)] =
+                (link->own_id ^ 1U) << 16;
 
             log_uart(HSOC_LOG_VERBOSE, "[irq] ");
             log_uart(HSOC_LOG_VERBOSE, link->name);
@@ -170,6 +171,7 @@ void freertos_ivshmem_init(struct freertos_ivshmem_link *link,
     link->mmio_base = (volatile uint32_t *)mmio_base;
     link->layout = (struct hsoc_layout *)shmem_base;
     link->name = name;
+    link->own_id = link->mmio_base[FREERTOS_IVSHMEM_IVPOSITION / sizeof(uint32_t)];
     link->layout->linux_to_freertos.flag = 0;
     link->layout->freertos_to_linux.flag = 0;
 }
