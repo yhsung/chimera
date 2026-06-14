@@ -8,9 +8,14 @@
 
 #include "can_driver.h"
 #include "shell_parse.h"
+#include "shell_heap_test.h"
 #include "uart_driver.h"
 
 extern volatile uint32_t g_freertos_log_level;
+
+static void *heap_test_allocs[HEAP_TEST_MAX];
+static uint32_t heap_test_sizes[HEAP_TEST_MAX];
+static uint32_t heap_test_count;
 
 #define SHELL_LINE_MAX 80
 #define SHELL_STACK_WORDS 1024
@@ -86,6 +91,7 @@ static void cmd_sysinfo(const struct chimera_shell_ctx *ctx, int argc, char *arg
 static void cmd_links(const struct chimera_shell_ctx *ctx, int argc, char *argv[]);
 static void cmd_loglevel(const struct chimera_shell_ctx *ctx, int argc, char *argv[]);
 static void cmd_can(const struct chimera_shell_ctx *ctx, int argc, char *argv[]);
+static void cmd_heap_test(const struct chimera_shell_ctx *ctx, int argc, char *argv[]);
 
 struct shell_cmd {
     const char *name;
@@ -100,6 +106,7 @@ static const struct shell_cmd shell_cmd_table[] = {
     { "links",    cmd_links,    "per-channel IVPOSITION, flags, time since last HELLO" },
     { "loglevel", cmd_loglevel, "get/set runtime log verbosity (0=VERBOSE..3=ERROR)" },
     { "can",      cmd_can,      "'can status' - CAN controller status register, frames forwarded" },
+    { "heap-test", cmd_heap_test, "<alloc N|free|release|show> - pvPortMalloc / vPortFree the FreeRTOS heap" },
 };
 
 #define SHELL_NUM_CMDS (sizeof(shell_cmd_table) / sizeof(shell_cmd_table[0]))
@@ -247,6 +254,123 @@ static void cmd_can(const struct chimera_shell_ctx *ctx, int argc, char *argv[])
     shell_utoa(buf, st.rx_frames);
     shell_print(buf);
     shell_print("\n");
+}
+
+static void cmd_heap_test(const struct chimera_shell_ctx *ctx, int argc, char *argv[])
+{
+    uint32_t size;
+    char buf[12];
+
+    (void)ctx;
+
+    switch (heap_test_parse(argc, argv, &size)) {
+
+    case HEAP_TEST_ALLOC: {
+        if (heap_test_count == HEAP_TEST_MAX) {
+            shell_print("heap_test: alloc list full (max ");
+            shell_utoa(buf, HEAP_TEST_MAX);
+            shell_print(buf);
+            shell_print(" outstanding)\n");
+            return;
+        }
+        void *p = pvPortMalloc(size);
+        if (p == NULL) {
+            shell_print("heap_test: alloc ");
+            shell_utoa(buf, size);
+            shell_print(buf);
+            shell_print(" failed (heap_free=");
+            shell_utoa(buf, (uint32_t)xPortGetFreeHeapSize());
+            shell_print(buf);
+            shell_print(")\n");
+            return;
+        }
+        heap_test_allocs[heap_test_count] = p;
+        heap_test_sizes[heap_test_count] = size;
+        heap_test_count++;
+        shell_print("heap_test: alloc ");
+        shell_utoa(buf, size);
+        shell_print(buf);
+        shell_print(" -> ");
+        shell_utoa_hex(buf, (uint32_t)p);
+        shell_print(buf);
+        shell_print(" (heap_free=");
+        shell_utoa(buf, (uint32_t)xPortGetFreeHeapSize());
+        shell_print(buf);
+        shell_print(")\n");
+        return;
+    }
+
+    case HEAP_TEST_FREE:
+        if (heap_test_count == 0) {
+            shell_print("heap_test: nothing to free\n");
+            return;
+        }
+        heap_test_count--;
+        shell_print("heap_test: free ");
+        shell_utoa_hex(buf, (uint32_t)heap_test_allocs[heap_test_count]);
+        shell_print(buf);
+        vPortFree(heap_test_allocs[heap_test_count]);
+        heap_test_allocs[heap_test_count] = NULL;
+        heap_test_sizes[heap_test_count] = 0;
+        shell_print(" (heap_free=");
+        shell_utoa(buf, (uint32_t)xPortGetFreeHeapSize());
+        shell_print(buf);
+        shell_print(")\n");
+        return;
+
+    case HEAP_TEST_RELEASE: {
+        uint32_t freed = 0;
+        while (heap_test_count > 0) {
+            heap_test_count--;
+            vPortFree(heap_test_allocs[heap_test_count]);
+            heap_test_allocs[heap_test_count] = NULL;
+            heap_test_sizes[heap_test_count] = 0;
+            freed++;
+        }
+        shell_print("heap_test: released ");
+        shell_utoa(buf, freed);
+        shell_print(buf);
+        shell_print(" buffer(s) (heap_free=");
+        shell_utoa(buf, (uint32_t)xPortGetFreeHeapSize());
+        shell_print(buf);
+        shell_print(")\n");
+        return;
+    }
+
+    case HEAP_TEST_SHOW: {
+        uint32_t i;
+        for (i = 0; i < heap_test_count; i++) {
+            shell_print("  [");
+            shell_utoa(buf, i);
+            shell_print(buf);
+            shell_print("] ");
+            shell_utoa_hex(buf, (uint32_t)heap_test_allocs[i]);
+            shell_print(buf);
+            shell_print(" size=");
+            shell_utoa(buf, heap_test_sizes[i]);
+            shell_print(buf);
+            shell_print("\n");
+        }
+        shell_print("heap_test: count=");
+        shell_utoa(buf, heap_test_count);
+        shell_print(buf);
+        shell_print("/");
+        shell_utoa(buf, HEAP_TEST_MAX);
+        shell_print(buf);
+        shell_print(" heap_free=");
+        shell_utoa(buf, (uint32_t)xPortGetFreeHeapSize());
+        shell_print(buf);
+        shell_print(" heap_total=");
+        shell_utoa(buf, configTOTAL_HEAP_SIZE);
+        shell_print(buf);
+        shell_print(" allocator=heap_4\n");
+        return;
+    }
+
+    default:
+        shell_print("usage: heap-test <alloc N|free|release|show>\n");
+        return;
+    }
 }
 
 static const char shell_banner[] =
