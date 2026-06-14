@@ -20,8 +20,9 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
 
     # Always rebuild QEMU and ivshmem-server via ninja (incremental; no-op when
     # nothing changed, fast partial rebuild when only .c files changed).
-    BUILD_DIR="$HOME/chimera-build-linux" VM_SOURCE_DIR="$HOME/chimera-src" \
-        scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
+    # BUILD_DIR/VM_SOURCE_DIR are left to common.sh's own detection, which
+    # resolves them relative to this script's location (REPO).
+    scripts/heterogeneous-soc/guest-build-ivshmem-tools.sh
 
     # Always rebuild the FreeRTOS ELF and Linux syslog binaries so source changes
     # are picked up without manual intervention.

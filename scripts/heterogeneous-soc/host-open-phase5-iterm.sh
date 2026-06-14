@@ -5,7 +5,7 @@
 set -euo pipefail
 
 LIMA_CMD="limactl shell qemu-dev"
-RUN_CMD="CHIMERA_ROOT=/home/yhsung.guest/chimera-src BUILD_DIR=/home/yhsung.guest/chimera-build-linux bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-phase5-tmux.sh"
+RUN_CMD="bash /Users/yhsung/chimera-src/scripts/heterogeneous-soc/guest-run-phase5-tmux.sh"
 
 # Write a temp AppleScript as plain text (.applescript).
 # Using 'current window' after create avoids the broken 'set X to (create ...)' pattern.
