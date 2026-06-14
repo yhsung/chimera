@@ -25,7 +25,7 @@ bash scripts/heterogeneous-soc/host-install-lima-host.sh
 **Step 2 — Launch the full showcase** (from macOS host; re-run any time):
 
 ```bash
-limactl shell qemu-dev -- bash ~/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
+limactl shell qemu-dev -- bash /Users/yhsung/chimera-src/scripts/heterogeneous-soc/guest-run-chimera-showcase.sh
 ```
 
 `guest-run-chimera-showcase.sh` handles all prerequisites, builds, and opens the 8-pane tmux session.
@@ -248,24 +248,19 @@ When the master agent is working inside a git worktree (isolated branch), **all 
 - **`tmux set-option remain-on-exit on`** — always set this in harness scripts. When a QEMU process exits inside a tmux pane, tmux destroys the pane and renumbers all subsequent panes, silently breaking every `send-keys -t 0.N` target.  `remain-on-exit on` keeps the pane (marked "dead") so indices stay stable.
 - **`pkill` without `-f`** — use `pkill ivshmem-server` (matches 15-char process name) rather than `pkill -f <long-regex>`.  The `-f` flag matches the full command line including the invoking shell's own `-c '...'` string, potentially killing the SSH/limactl session itself (exit 255).
 
-## Deploy Path: Worktree → macOS → Lima-local
+## Deploy Path: Worktree → macOS → Lima (writable mount)
 
-`host-install-lima-host.sh` deploys the worktree to `/Users/yhsung/chimera-src` on macOS.  Inside the Lima VM, `$HOME` resolves to `/home/yhsung.guest` and `~` expansion from the **local** shell (macOS) resolves to `/Users/yhsung`.  This creates two different source trees:
+`host-install-lima-host.sh` deploys the worktree to `/Users/yhsung/chimera-src` on macOS via `rsync`. The Lima VM `qemu-dev` mounts the macOS home directory (`~`) **read-write** via virtiofs at the same path, so `/Users/yhsung/chimera-src` is directly writable from inside Lima — no second copy is required.
 
-| Path | Populated by | Used by |
-|---|---|---|
-| `/Users/yhsung/chimera-src` | `host-install-lima-host.sh` | reference / diff |
-| `/home/yhsung.guest/chimera-src` | manual deploy or `cp` from `/Users/…` | `guest-build-freertos-showcase.sh` |
+`scripts/heterogeneous-soc/common.sh` detects this automatically: when `CHIMERA_ROOT` (derived from the running script's own path) is under `/Users/` and writable, `VM_SOURCE_DIR`, `BUILD_DIR`, and `PINGPONG_DIR` all resolve under `/Users/yhsung/chimera-src` directly, and `prepare_vm_source_tree` becomes a no-op.
 
-**After editing source in the worktree, you must deploy to the Lima-local path:**
+**After editing source in the worktree, re-run host-install and build in place — no copy step:**
 ```bash
-# Option A: Run host-install, then copy inside Lima
 bash scripts/heterogeneous-soc/host-install-lima-host.sh
-limactl shell qemu-dev -- cp /Users/yhsung/chimera-src/path/to/file $HOME/chimera-src/path/to/file
-
-# Option B: Transfer directly via base64 (avoids quoting issues)
-base64 -i <worktree-file> | limactl shell qemu-dev -- bash -c 'base64 -d > /home/yhsung.guest/chimera-src/path/to/file'
+limactl shell qemu-dev -- bash /Users/yhsung/chimera-src/scripts/heterogeneous-soc/guest-build-freertos-showcase.sh
 ```
+
+A pre-existing Lima-local copy at `/home/yhsung.guest/chimera-src` (Lima `$HOME`) may still be present from before this mount was made writable. It is no longer required by any script that sources `common.sh` and can be left in place or removed.
 
 ## FreeRTOS Exception Handlers
 
