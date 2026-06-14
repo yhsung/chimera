@@ -170,10 +170,45 @@ check_contains "stats: arm-linux"   "arm-linux: hello=0 cpu=0.00% mem=0.00%"
 check_contains "stats: riscv-linux" "riscv-linux: hello=0 cpu=0.00% mem=0.00%"
 check_contains "stats: mips-linux"  "mips-linux: hello=0 cpu=0.00% mem=0.00%"
 
-echo ""
-echo "[harness] Checking 'sysinfo' output..."
+echo "[harness] Checking 'sysinfo' output (1st call: 4 numeric fields)..."
 check_regex "sysinfo: 4 numeric fields" \
     'heap_free=[0-9]+ uptime_s=[0-9]+ shell_stack_hiwat=[0-9]+ showcase_stack_hiwat=[0-9]+'
+
+# Extract heap_free=N from the 1st (baseline) and 2nd (post-shell-activity)
+# sysinfo invocations. heap_4 is one-time-alloc-only at boot, so they MUST
+# be equal; a future change that allocates during shell/showcase activity
+# will break this. configTOTAL_HEAP_SIZE=65536, safety margin=4096.
+echo ""
+echo "[harness] Checking heap leak (heap_free before vs after 7 commands)..."
+mapfile -t HEAP_VALUES < <(echo "${OUTPUT}" | grep -oE 'heap_free=[0-9]+' | grep -oE '[0-9]+')
+HEAP_BEFORE="${HEAP_VALUES[0]:-}"
+HEAP_AFTER="${HEAP_VALUES[1]:-}"
+
+if [[ -z "${HEAP_BEFORE}" || -z "${HEAP_AFTER}" ]]; then
+    _fail "heap_free value not found in output (expected 2 sysinfo invocations)"
+    (( ++FAIL_COUNT ))
+else
+    if (( HEAP_BEFORE > 0 && HEAP_BEFORE < 65536 )); then
+        _ok "heap_free sane at boot (HEAP_BEFORE=${HEAP_BEFORE})"
+    else
+        _fail "heap_free sane at boot (HEAP_BEFORE=${HEAP_BEFORE}, expected 0 < N < 65536)"
+        (( ++FAIL_COUNT ))
+    fi
+
+    if (( HEAP_BEFORE > 4096 )); then
+        _ok "heap_free above safety margin (HEAP_BEFORE=${HEAP_BEFORE} > 4096)"
+    else
+        _fail "heap_free above safety margin (HEAP_BEFORE=${HEAP_BEFORE}, expected > 4096)"
+        (( ++FAIL_COUNT ))
+    fi
+
+    if (( HEAP_AFTER == HEAP_BEFORE )); then
+        _ok "heap_free stable (HEAP_AFTER=${HEAP_AFTER} == HEAP_BEFORE=${HEAP_BEFORE})"
+    else
+        _fail "heap_free stable (HEAP_AFTER=${HEAP_AFTER} != HEAP_BEFORE=${HEAP_BEFORE})"
+        (( ++FAIL_COUNT ))
+    fi
+fi
 
 echo ""
 echo "[harness] Checking 'links' output (no Linux guests -> flags=0)..."
