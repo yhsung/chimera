@@ -232,7 +232,7 @@ check_contains "unknown command" "unknown command: frobnicate (try 'help')"
 # ---- Result ----
 echo ""
 if (( FAIL_COUNT == 0 )); then
-    echo "[harness] PASS — all 16 shell command checks passed"
+    echo "[harness] PASS — all 19 shell command checks passed"
     exit 0
 fi
 
