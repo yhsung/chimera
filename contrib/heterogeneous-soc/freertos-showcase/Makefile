@@ -124,11 +124,12 @@ freertos-r52-demo.elf: freertos_main.c freertos_ivshmem_flat.c boot_log.c can_dr
 	  $(LDFLAGS_BARE) -o $@
 
 clean:
-	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf test_can_decode test_shell_parse
+	rm -f $(SYSLOG_TARGETS) $(BOOTLOG_TARGETS) $(BOOT_COLLECTOR_TARGETS) freertos-r52-demo.elf test_can_decode test_shell_parse test_heap_test
 
-check: test_can_decode test_shell_parse
+check: test_can_decode test_shell_parse test_heap_test
 	./test_can_decode
 	./test_shell_parse
+	./test_heap_test
 	./test-syslog-format.sh
 
 test_can_decode: test_can_decode.c can_proto.h
@@ -136,3 +137,6 @@ test_can_decode: test_can_decode.c can_proto.h
 
 test_shell_parse: test_shell_parse.c shell_parse.h
 	cc -O2 -Wall -o $@ test_shell_parse.c
+
+test_heap_test: test_heap_test.c shell_parse.h shell_heap_test.h
+	cc -O2 -Wall -o $@ test_heap_test.c
