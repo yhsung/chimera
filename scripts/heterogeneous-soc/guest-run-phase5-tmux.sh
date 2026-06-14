@@ -66,6 +66,19 @@ tmux split-window -h -t "$SESSION:0.3" -l 50%
 tmux split-window -h -t "$SESSION:0.6" -l 67%
 tmux split-window -h -t "$SESSION:0.7" -l 50%
 
+# Name each pane for command-line addressing (see guest-tmux-pane.sh).
+tmux select-pane -t "$SESSION:0.0" -T "ivshmem-arm"
+tmux select-pane -t "$SESSION:0.1" -T "ivshmem-riscv"
+tmux select-pane -t "$SESSION:0.2" -T "ivshmem-mips"
+tmux select-pane -t "$SESSION:0.3" -T "ivshmem-stats"
+tmux select-pane -t "$SESSION:0.4" -T "ivshmem-bootlog"
+tmux select-pane -t "$SESSION:0.5" -T "freertos"
+tmux select-pane -t "$SESSION:0.6" -T "arm-linux"
+tmux select-pane -t "$SESSION:0.7" -T "riscv-linux"
+tmux select-pane -t "$SESSION:0.8" -T "mips-linux"
+tmux set-option -t "$SESSION" pane-border-status top
+tmux set-option -t "$SESSION" pane-border-format "#{pane_index}:#{pane_title}"
+
 # Kill any stale QEMU processes that outlived a previous session.
 pkill -f "qemu-system-arm.*freertos-r52-demo" 2>/dev/null || true
 pkill -f "qemu-system-riscv64.*riscv-phase5"        2>/dev/null || true
