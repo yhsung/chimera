@@ -507,9 +507,10 @@ static void showcase_task(void *opaque)
 
 void vApplicationMallocFailedHook(void)
 {
+    /* heap_4's pvPortMalloc calls this hook on allocation failure and then
+     * returns NULL to the caller; do not halt here so callers (e.g. the
+     * `heap-test alloc` shell command) can handle the failure gracefully. */
     log_uart(HSOC_LOG_ERROR, "[freertos] malloc failed\n");
-    for (;;) {
-    }
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t task, char *task_name)

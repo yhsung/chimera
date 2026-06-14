@@ -9,7 +9,7 @@
 #
 # Sends the 6 documented shell commands + 1 unrecognized command via
 # `tmux send-keys`, then a second `sysinfo` (as the final command) so we
-# can compare heap_free=N before/after the 12-command sequence and assert
+# can compare heap_free=N before/after the 14-command sequence and assert
 # the firmware has not leaked heap during shell/showcase activity. Verifies
 # the exact output documented in README.md's "Interactive Shell" section:
 #   help, stats, sysinfo, links, loglevel, can status, heap-test
@@ -128,6 +128,11 @@ send_cmd "heap-test alloc 4096"
 send_cmd "heap-test show"
 send_cmd "heap-test free"
 send_cmd "heap-test release"
+# Oversized alloc: 1111111 bytes >> configTOTAL_HEAP_SIZE (65536), so
+# pvPortMalloc must return NULL and vApplicationMallocFailedHook must NOT
+# hang -- otherwise the shell never processes any command after this one.
+send_cmd "heap-test alloc 1111111"
+send_cmd "heap-test show"
 send_cmd "heap-test"
 # Second sysinfo: paired with the first (line 122) to detect heap leaks
 # that occur during shell/showcase activity. Equal in firmware to the
@@ -184,9 +189,10 @@ check_regex "sysinfo: 4 numeric fields" \
 # boot (heap_4 itself supports runtime alloc/free), so heap_free MUST
 # be equal; a future change that allocates during shell/showcase
 # activity will break this. configTOTAL_HEAP_SIZE=65536, safety margin=4096.
-# With heap-test additions: 12 commands total between the two sysinfo calls.
+# With heap-test additions (including the oversized-alloc failure check):
+# 14 commands total between the two sysinfo calls.
 echo ""
-echo "[harness] Checking heap leak (heap_free before vs after 12 commands)..."
+echo "[harness] Checking heap leak (heap_free before vs after 14 commands)..."
 mapfile -t HEAP_VALUES < <(echo "${OUTPUT}" | grep -oE 'heap_free=[0-9]+' | grep -oE '[0-9]+')
 HEAP_BEFORE="${HEAP_VALUES[0]:-}"
 HEAP_AFTER="${HEAP_VALUES[-1]:-}"
@@ -247,13 +253,17 @@ check_regex "heap-test free: balanced" \
     'heap_test: free 0x[0-9a-f]{8} \(heap_free=[0-9]+\)'
 check_contains "heap-test release: nothing" \
     "heap_test: nothing to release"
+check_regex "heap-test alloc 1111111: fails without hanging" \
+    'heap_test: alloc 1111111 failed \(heap_free=[0-9]+\)'
+check_regex "heap-test show after failed alloc: count=0 (shell still alive)" \
+    'heap_test: count=0/8 heap_free=[0-9]+ heap_total=65536 allocator=heap_4'
 check_contains "heap-test (no subcmd): usage" \
     "usage: heap-test <alloc N|free|release|show>"
 
 # ---- Result ----
 echo ""
 if (( FAIL_COUNT == 0 )); then
-    echo "[harness] PASS — all 25 shell command checks passed"
+    echo "[harness] PASS — all 27 shell command checks passed"
     exit 0
 fi
 
