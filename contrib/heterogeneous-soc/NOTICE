@@ -1,0 +1,25 @@
+Chimera Heterogeneous SoC Demo
+Copyright 2026 Yuehhsin Sung
+
+This product includes software developed for the Chimera project
+(https://github.com/yhsung/chimera):
+
+  - freertos-showcase/  - FreeRTOS firmware application (HELLO/ACK,
+    stats, CAN, boot-log, and shell over ivshmem-flat)
+  - ping.c / pong.c     - guest-side ivshmem test programs
+  - ivshmem_proto.h     - shared wire-protocol definitions
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+------------------------------------------------------------------------------
+
+The firmware in freertos-showcase/ is designed to be built and linked
+against the FreeRTOS Kernel (https://www.freertos.org/). The FreeRTOS
+Kernel source is NOT included in this directory or repository and must
+be obtained separately (see FREERTOS_KERNEL_DIR in
+scripts/heterogeneous-soc/common.sh). The FreeRTOS Kernel is
+separately licensed under the MIT License:
+
+  FreeRTOS Kernel
+  Copyright (C) Amazon Web Services, Inc. or its affiliates.
+  Licensed under the MIT License.

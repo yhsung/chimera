@@ -1,0 +1,20 @@
+Chimera Heterogeneous SoC Demo - Build, Launch, and CI Harness Scripts
+Copyright 2026 Yuehhsin Sung
+
+This product includes software developed for the Chimera project
+(https://github.com/yhsung/chimera): the host-side orchestration
+scripts used to build, launch, and test the heterogeneous SoC demo
+(Lima VM setup, QEMU guest/firmware launch scripts, ivshmem-server
+wrappers, and CI pass/fail harnesses).
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+------------------------------------------------------------------------------
+
+These scripts invoke, but do not include or redistribute, the
+following third-party tools at runtime. Each remains under its own
+upstream license:
+
+  - QEMU (https://www.qemu.org/)         - GPL-2.0-or-later
+  - Lima (https://github.com/lima-vm/lima) - Apache-2.0
+  - tmux (https://github.com/tmux/tmux)  - ISC / BSD-3-Clause
