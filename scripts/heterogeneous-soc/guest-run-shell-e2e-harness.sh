@@ -124,6 +124,10 @@ send_cmd "links"
 send_cmd "loglevel"
 send_cmd "can status"
 send_cmd "frobnicate"
+# Second sysinfo: paired with the first (line 119) to detect heap leaks
+# that occur during shell/showcase activity. Equal in firmware to the
+# first; only the order in the captured output differs.
+send_cmd "sysinfo"
 sleep 1
 
 OUTPUT="$(tmux capture-pane -p -t "${SESSION}:0.0" -S -50000 2>/dev/null)"
