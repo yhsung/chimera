@@ -9,7 +9,7 @@
 #
 # Sends the 6 documented shell commands + 1 unrecognized command via
 # `tmux send-keys`, then a second `sysinfo` (as the final command) so we
-# can compare heap_free=N before/after the 7-command sequence and assert
+# can compare heap_free=N before/after the 12-command sequence and assert
 # the firmware has not leaked heap during shell/showcase activity. Verifies
 # the exact output documented in README.md's "Interactive Shell" section:
 #   help, stats, sysinfo, links, loglevel, can status, heap-test
@@ -185,13 +185,13 @@ check_regex "sysinfo: 4 numeric fields" \
 # be equal; a future change that allocates during shell/showcase
 # activity will break this. configTOTAL_HEAP_SIZE=65536, safety margin=4096.
 echo ""
-echo "[harness] Checking heap leak (heap_free before vs after 7 commands)..."
+echo "[harness] Checking heap leak (heap_free before vs after 12 commands)..."
 mapfile -t HEAP_VALUES < <(echo "${OUTPUT}" | grep -oE 'heap_free=[0-9]+' | grep -oE '[0-9]+')
 HEAP_BEFORE="${HEAP_VALUES[0]:-}"
-HEAP_AFTER="${HEAP_VALUES[1]:-}"
+HEAP_AFTER="${HEAP_VALUES[-1]:-}"
 
 if [[ -z "${HEAP_BEFORE}" || -z "${HEAP_AFTER}" ]]; then
-    _fail "heap_free value not found in output (expected 2 sysinfo invocations)"
+    _fail "heap_free value not found in output (expected 2+ heap_free occurrences)"
     (( ++FAIL_COUNT ))
 else
     if (( HEAP_BEFORE > 0 && HEAP_BEFORE < 65536 )); then
